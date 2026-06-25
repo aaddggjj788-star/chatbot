@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>サポートセンター</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif; background: #f0f4f8; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
+
+    #app { width: 620px; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); overflow: hidden; }
+
+    /* ヘッダー */
+    #header { background: #0070f3; color: #fff; padding: 18px 24px; }
+    #header h1 { font-size: 1.1rem; font-weight: bold; }
+    #header p { font-size: 0.8rem; opacity: 0.85; margin-top: 4px; }
+
+    /* ジャンル選択画面 */
+    #genre-screen { padding: 24px; }
+    #genre-screen h2 { font-size: 1rem; color: #333; margin-bottom: 6px; }
+    #genre-screen p { font-size: 0.85rem; color: #666; margin-bottom: 20px; }
+    #genre-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .genre-btn {
+      padding: 14px 12px; border: 2px solid #e0e8f0; border-radius: 10px;
+      background: #f8fafc; cursor: pointer; font-size: 0.9rem; color: #333;
+      text-align: left; transition: all 0.15s; line-height: 1.4;
+    }
+    .genre-btn:hover { border-color: #0070f3; background: #eff6ff; color: #0070f3; }
+    .genre-btn .icon { font-size: 1.2rem; display: block; margin-bottom: 4px; }
+    .genre-btn.full { grid-column: 1 / -1; }
+
+    /* チャット画面 */
+    #chat-screen { display: none; flex-direction: column; height: 70vh; min-height: 480px; }
+    #genre-tag { padding: 10px 20px; background: #eff6ff; border-bottom: 1px solid #dbeafe; font-size: 0.85rem; color: #1d4ed8; }
+    #genre-tag span { font-weight: bold; }
+    #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+    .msg { max-width: 82%; padding: 10px 14px; border-radius: 12px; line-height: 1.6; font-size: 0.92rem; white-space: pre-wrap; word-break: break-word; }
+    .msg.user { align-self: flex-end; background: #0070f3; color: #fff; border-bottom-right-radius: 3px; }
+    .msg.assistant { align-self: flex-start; background: #f3f4f6; color: #1f2937; border-bottom-left-radius: 3px; }
+    .msg.inquiry-summary {
+      align-self: flex-start; background: #fff7ed; color: #1f2937;
+      border: 2px solid #fed7aa; border-radius: 12px; border-bottom-left-radius: 3px;
+      width: 100%; max-width: 100%;
+    }
+    .msg.inquiry-summary .summary-title { font-weight: bold; color: #c2410c; margin-bottom: 8px; font-size: 0.9rem; }
+    .msg.inquiry-summary .summary-body { font-size: 0.88rem; line-height: 1.8; }
+    .msg.inquiry-summary .summary-body b { color: #374151; }
+    .msg.sent-notice { align-self: flex-start; background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; font-size: 0.85rem; border-radius: 8px; padding: 8px 12px; }
+    .msg.error { align-self: flex-start; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; font-size: 0.85rem; border-radius: 8px; }
+    .msg.thinking { align-self: flex-start; background: #f3f4f6; color: #9ca3af; font-size: 0.85rem; font-style: italic; }
+
+    #input-area { padding: 12px 16px; border-top: 1px solid #e5e7eb; display: flex; gap: 8px; align-items: flex-end; }
+    #input { flex: 1; padding: 10px 14px; border: 1.5px solid #d1d5db; border-radius: 10px; font-size: 0.92rem; resize: none; min-height: 44px; max-height: 120px; outline: none; font-family: inherit; }
+    #input:focus { border-color: #0070f3; }
+    #send { padding: 10px 18px; background: #0070f3; color: #fff; border: none; border-radius: 10px; cursor: pointer; font-size: 0.92rem; white-space: nowrap; height: 44px; }
+    #send:disabled { background: #93c5fd; cursor: not-allowed; }
+    #back-btn { padding: 8px 14px; background: none; border: 1.5px solid #d1d5db; border-radius: 8px; cursor: pointer; font-size: 0.82rem; color: #6b7280; display: block; margin: 12px 16px 0; }
+    #back-btn:hover { border-color: #9ca3af; color: #374151; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <h1>🎧 サポートセンター</h1>
+    <p>ご質問の内容に最も近いジャンルを選んでください</p>
+  </div>
+
+  <!-- ジャンル選択 -->
+  <div id="genre-screen">
+    <h2>お問い合わせジャンル</h2>
+    <p>下のボタンからご質問のジャンルをお選びください</p>
+    <div id="genre-buttons">
+      <button class="genre-btn" data-genre="ポイント単価について">
+        <span class="icon">💰</span>ポイント単価について
+      </button>
+      <button class="genre-btn" data-genre="ポイント購入方法">
+        <span class="icon">🛒</span>ポイント購入方法
+      </button>
+      <button class="genre-btn" data-genre="機能の説明">
+        <span class="icon">📖</span>機能の説明
+      </button>
+      <button class="genre-btn" data-genre="先生から返信が来ない">
+        <span class="icon">💬</span>先生から返信が来ない
+      </button>
+      <button class="genre-btn" data-genre="ポイントの誤差">
+        <span class="icon">⚠️</span>ポイントの誤差
+      </button>
+      <button class="genre-btn" data-genre="キャンペーンについて">
+        <span class="icon">🎁</span>キャンペーンについて
+      </button>
+      <button class="genre-btn full" data-genre="その他">
+        <span class="icon">✏️</span>その他（自由入力）
+      </button>
+    </div>
+  </div>
+
+  <!-- チャット -->
+  <div id="chat-screen">
+    <button id="back-btn">← ジャンル選択に戻る</button>
+    <div id="genre-tag">ジャンル：<span id="genre-label"></span></div>
+    <div id="messages"></div>
+    <div id="input-area">
+      <textarea id="input" placeholder="ご質問内容を入力してください…" rows="1"></textarea>
+      <button id="send">送信</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const genreScreen = document.getElementById('genre-screen');
+  const chatScreen = document.getElementById('chat-screen');
+  const genreLabel = document.getElementById('genre-label');
+  const messagesEl = document.getElementById('messages');
+  const inputEl = document.getElementById('input');
+  const sendBtn = document.getElementById('send');
+  const backBtn = document.getElementById('back-btn');
+
+  let currentGenre = '';
+  let history = [];
+
+  // --- ジャンル選択 ---
+  document.querySelectorAll('.genre-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentGenre = btn.dataset.genre;
+      history = [];
+      messagesEl.innerHTML = '';
+      genreLabel.textContent = currentGenre;
+      genreScreen.style.display = 'none';
+      chatScreen.style.display = 'flex';
+      inputEl.focus();
+      addMsg('assistant', `「${currentGenre}」についてのご質問ですね。\nどのようなことでお困りですか？お気軽にご入力ください。`);
+    });
+  });
+
+  // --- 戻るボタン ---
+  backBtn.addEventListener('click', () => {
+    chatScreen.style.display = 'none';
+    genreScreen.style.display = 'block';
+  });
+
+  // --- メッセージ追加 ---
+  function addMsg(type, text) {
+    const div = document.createElement('div');
+    div.className = `msg ${type}`;
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  function addInquirySummary(genre, content, timestamp) {
+    const div = document.createElement('div');
+    div.className = 'msg inquiry-summary';
+    div.innerHTML = `
+      <div class="summary-title">📋 オペレーターに引き継ぎます</div>
+      <div class="summary-body">
+        <b>【お問い合わせジャンル】</b><br>${escHtml(genre)}<br><br>
+        <b>【お問い合わせ内容】</b><br>${escHtml(content)}<br><br>
+        <b>【日時】</b><br>${timestamp}
+      </div>
+    `;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  }
+
+  // --- 送信処理 ---
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text || sendBtn.disabled) return;
+
+    inputEl.value = '';
+    sendBtn.disabled = true;
+    addMsg('user', text);
+    history.push({ role: 'user', content: text });
+
+    const thinking = addMsg('thinking', '回答を生成中…');
+
+    try {
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ genre: currentGenre, messages: history }),
+      });
+      const data = await res.json();
+      thinking.remove();
+
+      if (data.error) {
+        addMsg('error', 'エラー: ' + data.error);
+        history.pop();
+        return;
+      }
+
+      if (data.can_answer) {
+        // 通常回答
+        addMsg('assistant', data.reply);
+        history.push({ role: 'assistant', content: data.reply });
+      } else {
+        // 回答できない → 問い合わせまとめ＆POST送信
+        const now = new Date();
+        const timestamp = now.toLocaleString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+        addInquirySummary(currentGenre, text, timestamp);
+
+        // POST送信
+        await fetch('/inquiry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ genre: currentGenre, content: text, timestamp }),
+        });
+
+        addMsg('sent-notice', '✅ 担当オペレーターに内容を送信しました。折り返しご連絡いたします。');
+      }
+    } catch (err) {
+      thinking.remove();
+      addMsg('error', '通信エラー: ' + err.message);
+      history.pop();
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  sendBtn.addEventListener('click', send);
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+
+  // テキストエリア自動伸縮
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  });
+</script>
+</body>
+</html>
