@@ -116,6 +116,16 @@
   const sendBtn = document.getElementById('send');
   const backBtn = document.getElementById('back-btn');
 
+  // URLのGETパラメータからユーザー情報を取得
+  const urlParams = new URLSearchParams(window.location.search);
+  const userInfo = {
+    user_id:    urlParams.get('user_id')    || '',
+    user_name:  urlParams.get('user_name')  || '',
+    user_point: urlParams.get('user_point') || '',
+    user_token: urlParams.get('user_token') || '',
+  };
+  console.log('【GETパラメータ取得】', userInfo);
+
   let currentGenre = '';
   let history = [];
 
@@ -184,7 +194,7 @@
       const res = await fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ genre: currentGenre, messages: history }),
+        body: JSON.stringify({ genre: currentGenre, messages: history, ...userInfo }),
       });
       const data = await res.json();
       thinking.remove();
