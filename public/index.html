@@ -169,9 +169,6 @@
 
   const ESCALATION_MSG = 'こちらでは対応が難しいお問い合わせの内容となる為、サポートスタッフへお客様のお問い合わせを転送させて頂きます。今頂いたお問い合わせの内容を引用し文章を作成してよい場合は「1」を、改めて問い合わせ内容を入力される場合は「2」とご入力ください。';
 
-  // キャンペーンジャンルは最初からエスカレーションへ
-  const ESCALATION_GENRES = ['キャンペーンについて'];
-
   // --- ジャンル選択 ---
   document.querySelectorAll('.genre-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -184,11 +181,11 @@
       chatScreen.style.display = 'flex';
       inputEl.focus();
 
-      if (ESCALATION_GENRES.includes(currentGenre)) {
-        const msg = ESCALATION_MSG;
+      if (currentGenre === 'キャンペーンについて') {
+        const msg = '本日の開催企画の中でご不明な点をお気軽にご入力ください。';
         addMsg('assistant', msg);
         history.push({ role: 'assistant', content: msg });
-        escalationState = 'awaiting_choice';
+        escalationState = 'campaign_awaiting_input';
       } else {
         addMsg('assistant', `「${currentGenre}」についてのご質問ですね。\nどのようなことでお困りですか？お気軽にご入力ください。`);
       }
@@ -261,6 +258,17 @@
     inputEl.value = '';
     sendBtn.disabled = true;
     addMsg('user', text);
+
+    // --- キャンペーン: 問い合わせ内容入力後にエスカレーション開始 ---
+    if (escalationState === 'campaign_awaiting_input') {
+      history.push({ role: 'user', content: text });
+      addMsg('assistant', ESCALATION_MSG);
+      history.push({ role: 'assistant', content: ESCALATION_MSG });
+      escalationState = 'awaiting_choice';
+      sendBtn.disabled = false;
+      inputEl.focus();
+      return;
+    }
 
     // --- エスカレーション: 1 or 2 の選択待ち ---
     if (escalationState === 'awaiting_choice') {
