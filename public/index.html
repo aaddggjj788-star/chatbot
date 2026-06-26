@@ -165,12 +165,14 @@
 
   let currentGenre = '';
   let history = [];
+  let escalationState = null; // null | 'awaiting_choice' | 'awaiting_custom_message'
 
   // --- ジャンル選択 ---
   document.querySelectorAll('.genre-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       currentGenre = btn.dataset.genre;
       history = [];
+      escalationState = null;
       messagesEl.innerHTML = '';
       genreLabel.textContent = currentGenre;
       genreScreen.style.display = 'none';
@@ -184,6 +186,7 @@
   backBtn.addEventListener('click', () => {
     chatScreen.style.display = 'none';
     genreScreen.style.display = 'block';
+    escalationState = null;
   });
 
   // --- メッセージ追加 ---
@@ -215,6 +218,28 @@
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
   }
 
+  function buildEscalationUrl(token, message) {
+    return `https://x7j4l2p9m1.com/log_index.php?page=kbt&kbt=275&s=${encodeURIComponent(token || '')}&message=${encodeURIComponent(message)}`;
+  }
+
+  function addMsgWithLink(text, url) {
+    const div = document.createElement('div');
+    div.className = 'msg assistant';
+    const span = document.createElement('span');
+    span.style.whiteSpace = 'pre-wrap';
+    span.textContent = text + '\n\n';
+    div.appendChild(span);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = url;
+    a.style.cssText = 'word-break:break-all;color:#0070f3;';
+    div.appendChild(a);
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
   // --- 送信処理 ---
   async function send() {
     const text = inputEl.value.trim();
@@ -223,8 +248,59 @@
     inputEl.value = '';
     sendBtn.disabled = true;
     addMsg('user', text);
-    history.push({ role: 'user', content: text });
 
+    // --- エスカレーション: 1 or 2 の選択待ち ---
+    if (escalationState === 'awaiting_choice') {
+      if (text === '1') {
+        history.push({ role: 'user', content: text });
+        const thinking = addMsg('thinking', '問い合わせ文章を生成中…');
+        try {
+          const res = await fetch('/generate-inquiry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: history, genre: currentGenre }),
+          });
+          const data = await res.json();
+          thinking.remove();
+          const generated = data.message || '';
+          const url = buildEscalationUrl(userInfo.user_token, generated);
+          addMsgWithLink(
+            `かしこまりました。お客様のお問い合わせを元にサポートスタッフへ転送されるお問い合わせ文章を作成いたしました。\n\n${generated}\n\n下記をご確認いただき相違がなければ下記URLをクリックしサポートセンターへお問い合わせを送信してください。`,
+            url
+          );
+          escalationState = null;
+        } catch (err) {
+          thinking.remove();
+          addMsg('error', '通信エラー: ' + err.message);
+        }
+      } else if (text === '2') {
+        history.push({ role: 'user', content: text });
+        addMsg('assistant', 'ありがとうございます。お客様からのお問い合わせ内容をご入力ください。');
+        escalationState = 'awaiting_custom_message';
+      } else {
+        addMsg('assistant', '「1」または「2」をご入力ください。');
+      }
+      sendBtn.disabled = false;
+      inputEl.focus();
+      return;
+    }
+
+    // --- エスカレーション: カスタムメッセージ入力待ち ---
+    if (escalationState === 'awaiting_custom_message') {
+      history.push({ role: 'user', content: text });
+      const url = buildEscalationUrl(userInfo.user_token, text);
+      addMsgWithLink(
+        'ありがとうございます。上記の内容を転送いたしますので下記URLをクリックしサポートセンターへお問い合わせを送信してください。',
+        url
+      );
+      escalationState = null;
+      sendBtn.disabled = false;
+      inputEl.focus();
+      return;
+    }
+
+    // --- 通常チャット ---
+    history.push({ role: 'user', content: text });
     const thinking = addMsg('thinking', '回答を生成中…');
 
     try {
@@ -243,24 +319,14 @@
       }
 
       if (data.can_answer) {
-        // 通常回答
         addMsg('assistant', data.reply);
         history.push({ role: 'assistant', content: data.reply });
       } else {
-        // 回答できない → 問い合わせまとめ＆POST送信
-        const now = new Date();
-        const timestamp = now.toLocaleString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
-
-        addInquirySummary(currentGenre, text, timestamp);
-
-        // POST送信
-        await fetch('/inquiry', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ genre: currentGenre, content: text, timestamp }),
-        });
-
-        addMsg('sent-notice', '✅ 担当オペレーターに内容を送信しました。折り返しご連絡いたします。');
+        // エスカレーション開始
+        const msg = 'こちらでは対応が難しいお問い合わせの内容となる為、サポートスタッフへお客様のお問い合わせを転送させて頂きます。今頂いたお問い合わせの内容を引用し文章を作成してよい場合は「1」を、改めて問い合わせ文章を入力される場合は「2」とご入力ください。';
+        addMsg('assistant', msg);
+        history.push({ role: 'assistant', content: msg });
+        escalationState = 'awaiting_choice';
       }
     } catch (err) {
       thinking.remove();

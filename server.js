@@ -135,6 +135,37 @@ app.post('/chat', async (req, res) => {
   }
 });
 
+// 問い合わせ文章自動生成エンドポイント
+app.post('/generate-inquiry', async (req, res) => {
+  const { messages, genre } = req.body;
+
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'messagesが必要です' });
+  }
+
+  const historyText = messages
+    .map(m => `${m.role === 'user' ? 'お客様' : 'ボット'}：${m.content}`)
+    .join('\n');
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-opus-4-8',
+      max_tokens: 512,
+      system: 'あなたはサポートスタッフ向けの問い合わせ文章を作成するアシスタントです。提供された会話履歴をもとに、サポートスタッフが状況を把握できるよう、お客様のお問い合わせ内容を日本語で簡潔にまとめてください。文章のみを返してください。前置きや余計な説明は不要です。',
+      messages: [{
+        role: 'user',
+        content: `以下の会話履歴（ジャンル：${genre || 'その他'}）をもとに、サポートスタッフ向けの問い合わせ文章を作成してください。\n\n${historyText}`,
+      }],
+    });
+
+    const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
+    res.json({ message: text });
+  } catch (err) {
+    console.error('問い合わせ文章生成エラー:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 問い合わせ送信エンドポイント
 app.post('/inquiry', async (req, res) => {
   const { genre, content, timestamp } = req.body;
