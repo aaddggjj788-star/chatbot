@@ -167,6 +167,11 @@
   let history = [];
   let escalationState = null; // null | 'awaiting_choice' | 'awaiting_custom_message'
 
+  const ESCALATION_MSG = 'こちらでは対応が難しいお問い合わせの内容となる為、サポートスタッフへお客様のお問い合わせを転送させて頂きます。今頂いたお問い合わせの内容を引用し文章を作成してよい場合は「1」を、改めて問い合わせ内容を入力される場合は「2」とご入力ください。';
+
+  // キャンペーンジャンルは最初からエスカレーションへ
+  const ESCALATION_GENRES = ['キャンペーンについて'];
+
   // --- ジャンル選択 ---
   document.querySelectorAll('.genre-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -178,7 +183,15 @@
       genreScreen.style.display = 'none';
       chatScreen.style.display = 'flex';
       inputEl.focus();
-      addMsg('assistant', `「${currentGenre}」についてのご質問ですね。\nどのようなことでお困りですか？お気軽にご入力ください。`);
+
+      if (ESCALATION_GENRES.includes(currentGenre)) {
+        const msg = ESCALATION_MSG;
+        addMsg('assistant', msg);
+        history.push({ role: 'assistant', content: msg });
+        escalationState = 'awaiting_choice';
+      } else {
+        addMsg('assistant', `「${currentGenre}」についてのご質問ですね。\nどのようなことでお困りですか？お気軽にご入力ください。`);
+      }
     });
   });
 
@@ -323,9 +336,8 @@
         history.push({ role: 'assistant', content: data.reply });
       } else {
         // エスカレーション開始
-        const msg = 'こちらでは対応が難しいお問い合わせの内容となる為、サポートスタッフへお客様のお問い合わせを転送させて頂きます。今頂いたお問い合わせの内容を引用し文章を作成してよい場合は「1」を、改めて問い合わせ文章を入力される場合は「2」とご入力ください。';
-        addMsg('assistant', msg);
-        history.push({ role: 'assistant', content: msg });
+        addMsg('assistant', ESCALATION_MSG);
+        history.push({ role: 'assistant', content: ESCALATION_MSG });
         escalationState = 'awaiting_choice';
       }
     } catch (err) {
