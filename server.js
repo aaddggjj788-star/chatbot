@@ -13,6 +13,26 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// パーセントエンコードされたShift-JIS文字列をUTF-8に変換
+function decodeShiftJIS(str) {
+  if (!str || !/%[0-9A-Fa-f]{2}/.test(str)) return str || '';
+  const bytes = [];
+  const s = str.replace(/\+/g, ' ');
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '%' && i + 2 < s.length) {
+      bytes.push(parseInt(s.substr(i + 1, 2), 16));
+      i += 2;
+    } else {
+      bytes.push(s.charCodeAt(i) & 0xff);
+    }
+  }
+  try {
+    return new TextDecoder('shift-jis').decode(Buffer.from(bytes));
+  } catch (e) {
+    return str;
+  }
+}
+
 const buildSystemPrompt = ({ user_id, user_name, user_point, user_token } = {}) => `あなたは占いを用いたメールカウンセリングサービスのサポートチャットボットです。
 以下のユーザー情報を把握した上で対応してください。
 
@@ -42,7 +62,13 @@ const buildSystemPrompt = ({ user_id, user_name, user_point, user_token } = {}) 
 
 // チャットエンドポイント
 app.post('/chat', async (req, res) => {
-  const { genre, messages, user_id, user_name, user_point, user_token } = req.body;
+  const { genre, messages } = req.body;
+  const user_id    = decodeShiftJIS(req.body.user_id);
+  const user_name  = decodeShiftJIS(req.body.user_name);
+  const user_point = decodeShiftJIS(req.body.user_point);
+  const user_token = decodeShiftJIS(req.body.user_token);
+
+  console.log('【受信ユーザー情報】', { user_id, user_name, user_point, user_token });
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messagesが必要です' });
@@ -50,6 +76,8 @@ app.post('/chat', async (req, res) => {
 
   const systemPrompt = buildSystemPrompt({ user_id, user_name, user_point, user_token })
     + `\n\n【現在の問い合わせジャンル】${genre || 'その他'}`;
+
+  console.log('【システムプロンプト】\n' + systemPrompt);
 
   try {
     const response = await client.messages.create({

@@ -116,13 +116,50 @@
   const sendBtn = document.getElementById('send');
   const backBtn = document.getElementById('back-btn');
 
-  // URLのGETパラメータからユーザー情報を取得
-  const urlParams = new URLSearchParams(window.location.search);
+  // URLのGETパラメータをShift-JIS / UTF-8 両対応でデコード
+  function decodeParam(encodedVal) {
+    if (!encodedVal) return '';
+    const s = encodedVal.replace(/\+/g, ' ');
+    // まずUTF-8としてデコードを試みる
+    try {
+      return decodeURIComponent(s);
+    } catch (e) {
+      // 失敗した場合はShift-JISとしてデコード
+      const bytes = [];
+      for (let i = 0; i < s.length; i++) {
+        if (s[i] === '%' && i + 2 < s.length) {
+          bytes.push(parseInt(s.substr(i + 1, 2), 16));
+          i += 2;
+        } else {
+          bytes.push(s.charCodeAt(i) & 0xff);
+        }
+      }
+      try {
+        return new TextDecoder('shift-jis').decode(new Uint8Array(bytes));
+      } catch (e2) {
+        return encodedVal;
+      }
+    }
+  }
+
+  // URLパラメータをエンコードされたまま取得（URLSearchParamsは使わない）
+  function getRawParams() {
+    const result = {};
+    window.location.search.slice(1).split('&').forEach(part => {
+      const eq = part.indexOf('=');
+      if (eq === -1) return;
+      const key = decodeURIComponent(part.slice(0, eq));
+      result[key] = part.slice(eq + 1);
+    });
+    return result;
+  }
+
+  const rawParams = getRawParams();
   const userInfo = {
-    user_id:    urlParams.get('user_id')    || '',
-    user_name:  urlParams.get('user_name')  || '',
-    user_point: urlParams.get('user_point') || '',
-    user_token: urlParams.get('user_token') || '',
+    user_id:    decodeParam(rawParams.user_id),
+    user_name:  decodeParam(rawParams.user_name),
+    user_point: decodeParam(rawParams.user_point),
+    user_token: decodeParam(rawParams.user_token),
   };
   console.log('【GETパラメータ取得】', userInfo);
 
