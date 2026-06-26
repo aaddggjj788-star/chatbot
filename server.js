@@ -80,7 +80,7 @@ https://x7j4l2p9m1.com/log_index.php?page=pointtuika&s=1782435196&ddv=${user_tok
 【その他・自由入力の場合】
 ・上記ジャンルで対応できる内容であれば回答する
 ・対応できない内容の場合は問い合わせ内容を整理して以下のURLにPOSTで送信する
-https://x7j4l2p9m1.com/log_index.php?page=kbt&kbt=275&s=${user_token || ''}
+https://x7j4l2p9m1.com/log_index.php?page=kbt&kbt=275&s=${Math.floor(Date.now() / 1000)}&ddv=${user_token || ''}
 
 【重要なルール】
 ・ユーザー名は必ず「${user_name || ''}様」と呼ぶ

@@ -229,7 +229,8 @@
   }
 
   function buildEscalationUrl(token, message) {
-    return `https://x7j4l2p9m1.com/log_index.php?page=kbt&kbt=275&s=${encodeURIComponent(token || '')}&message=${encodeURIComponent(message)}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    return `https://x7j4l2p9m1.com/log_index.php?page=kbt&kbt=275&s=${timestamp}&ddv=${encodeURIComponent(token || '')}&message=${encodeURIComponent(message)}`;
   }
 
   function addMsgWithLink(text, url) {
