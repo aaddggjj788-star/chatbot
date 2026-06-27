@@ -177,11 +177,10 @@ async function checkMail() {
     }
     console.log(`  検索対象件名: ${JSON.stringify(TARGET_SUBJECT)}`);
 
-    // UNSEEN → ALL に変更（テスト用。動作確認後はUNSEENに戻す）
-    const searchCriteria = ['ALL', ['SUBJECT', TARGET_SUBJECT]];
+    const searchCriteria = ['UNSEEN', ['SUBJECT', TARGET_SUBJECT]];
     const fetchOptions = {
       bodies: [''],
-      markSeen: false,    // テスト中は既読にしない
+      markSeen: true,     // 処理済みメールを既読にして次回スキップ
     };
 
     const messages = await connection.search(searchCriteria, fetchOptions);
