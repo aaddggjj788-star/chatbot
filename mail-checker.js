@@ -55,6 +55,7 @@ async function sendLine(message) {
           'Content-Type': 'application/json',
       } }
     );
+    await new Promise(resolve => setTimeout(resolve, 1000)); // 429対策
   } catch (err) {
     console.error('LINE通知エラー:', err.message);
   }
@@ -78,19 +79,18 @@ function extractAmount(text) {
 async function addPointsViaPlaywright(memberId, amount, points) {
   const BASE_URL = 'http://manager.x7j4l2p9m1.com/mg/';
 
-  // ベーシック認証をURLに埋め込む形式で構築
-  const loginUrlObj = new URL(BASE_URL + 'mg_ope.php');
-  loginUrlObj.username = process.env.BASIC_AUTH_ID;
-  loginUrlObj.password = process.env.BASIC_AUTH_PASS;
-  const loginUrl = loginUrlObj.toString();
-
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
   const page = await context.newPage();
 
   try {
-    // ── ベーシック認証付きでログインページを開く ──
-    await page.goto(loginUrl, { waitUntil: 'networkidle' });
+    // ── ログインページを開く（ベーシック認証はコンテキストで処理）──
+    await page.goto(BASE_URL + 'mg_ope.php', { waitUntil: 'networkidle' });
 
     // ── ログインフォームを入力・送信 ──
     await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.SYSTEM_LOGIN_ID);
@@ -207,6 +207,11 @@ async function checkMail() {
 
     let processedCount = 0;
     for (const msg of messages) {
+      if (MAX_PROCESS > 0 && processedCount >= MAX_PROCESS) {
+        console.log(`  [MAX_PROCESS=${MAX_PROCESS}] 処理件数上限に達したため終了`);
+        break;
+      }
+
       const rawPart = msg.parts.find(p => p.which === '');
       if (!rawPart) continue;
 
@@ -267,10 +272,7 @@ async function checkMail() {
         }
       }
 
-      if (MAX_PROCESS > 0 && ++processedCount >= MAX_PROCESS) {
-        console.log(`  [MAX_PROCESS=${MAX_PROCESS}] 処理件数上限に達したため終了`);
-        break;
-      }
+      processedCount++;
     }
   } catch (err) {
     console.error('IMAPエラー:', err.message);
