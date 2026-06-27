@@ -82,21 +82,34 @@ async function addPointsViaPlaywright(memberId, amount, points) {
   });
   const page = await context.newPage();
 
+  // セレクター・パスを.envから取得
+  const SEL = {
+    loginId:      process.env.SEL_LOGIN_ID      || '[name="login_id"]',
+    loginPass:    process.env.SEL_LOGIN_PASS    || '[name="password"]',
+    loginSubmit:  process.env.SEL_LOGIN_SUBMIT  || '[type="submit"]',
+    memberId:     process.env.SEL_MEMBER_ID     || '[name="member_id"]',
+    searchSubmit: process.env.SEL_SEARCH_SUBMIT || '[type="submit"]',
+    amountSelect: process.env.SEL_AMOUNT_SELECT || 'select[name="amount"]',
+    radioCustom:  process.env.SEL_RADIO_CUSTOM  || 'input[type="radio"][value="custom"]',
+    inputAmount:  process.env.SEL_INPUT_AMOUNT  || 'input[name="input_amount"]',
+    inputPoints:  process.env.SEL_INPUT_POINTS  || 'input[name="input_points"]',
+  };
+  const pointAddPath = process.env.POINT_ADD_PATH || '/member/point_add';
+
   try {
     // ── ログイン ──
     await page.goto(process.env.SYSTEM_URL, { waitUntil: 'networkidle' });
-    await page.fill('[name="login_id"]', process.env.LOGIN_ID);     // TODO: セレクター確認
-    await page.fill('[name="password"]', process.env.LOGIN_PASS);   // TODO: セレクター確認
-    await page.click('[type="submit"]');
+    await page.fill(SEL.loginId, process.env.LOGIN_ID);
+    await page.fill(SEL.loginPass, process.env.LOGIN_PASS);
+    await page.click(SEL.loginSubmit);
     await page.waitForLoadState('networkidle');
 
-    // ── 会員検索ページへ ──
-    // TODO: 実際のポイント追加ページのURLパスに変更すること
-    await page.goto(`${process.env.SYSTEM_URL}/member/point_add`, { waitUntil: 'networkidle' });
+    // ── ポイント追加ページへ ──
+    await page.goto(`${process.env.SYSTEM_URL}${pointAddPath}`, { waitUntil: 'networkidle' });
 
     // 会員ID入力・検索
-    await page.fill('[name="member_id"]', memberId);  // TODO: セレクター確認
-    await page.click('[type="submit"]');              // TODO: 検索ボタンのセレクター確認
+    await page.fill(SEL.memberId, memberId);
+    await page.click(SEL.searchSubmit);
     await page.waitForLoadState('networkidle');
 
     // ── 安全チェック: 削除ボタンが存在してもクリックしない ──
@@ -106,15 +119,15 @@ async function addPointsViaPlaywright(memberId, amount, points) {
 
     if (isPreset) {
       // プルダウンから金額を選択
-      await page.selectOption('select[name="amount"]', String(amount)); // TODO: セレクター確認
+      await page.selectOption(SEL.amountSelect, String(amount));
     } else {
       // ラジオボタンで自由入力に切り替え
-      await page.click('input[type="radio"][value="custom"]'); // TODO: セレクター確認
+      await page.click(SEL.radioCustom);
 
       // 左側: 入金額
-      await page.fill('input[name="input_amount"]', String(amount));  // TODO: セレクター確認
+      await page.fill(SEL.inputAmount, String(amount));
       // 右側: 追加ポイント数
-      await page.fill('input[name="input_points"]', String(points));  // TODO: セレクター確認
+      await page.fill(SEL.inputPoints, String(points));
     }
 
     // ── ポイント追加ボタンのみをクリック（削除ボタンを除外） ──
