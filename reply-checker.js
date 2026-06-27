@@ -327,14 +327,17 @@ async function analyzeMessages(page) {
       seen.add(el);
       const bg = normStyle(el);
       if (bg.includes('90ee90') || bg.includes('144,238,144')) {
-        // コメントアウトはtrのinnerHTMLから取得する（innerHTML必須）
+        // コメントアウトは innerHTML だと &lt;!--...--&gt; にエンコードされるため
+        // hidden input の value 属性から生テキストを取得して正規表現で抽出する
         const trEl = el.tagName === 'TR' ? el : (el.closest('tr') || el);
-        const trHtml = trEl.innerHTML;
+        const trHtml = trEl.innerHTML; // デバッグ用
+        const bodyInput = trEl.querySelector('input[type="hidden"][id^="body_"]');
+        const bodyText = bodyInput ? bodyInput.value : '';
         const comments = [];
         const cre = /<!--([^>]+)-->/g;
         let cm;
-        while ((cm = cre.exec(trHtml)) !== null) { comments.push(cm[1]); }
-        msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, comments });
+        while ((cm = cre.exec(bodyText)) !== null) { comments.push(cm[1]); }
+        msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, bodyText, comments });
       } else if (bg.includes('aaaaff') || bg.includes('ffaaaa')) {
         const row = el.closest('tr') || el;
         msgs.push({ type: 'user', rowText: row.textContent || '' });
@@ -357,7 +360,7 @@ async function analyzeMessages(page) {
     const beforeUser = msgs.slice(0, firstKIdx).filter(m => m.type === 'user');
 
     const km = msgs[firstKIdx];
-    const successK = { kanteishiHtml: km.html, kanteishiTrHtml: km.trHtml, kanteishiComments: km.comments };
+    const successK = { kanteishiHtml: km.html, kanteishiTrHtml: km.trHtml, kanteishiBodyText: km.bodyText, kanteishiComments: km.comments };
 
     if (beforeUser.length === 0) {
       return { result: { target: false, reason: '鑑定士より新しいユーザーメッセージなし', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
@@ -380,6 +383,9 @@ async function analyzeMessages(page) {
   console.log(`[DEBUG] 鑑定士より新しいユーザーメッセージ: ${afterUserCount}件`);
   if (result.kanteishiTrHtml) {
     console.log(`[DEBUG] 鑑定士行HTML(先頭500文字): ${result.kanteishiTrHtml.slice(0, 500)}`);
+  }
+  if (result.kanteishiBodyText !== undefined) {
+    console.log(`[DEBUG] body_N value(先頭300文字): ${result.kanteishiBodyText.slice(0, 300)}`);
   }
   console.log(`[DEBUG] 抽出コメント: ${JSON.stringify(result.kanteishiComments)}`);
 
