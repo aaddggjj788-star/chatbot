@@ -96,6 +96,15 @@ async function addPointsViaPlaywright(memberId, amount, points) {
     await page.screenshot({ path: '/tmp/login-debug.png' });
     console.log('[DEBUG] スクリーンショット保存: /tmp/login-debug.png');
 
+    // ── セッション切れページの検知・回避 ──
+    const sessionLink = page.locator('a[href*="s_system"]');
+    if (await sessionLink.count() > 0) {
+      console.log('[DEBUG] セッション切れページを検知 → リンクをクリックしてログインページへ遷移');
+      await sessionLink.first().click();
+      await page.waitForLoadState('networkidle');
+      console.log('[DEBUG] 遷移後タイトル:', await page.title());
+    }
+
     // ── ログインフォームを入力・送信 ──
     await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.SYSTEM_LOGIN_ID);
     await page.fill(process.env.SEL_LOGIN_PASS  || '[name="password"]', process.env.SYSTEM_LOGIN_PASS);
