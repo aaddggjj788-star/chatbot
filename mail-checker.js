@@ -92,6 +92,9 @@ async function addPointsViaPlaywright(memberId, amount, points) {
   try {
     // ── ログインページを開く（ベーシック認証はコンテキストで処理）──
     await page.goto(BASE_URL + 'mg_ope.php', { waitUntil: 'networkidle' });
+    console.log('[DEBUG] ページタイトル:', await page.title());
+    await page.screenshot({ path: '/tmp/login-debug.png' });
+    console.log('[DEBUG] スクリーンショット保存: /tmp/login-debug.png');
 
     // ── ログインフォームを入力・送信 ──
     await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.SYSTEM_LOGIN_ID);
