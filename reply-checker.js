@@ -170,15 +170,14 @@ async function login(page) {
 
 // ─── Playwright: サポート画面を新タブで開く ──────────────────────
 
-async function openSupportPage(context, page) {
-  const supportLoc = page.locator('a[href="mg_ope.php"]').first();
-  const [supportPage] = await Promise.all([
-    context.waitForEvent('page'),
-    supportLoc.click(),
+async function openSupportPage(browser, page) {
+  const [newPage] = await Promise.all([
+    browser.waitForEvent('page'),
+    page.click('a[href="mg_ope.php"]'),
   ]);
-  await supportPage.waitForLoadState('networkidle');
-  console.log('[SUPPORT] タブ切替完了:', await supportPage.title());
-  return supportPage;
+  await newPage.waitForLoadState();
+  console.log('[SUPPORT] タブ切替完了:', await newPage.title());
+  return newPage;
 }
 
 // ─── 対象ユーザー絞り込み（JS評価）─────────────────────────────────
@@ -400,7 +399,7 @@ async function checkReplies() {
   try {
     const page = await context.newPage();
     await login(page);
-    const supportPage = await openSupportPage(context, page);
+    const supportPage = await openSupportPage(browser, page);
     await processUsers(supportPage);
     console.log('=== reply-checker 完了 ===');
   } catch (err) {
