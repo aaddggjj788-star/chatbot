@@ -1,7 +1,19 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk').default;
-const { startMailCheck, stopMailCheck, isMailCheckRunning } = require('./mail-checker');
+
+// mail-checker は依存パッケージが別環境にある場合があるため安全に読み込む
+let startMailCheck = () => console.warn('mail-checker 未ロード');
+let stopMailCheck  = () => console.warn('mail-checker 未ロード');
+let isMailCheckRunning = () => false;
+try {
+  const mc = require('./mail-checker');
+  startMailCheck    = mc.startMailCheck;
+  stopMailCheck     = mc.stopMailCheck;
+  isMailCheckRunning = mc.isMailCheckRunning;
+} catch (e) {
+  console.warn('mail-checker のロードに失敗しました:', e.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -221,26 +233,34 @@ async function lineReply(replyToken, text) {
   }).catch(err => console.error('LINE返信エラー:', err.message));
 }
 
+async function handleEvent(event) {
+  if (event.type !== 'message' || event.message.type !== 'text') return;
+
+  const text = event.message.text.trim();
+  const replyToken = event.replyToken;
+
+  console.log('[LINE] 受信:', JSON.stringify(text));
+
+  if (text === '入金処理開始') {
+    startMailCheck();
+    return lineReply(replyToken, '入金処理を開始しました');
+  }
+  if (text === '入金処理停止') {
+    stopMailCheck();
+    return lineReply(replyToken, '入金処理を停止しました');
+  }
+  if (text === 'ステータス') {
+    return lineReply(replyToken, isMailCheckRunning() ? '稼働中' : '停止中');
+  }
+
+  // 未対応メッセージはエコー返信
+  return lineReply(replyToken, '受け取りました：' + text);
+}
+
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200); // LINEは即時200が必要
-
   const events = req.body.events || [];
-  for (const event of events) {
-    if (event.type !== 'message' || event.message.type !== 'text') continue;
-
-    const text = event.message.text.trim();
-    const replyToken = event.replyToken;
-
-    if (text === '入金処理開始') {
-      startMailCheck();
-      await lineReply(replyToken, '入金処理を開始しました');
-    } else if (text === '入金処理停止') {
-      stopMailCheck();
-      await lineReply(replyToken, '入金処理を停止しました');
-    } else if (text === 'ステータス') {
-      await lineReply(replyToken, isMailCheckRunning() ? '稼働中' : '停止中');
-    }
-  }
+  await Promise.all(events.map(handleEvent));
 });
 
 app.listen(PORT, () => {
