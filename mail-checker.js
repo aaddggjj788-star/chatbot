@@ -55,19 +55,17 @@ async function sendLine(message) {
   }
 }
 
-// メール本文（テキスト）から依頼人名を抽出
-// ※ SUIサービスのメール書式に合わせて正規表現を調整すること
+// メール本文から依頼人名を抽出（■依頼人名\n次行に値）
 function extractSenderName(text) {
-  const match = text.match(/依頼人名\s*[：:]\s*(.+)/);
+  const match = text.match(/■依頼人名\s*\n(.+)/);
   return match ? match[1].trim() : null;
 }
 
-// メール本文から入金額（円）を抽出
-// ※ SUIサービスのメール書式に合わせて正規表現を調整すること
+// メール本文から入金額（円）を抽出（■金額\n次行に「10,000円」形式）
 function extractAmount(text) {
-  const match = text.match(/入金額\s*[：:]\s*([0-9０-９,，]+)\s*円/);
+  const match = text.match(/■金額\s*\n([\d,]+)円/);
   if (!match) return null;
-  return parseInt(toHalfWidth(match[1]).replace(/[,，]/g, ''), 10);
+  return parseInt(match[1].replace(/,/g, ''), 10);
 }
 
 // ─── Playwright: ポイント追加処理 ───────────────────────────────────
