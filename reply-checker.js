@@ -361,15 +361,25 @@ async function processUsers(page) {
     }
     console.log(`[USER] 確認中: ${userName} (k_id=${kid}, u_id=${uid}, stringID=${stringID})`);
 
-    // ─── ope_menuフレーム内で getElementById(stringID).submit() を実行 ──
-    // replay(stringID) の実体は $('#' + stringID).submit() と同等。
-    // submitするとAjaxでmg_ope_noframe.phpを取得し、ope_mainの#bodyKakuninを更新する。
+    // ─── フレーム取得 ────────────────────────────────────────────
     const menuFrame = page.frame({ name: 'ope_menu' });
     if (!menuFrame) {
       console.log(`[WARN] ${userName}: ope_menuフレームが取得できません`);
       continue;
     }
+    const mainFrame = page.frame({ name: 'ope_main' });
+    if (!mainFrame) {
+      console.log(`[WARN] ${userName}: ope_mainフレームが取得できません`);
+      continue;
+    }
 
+    // ─── submit前に#bodyKakuninを空にする（2件目以降の誤検知防止）──
+    await mainFrame.evaluate(() => {
+      const el = document.querySelector('#bodyKakunin');
+      if (el) el.innerHTML = '';
+    });
+
+    // ─── ope_menuフレームでformをsubmit → Ajaxでope_mainを更新 ──
     try {
       await menuFrame.evaluate((stringID) => {
         const form = document.getElementById(stringID);
@@ -381,13 +391,7 @@ async function processUsers(page) {
       continue;
     }
 
-    // ─── ope_mainフレームのAjax完了を待つ（#bodyKakuninに内容が入るまで）─
-    const mainFrame = page.frame({ name: 'ope_main' });
-    if (!mainFrame) {
-      console.log(`[WARN] ${userName}: ope_mainフレームが取得できません`);
-      continue;
-    }
-
+    // ─── #bodyKakuninに新しい内容が入るまで待つ ─────────────────
     try {
       await mainFrame.waitForFunction(() => {
         const el = document.querySelector('#bodyKakunin');
@@ -399,8 +403,9 @@ async function processUsers(page) {
 
     // ─── デバッグログ ──────────────────────────────────────────
     console.log(`[DEBUG] ope_main URL: ${mainFrame.url()}`);
+    // [style*="#90EE90"] で空白の有無に関わらず全て取得
     const greenCount = await page.frameLocator('iframe[name="ope_main"]')
-      .locator('tr[style*="background-color: #90EE90"], td[style*="background-color: #90EE90"]')
+      .locator('tr[style*="#90EE90"], td[style*="#90EE90"]')
       .count().catch(() => 0);
     console.log(`[DEBUG] 緑セル件数: ${greenCount}`);
 
