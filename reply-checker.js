@@ -30,8 +30,9 @@ const path = require('path');
 
 const LOGIN_URL   = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const BASE_URL    = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
-const MENU_URL    = BASE_URL + 'mg_ope_menu.php?ken=1&tai=0&mato=0';
-const DETAIL_BASE = BASE_URL + 'mg_ope_noframe.php';
+const MENU_URL       = BASE_URL + 'mg_ope_menu.php?ken=1&tai=0&mato=0';
+const DETAIL_BASE    = BASE_URL + 'mg_ope_noframe.php';
+const DETAIL_BASE_IP = 'http://153.120.166.88/mg/mg_ope_noframe.php';
 const LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const CSV_DIR = process.env.REPLY_CSV_DIR || path.join(__dirname, 'reply-csv');
 const DRY_RUN = process.env.DRY_RUN === 'true';
@@ -345,9 +346,25 @@ async function processUsers(supportPage) {
     }
     console.log(`[USER] 確認中: ${userName} (k_id=${kid}, u_id=${uid})`);
 
-    // ユーザー詳細を直接URLで開く
-    await supportPage.goto(`${DETAIL_BASE}?k_id=${kid}&u_id=${uid}`);
+    // ─── ドメインURLで詳細画面を開く ────────────────────────────
+    const domainUrl = `${DETAIL_BASE}?k_id=${kid}&u_id=${uid}`;
+    await supportPage.goto(domainUrl);
     await supportPage.waitForLoadState('load');
+
+    console.log(`[DEBUG] [ドメイン] URL:   ${supportPage.url()}`);
+    console.log(`[DEBUG] [ドメイン] Title: ${await supportPage.title()}`);
+    const greenCountDomain = await supportPage.locator('tr[style*="background-color: #90EE90"], td[style*="background-color: #90EE90"]').count();
+    console.log(`[DEBUG] [ドメイン] 緑セル件数: ${greenCountDomain}`);
+
+    // ─── IPアドレスで同じページを試す ───────────────────────────
+    const ipUrl = `${DETAIL_BASE_IP}?k_id=${kid}&u_id=${uid}`;
+    await supportPage.goto(ipUrl);
+    await supportPage.waitForLoadState('load');
+
+    console.log(`[DEBUG] [IP] URL:   ${supportPage.url()}`);
+    console.log(`[DEBUG] [IP] Title: ${await supportPage.title()}`);
+    const greenCountIp = await supportPage.locator('tr[style*="background-color: #90EE90"], td[style*="background-color: #90EE90"]').count();
+    console.log(`[DEBUG] [IP] 緑セル件数: ${greenCountIp}`);
 
     // ─── メッセージ履歴の詳細判定 ───────────────────────────────
     const analysis = await analyzeMessages(supportPage);
