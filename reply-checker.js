@@ -442,12 +442,14 @@ async function processUsers(page) {
       continue;
     }
 
-    // ─── #bodyKakuninに新しい内容が入るまで待つ ─────────────────
+    // ─── 500ms固定待機後、Ajax完了を待つ ────────────────────────
+    await new Promise(r => setTimeout(r, 500));
     try {
       await mainFrame.waitForFunction(() => {
         const el = document.querySelector('#bodyKakunin');
-        return el !== null && el.innerHTML.length > 0;
-      }, { timeout: 10000 });
+        const trCount = document.querySelectorAll('tr').length;
+        return el !== null && el.innerHTML.length > 0 && trCount >= 20;
+      }, { timeout: 15000 });
     } catch (_) {
       console.log(`[WARN] ${userName}: #bodyKakunin のタイムアウト`);
     }
