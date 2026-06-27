@@ -300,12 +300,24 @@ async function analyzeMessages(page) {
   if (!mainFrame) {
     return { target: false, reason: 'ope_mainフレームが取得できません', kanteishiHtml: '' };
   }
-  return await mainFrame.evaluate(() => {
+
+  const { result, debugRows, lastKIdx, afterUserCount } = await mainFrame.evaluate(() => {
     function normStyle(el) {
       return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
     }
 
-    // td / div からメッセージ要素をDOM順に収集
+    // ── デバッグ: 全trの背景色と既/未 ──────────────────────────
+    const debugRows = Array.from(document.querySelectorAll('tr')).map((tr, i) => {
+      const style = tr.getAttribute('style') || '';
+      const colorMatch = style.match(/#[0-9a-fA-F]{3,6}/);
+      return {
+        i,
+        color: colorMatch ? colorMatch[0] : null,
+        hasKi: tr.textContent.includes('既'),
+      };
+    });
+
+    // ── メッセージ収集: td / div ────────────────────────────────
     const msgs = [];
     for (const el of document.querySelectorAll('td, div')) {
       const bg = normStyle(el);
@@ -317,28 +329,39 @@ async function analyzeMessages(page) {
       }
     }
 
-    // 最後の鑑定士メッセージのインデックスを探す
+    // ── 最後の鑑定士メッセージのインデックスを探す ──────────────
     let lastKIdx = -1;
     for (let i = msgs.length - 1; i >= 0; i--) {
       if (msgs[i].type === 'kanteishi') { lastKIdx = i; break; }
     }
 
     if (lastKIdx === -1) {
-      return { target: false, reason: '鑑定士メッセージなし', kanteishiHtml: '' };
+      return { result: { target: false, reason: '鑑定士メッセージなし', kanteishiHtml: '' }, debugRows, lastKIdx, afterUserCount: 0 };
     }
 
     const afterUser = msgs.slice(lastKIdx + 1).filter(m => m.type === 'user');
 
     if (afterUser.length === 0) {
-      return { target: false, reason: '鑑定士後にユーザーメッセージなし', kanteishiHtml: '' };
+      return { result: { target: false, reason: '鑑定士後にユーザーメッセージなし', kanteishiHtml: '' }, debugRows, lastKIdx, afterUserCount: 0 };
     }
 
     if (afterUser.some(m => m.rowText.includes('既'))) {
-      return { target: false, reason: 'ユーザーメッセージに「既」あり', kanteishiHtml: '' };
+      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', kanteishiHtml: '' }, debugRows, lastKIdx, afterUserCount: afterUser.length };
     }
 
-    return { target: true, reason: '', kanteishiHtml: msgs[lastKIdx].html };
+    return { result: { target: true, reason: '', kanteishiHtml: msgs[lastKIdx].html }, debugRows, lastKIdx, afterUserCount: afterUser.length };
   });
+
+  // ── Node.js側でデバッグログ出力 ────────────────────────────────
+  for (const row of debugRows) {
+    if (row.color) {
+      console.log(`[DEBUG] tr[${row.i}]: 色=${row.color}, 既/未=${row.hasKi ? '既' : '未'}`);
+    }
+  }
+  console.log(`[DEBUG] 最後の鑑定士メッセージ index: ${lastKIdx}`);
+  console.log(`[DEBUG] 鑑定士後のユーザーメッセージ: ${afterUserCount}件`);
+
+  return result;
 }
 
 // ─── 返信処理メインループ ─────────────────────────────────────────
