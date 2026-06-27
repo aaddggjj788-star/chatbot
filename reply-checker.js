@@ -30,8 +30,7 @@ const path = require('path');
 
 const LOGIN_URL   = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const BASE_URL    = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
-const MENU_URL    = BASE_URL + 'mg_ope_menu.php?ken=1&tai=0&mato=0';
-const DETAIL_BASE = BASE_URL + 'mg_ope_noframe.php';
+// 親フレーム: mg_ope.php  左: iframe[name="ope_menu"]  右: iframe[name="ope_main"]
 const LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const CSV_DIR = process.env.REPLY_CSV_DIR || path.join(__dirname, 'reply-csv');
 const DRY_RUN = process.env.DRY_RUN === 'true';
@@ -174,9 +173,13 @@ async function login(page) {
 // ─── Playwright: サポート左側一覧を開く ──────────────────────────
 
 async function openSupportPage(page) {
-  await page.goto(MENU_URL);
+  await page.goto(LOGIN_URL); // 親フレームページ（mg_ope.php）を開く
   await page.waitForLoadState('load');
-  console.log('[SUPPORT] 一覧画面:', page.url());
+  // iframeが読み込まれるまで待機
+  await page.waitForSelector('iframe[name="ope_menu"]', { timeout: 10000 }).catch(() => {
+    console.log('[WARN] ope_menuフレームが見つかりません');
+  });
+  console.log('[SUPPORT] 親ページ:', page.url());
   return page;
 }
 
@@ -189,17 +192,23 @@ async function openSupportPage(page) {
 // 戻り値: [{ userName, onclick }] ※ページ内の出現順
 
 async function getTargetUsers(page) {
-  // 現在のURLを確認
-  console.log(`[DEBUG] 現在のURL: ${page.url()}`);
+  // ope_menuフレーム内で操作する
+  const menuFrameLocator = page.frameLocator('iframe[name="ope_menu"]');
 
   // 赤背景セルが出現するまで最大10秒待機
   try {
-    await page.waitForSelector('td[style*="background-color: #f00"]', { timeout: 10000 });
+    await menuFrameLocator.locator('td[style*="background-color: #f00"]').first().waitFor({ timeout: 10000 });
   } catch (_) {
     console.log('[DEBUG] waitForSelector タイムアウト: 赤背景セルが見つからなかった');
   }
 
-  const { results, debugInfo } = await page.evaluate(() => {
+  const menuFrame = page.frame({ name: 'ope_menu' });
+  if (!menuFrame) {
+    console.log('[DEBUG] ope_menuフレームが取得できません');
+    return [];
+  }
+
+  const { results, debugInfo } = await menuFrame.evaluate(() => {
     function getBgStyle(el) {
       return el ? (el.getAttribute('style') || '(style属性なし)') : null;
     }
@@ -282,7 +291,11 @@ async function getTargetUsers(page) {
 // 戻り値: { target: bool, reason: string, kanteishiHtml: string }
 
 async function analyzeMessages(page) {
-  return await page.evaluate(() => {
+  const mainFrame = page.frame({ name: 'ope_main' });
+  if (!mainFrame) {
+    return { target: false, reason: 'ope_mainフレームが取得できません', kanteishiHtml: '' };
+  }
+  return await mainFrame.evaluate(() => {
     function normStyle(el) {
       return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
     }
@@ -325,12 +338,10 @@ async function analyzeMessages(page) {
 
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
-async function processUsers(supportPage) {
-  // 左側一覧を再読み込み
-  await supportPage.goto(MENU_URL);
-  await supportPage.waitForLoadState('load');
-
-  const targets = await getTargetUsers(supportPage);
+async function processUsers(page) {
+  // page = mg_ope.php（親フレームページ）
+  // ope_menuフレームから対象ユーザーを取得
+  const targets = await getTargetUsers(page);
   console.log(`[LIST] 対象ユーザー: ${targets.length}件`);
 
   if (targets.length === 0) {
@@ -345,48 +356,57 @@ async function processUsers(supportPage) {
     }
     console.log(`[USER] 確認中: ${userName} (k_id=${kid}, u_id=${uid})`);
 
-    // ─── メニューページ内のformをsubmitして詳細を開く ──────────
-    // gotoで直接開くとセッションが切れるため、mg_ope_menu.php内の
-    // フォームをsubmitしてセッションを維持したまま詳細ページを読み込む
-    if (!supportPage.url().includes('mg_ope_menu')) {
-      await supportPage.goto(MENU_URL);
-      await supportPage.waitForLoadState('load');
+    // ─── ope_menuフレーム内のformをsubmit → ope_mainに詳細が表示される ──
+    const menuFrame = page.frame({ name: 'ope_menu' });
+    if (!menuFrame) {
+      console.log(`[WARN] ${userName}: ope_menuフレームが取得できません`);
+      continue;
     }
 
-    const formFound = await supportPage.evaluate(({ kid, uid }) => {
+    const formFound = await menuFrame.evaluate(({ kid, uid }) => {
       for (const row of document.querySelectorAll('tr')) {
         const form = row.querySelector('form[action*="k_id="]');
         if (!form) continue;
         const action = form.getAttribute('action') || '';
         if (action.includes(`k_id=${kid}`) && action.includes(`u_id=${uid}`)) {
-          form.setAttribute('target', '_self');
-          form.submit();
+          form.submit(); // target="ope_main" のまま送信（ope_mainフレームに表示される）
           return true;
         }
       }
       return false;
     }, { kid: String(kid), uid: String(uid) });
-    await supportPage.waitForLoadState('load').catch(() => {});
 
     if (!formFound) {
       console.log(`[WARN] ${userName}: フォームが見つかりません (k_id=${kid}, u_id=${uid})`);
       continue;
     }
 
-    console.log(`[DEBUG] URL: ${supportPage.url()}`);
-    console.log(`[DEBUG] Title: ${await supportPage.title()}`);
-    const greenCount = await supportPage.locator('tr[style*="background-color: #90EE90"], td[style*="background-color: #90EE90"]').count();
+    // ─── ope_mainフレームの読み込みを待つ ───────────────────────
+    const mainFrame = page.frame({ name: 'ope_main' });
+    if (mainFrame) {
+      await mainFrame.waitForLoadState('load').catch(() => {});
+    } else {
+      await page.waitForTimeout(2000);
+    }
+
+    // ─── デバッグログ ──────────────────────────────────────────
+    const mainFrameNow = page.frame({ name: 'ope_main' });
+    if (mainFrameNow) {
+      console.log(`[DEBUG] ope_main URL: ${mainFrameNow.url()}`);
+    }
+    const greenCount = await page.frameLocator('iframe[name="ope_main"]')
+      .locator('tr[style*="background-color: #90EE90"], td[style*="background-color: #90EE90"]')
+      .count().catch(() => 0);
     console.log(`[DEBUG] 緑セル件数: ${greenCount}`);
 
     // ─── メッセージ履歴の詳細判定 ───────────────────────────────
-    const analysis = await analyzeMessages(supportPage);
+    const analysis = await analyzeMessages(page);
     if (!analysis.target) {
       console.log(`[SKIP] ${userName}: ${analysis.reason}`);
       continue;
     }
 
     // ─── コメントアウト抽出 ──────────────────────────────────────
-    // HTMLコメントは innerHTML から取得（innerText では不可）
     const commentMatch = analysis.kanteishiHtml.match(/<!--([a-zA-Z0-9]+)\/sinko\/?(\d+)-->/);
     if (!commentMatch) {
       console.log(`[WARN] ${userName}: コメントアウトなし`);
@@ -394,8 +414,8 @@ async function processUsers(supportPage) {
       continue;
     }
 
-    const charaId  = commentMatch[1]; // 例: "12672yu9"
-    const sinkoNum = parseInt(commentMatch[2], 10); // 例: 3
+    const charaId  = commentMatch[1];
+    const sinkoNum = parseInt(commentMatch[2], 10);
     console.log(`[COMMENT] ${userName}: charaId=${charaId} sinko=${sinkoNum}`);
 
     // ─── CSVから次の返信文を取得 ─────────────────────────────────
@@ -444,9 +464,15 @@ async function processUsers(supportPage) {
         console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
         await sendLine(`【DRY RUN】${userName}への返信送信をスキップしました`);
       } else {
-        await supportPage.fill('textarea#mess_body', textToSend);
-        await supportPage.click('#chara_mail_send');
-        await supportPage.waitForLoadState('networkidle').catch(() => {});
+        // ope_mainフレーム内のフォームに記入して送信
+        const sendFrame = page.frame({ name: 'ope_main' });
+        if (!sendFrame) {
+          console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
+          continue;
+        }
+        await sendFrame.fill('textarea#mess_body', textToSend);
+        await sendFrame.click('#chara_mail_send');
+        await sendFrame.waitForLoadState('networkidle').catch(() => {});
         console.log(`[SEND] ${userName} 送信完了`);
         await sendLine(`【送信完了】${userName}への返信を送信しました`);
       }
