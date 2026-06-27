@@ -42,13 +42,16 @@ function calcPoints(amount) {
   return Math.floor(amount / 10 + amount * 0.005);
 }
 
-// LINE Notify へ通知
+// LINE Messaging API（broadcast）へ通知
 async function sendLine(message) {
   try {
     await axios.post(
-      'https://notify-api.line.me/api/notify',
-      new URLSearchParams({ message }),
-      { headers: { Authorization: `Bearer ${process.env.LINE_NOTIFY_TOKEN}` } }
+      'https://api.line.me/v2/bot/message/broadcast',
+      { messages: [{ type: 'text', text: message }] },
+      { headers: {
+          Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+      } }
     );
   } catch (err) {
     console.error('LINE通知エラー:', err.message);
@@ -88,8 +91,8 @@ async function addPointsViaPlaywright(memberId, amount, points) {
     await page.goto(loginUrl, { waitUntil: 'networkidle' });
 
     // ── ログインフォームを入力・送信 ──
-    await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.LOGIN_ID);
-    await page.fill(process.env.SEL_LOGIN_PASS  || '[name="password"]', process.env.LOGIN_PASS);
+    await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.SYSTEM_LOGIN_ID);
+    await page.fill(process.env.SEL_LOGIN_PASS  || '[name="password"]', process.env.SYSTEM_LOGIN_PASS);
     await page.click(process.env.SEL_LOGIN_SUBMIT || '[type="submit"]');
     await page.waitForLoadState('networkidle');
 
