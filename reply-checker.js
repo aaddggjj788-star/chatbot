@@ -133,20 +133,26 @@ function getReplyFromCSV(charaId, sinkoNum) {
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
 
   const rows = parseCSV(csvPath);
-  // スラッシュあり・なし両方に対応
+
+  // sinko/N の行を特定する（スラッシュあり・なし両対応）
   const targets = [
     `<!--${charaId}/sinko${sinkoNum}-->`,
     `<!--${charaId}/sinko/${sinkoNum}-->`,
   ];
   const idx = rows.findIndex(r => targets.includes((r[0] || '').trim()));
-
   if (idx === -1) throw new Error(`コメント sinko${sinkoNum} がCSVに未発見`);
-  if (idx + 1 >= rows.length) return null; // 末尾に到達
 
-  return {
-    replyText:   rows[idx + 1][1] || '',
-    nextComment: rows[idx + 1][0] || '',
-  };
+  // 次の行 = sinko/N+1 行
+  const nextRow = rows[idx + 1];
+  if (!nextRow) return null; // 末尾に到達
+
+  // 次の行のB列 = 返信文、A列 = 次のコメントアウト（末尾に追記）
+  const replyText   = nextRow[1] || '';
+  const nextComment = nextRow[0] || '';
+
+  console.log(`[CSV] sinko${sinkoNum} 行(idx=${idx}) → 次行(idx=${idx + 1}): B列="${replyText.slice(0, 30)}..." A列="${nextComment}"`);
+
+  return { replyText, nextComment };
 }
 
 // ─── Playwright: ログイン ─────────────────────────────────────────
@@ -384,9 +390,6 @@ async function analyzeMessages(page) {
   if (result.kanteishiTrHtml) {
     console.log(`[DEBUG] 鑑定士行HTML(先頭500文字): ${result.kanteishiTrHtml.slice(0, 500)}`);
   }
-  if (result.kanteishiBodyText !== undefined) {
-    console.log(`[DEBUG] body_N value(先頭300文字): ${result.kanteishiBodyText.slice(0, 300)}`);
-  }
   console.log(`[DEBUG] 抽出コメント: ${JSON.stringify(result.kanteishiComments)}`);
 
   return result;
@@ -530,7 +533,9 @@ async function processUsers(page) {
 
     // ─── 送信 or スキップ ────────────────────────────────────────
     if (reply === '送信') {
+      // 返信文（sinko/N+1 のB列）+ 次のコメントアウト（sinko/N+1 のA列）を末尾に追記
       const textToSend = replyData.replyText + '\n' + replyData.nextComment;
+      console.log(`[SEND-TEXT] 送信内容: "${textToSend.slice(0, 80)}..."`);
       if (DRY_RUN) {
         console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
         await sendLine(`【DRY RUN】${userName}への返信送信をスキップしました`);
