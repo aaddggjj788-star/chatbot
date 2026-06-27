@@ -258,6 +258,8 @@ async function handleEvent(event) {
 }
 
 app.post('/webhook', async (req, res) => {
+  console.log('[WEBHOOK] リクエスト受信:', new Date().toISOString());
+  console.log('[WEBHOOK] body:', JSON.stringify(req.body));
   res.sendStatus(200); // LINEは即時200が必要
   const events = req.body.events || [];
   await Promise.all(events.map(handleEvent));
