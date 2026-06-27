@@ -76,66 +76,60 @@ async function addPointsViaPlaywright(memberId, amount, points) {
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({
     httpCredentials: {
-      username: process.env.BASIC_AUTH_USER,
+      username: process.env.BASIC_AUTH_ID,
       password: process.env.BASIC_AUTH_PASS,
     },
   });
   const page = await context.newPage();
-
-  // セレクター・パスを.envから取得
-  const SEL = {
-    loginId:      process.env.SEL_LOGIN_ID      || '[name="login_id"]',
-    loginPass:    process.env.SEL_LOGIN_PASS    || '[name="password"]',
-    loginSubmit:  process.env.SEL_LOGIN_SUBMIT  || '[type="submit"]',
-    memberId:     process.env.SEL_MEMBER_ID     || '[name="member_id"]',
-    searchSubmit: process.env.SEL_SEARCH_SUBMIT || '[type="submit"]',
-    amountSelect: process.env.SEL_AMOUNT_SELECT || 'select[name="amount"]',
-    radioCustom:  process.env.SEL_RADIO_CUSTOM  || 'input[type="radio"][value="custom"]',
-    inputAmount:  process.env.SEL_INPUT_AMOUNT  || 'input[name="input_amount"]',
-    inputPoints:  process.env.SEL_INPUT_POINTS  || 'input[name="input_points"]',
-  };
   const pointAddPath = process.env.POINT_ADD_PATH || '/member/point_add';
 
   try {
     // ── ログイン ──
     await page.goto(process.env.SYSTEM_URL, { waitUntil: 'networkidle' });
-    await page.fill(SEL.loginId, process.env.LOGIN_ID);
-    await page.fill(SEL.loginPass, process.env.LOGIN_PASS);
-    await page.click(SEL.loginSubmit);
+    await page.fill(process.env.SEL_LOGIN_ID   || '[name="login_id"]', process.env.LOGIN_ID);
+    await page.fill(process.env.SEL_LOGIN_PASS || '[name="password"]', process.env.LOGIN_PASS);
+    await page.click(process.env.SEL_LOGIN_SUBMIT || '[type="submit"]');
     await page.waitForLoadState('networkidle');
 
-    // ── ポイント追加ページへ ──
+    // ── 会員検索ページへ ──
     await page.goto(`${process.env.SYSTEM_URL}${pointAddPath}`, { waitUntil: 'networkidle' });
 
-    // 会員ID入力・検索
-    await page.fill(SEL.memberId, memberId);
-    await page.click(SEL.searchSubmit);
+    // 会員ID入力（textarea）
+    await page.fill('textarea[name="ken_id"]', memberId);
+
+    // 検索ボタンはonclick="nomalput()"を持つためevaluateで発火
+    await page.evaluate(() => {
+      document.querySelector('input[name="userSearch"]').click();
+    });
     await page.waitForLoadState('networkidle');
 
     // ── 安全チェック: 削除ボタンが存在してもクリックしない ──
-    // 以降の操作で data-delete / delete 系ボタンには一切触れない
 
     const isPreset = PRESET_AMOUNTS.includes(amount);
 
     if (isPreset) {
-      // プルダウンから金額を選択
-      await page.selectOption(SEL.amountSelect, String(amount));
-    } else {
-      // ラジオボタンで自由入力に切り替え
-      await page.click(SEL.radioCustom);
+      // 固定選択ラジオをON
+      await page.click('input[name="ginkoRadio"][value="0"]');
 
-      // 左側: 入金額
-      await page.fill(SEL.inputAmount, String(amount));
-      // 右側: 追加ポイント数
-      await page.fill(SEL.inputPoints, String(points));
+      // プルダウンの値形式は「金額-ポイント数」（例: 1000-105）なので前方一致で選択
+      const optionValue = await page.evaluate((amt) => {
+        const sel = document.querySelector('select[name="point_in"]');
+        const opt = Array.from(sel.options).find(o => o.value.startsWith(amt + '-'));
+        return opt ? opt.value : null;
+      }, String(amount));
+
+      if (!optionValue) throw new Error(`プルダウンに ${amount}円 の選択肢が見つかりません`);
+      await page.selectOption('select[name="point_in"]', optionValue);
+    } else {
+      // 自由入力ラジオをON
+      await page.click('input[name="ginkoRadio"][value="1"]');
+
+      await page.fill('input[name="ginkoNedan"]', String(amount));
+      await page.fill('input[name="ginkoPoint"]', String(points));
     }
 
-    // ── ポイント追加ボタンのみをクリック（削除ボタンを除外） ──
-    const addBtn = page.locator(
-      'button:not([data-delete]):not(.delete):not(.btn-danger), input[type="submit"]:not([data-delete])'
-    ).filter({ hasText: /ポイント追加|追加|add/i }).first();
-
-    await addBtn.click();
+    // ── ポイント追加ボタンをクリック ──
+    await page.click('input[name="point_bg2"]');
     await page.waitForLoadState('networkidle');
 
     // 成功確認: エラーメッセージが表示されていないか簡易チェック
