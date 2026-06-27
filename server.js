@@ -21,9 +21,11 @@ try {
 
 // reply-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let checkReplies = () => console.warn('reply-checker 未ロード');
+let stopReplies  = () => console.warn('reply-checker 未ロード');
 try {
   const rc = require('./reply-checker');
   checkReplies = rc.checkReplies;
+  stopReplies  = rc.stopReplies;
 } catch (e) {
   console.warn('reply-checker のロードに失敗しました:', e.message);
 }
@@ -268,6 +270,10 @@ async function handleEvent(event) {
   if (text === '返信チェック開始') {
     checkReplies().catch(err => console.error('[REPLY] エラー:', err.message));
     return lineReply(replyToken, '返信チェックを開始しました');
+  }
+  if (text === '返信チェック停止') {
+    stopReplies();
+    return lineReply(replyToken, '返信チェックを停止しました');
   }
 
   if (text === '入金処理開始') {

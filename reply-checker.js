@@ -37,6 +37,8 @@ const STATE_FILE = '/tmp/rune-reply-state.json';
 const POLL_INTERVAL_MS = 2000;
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
+let _shouldStop = false;
+
 // ─── LINE 送信 ────────────────────────────────────────────────────
 
 async function sendLine(message) {
@@ -67,6 +69,12 @@ function waitForLineReply() {
     setWaiting();
     const start = Date.now();
     const timer = setInterval(() => {
+      if (_shouldStop) {
+        clearInterval(timer);
+        clearState();
+        reject(new Error('停止要求'));
+        return;
+      }
       try {
         if (!fs.existsSync(STATE_FILE)) return;
         const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
@@ -275,6 +283,10 @@ async function processUsers(supportPage) {
   }
 
   for (const { userName, onclick } of targets) {
+    if (_shouldStop) {
+      console.log('[STOP] 停止要求により中断');
+      break;
+    }
     console.log(`[USER] 確認中: ${userName}`);
 
     // onclick属性で該当リンクを特定してクリック（Ajax前提のためJS経由）
@@ -366,7 +378,13 @@ async function processUsers(supportPage) {
 
 // ─── エントリポイント ─────────────────────────────────────────────
 
+function stopReplies() {
+  _shouldStop = true;
+  console.log('=== reply-checker 停止要求 ===');
+}
+
 async function checkReplies() {
+  _shouldStop = false;
   console.log('=== reply-checker 起動 ===');
   if (DRY_RUN) console.log('[DRY RUN] モード有効');
   clearState();
@@ -398,4 +416,4 @@ if (require.main === module) {
   checkReplies();
 }
 
-module.exports = { checkReplies };
+module.exports = { checkReplies, stopReplies };
