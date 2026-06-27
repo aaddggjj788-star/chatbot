@@ -237,23 +237,28 @@ async function getTargetUsers(page) {
 
       if (!unreadCell || !assignedCell) continue;
 
-      // formのaction属性からk_idとu_idを抽出
-      // 例: <form action="mg_ope_noframe.php?k_id=12638&u_id=3866720">
+      // onclick="javascript:replay('108894512609')" からstringIDを取得
+      const onclickEl = row.querySelector('[onclick*="replay"]');
+      if (!onclickEl) continue;
+      const onclickVal = onclickEl.getAttribute('onclick') || '';
+      const om = onclickVal.match(/replay\(['"]([^'"]+)['"]\)/);
+      if (!om) continue;
+      const stringID = om[1];
+
+      // formのaction属性からk_idとu_idを抽出（ログ用）
       const form = row.querySelector('form[action*="k_id="]');
-      if (!form) continue;
-
-      const action = form.getAttribute('action') || '';
+      const action = form ? (form.getAttribute('action') || '') : '';
       const m = action.match(/k_id=(\d+)&(?:amp;)?u_id=(\d+)/);
-      if (!m) continue;
 
-      // ユーザー名はrow内のリンクテキストまたはフォーム内テキストから取得
+      // ユーザー名はrow内のリンクテキストまたはonclick要素のテキストから取得
       const link = row.querySelector('a');
-      const userName = link ? link.textContent.trim() : form.textContent.trim();
+      const userName = link ? link.textContent.trim() : onclickEl.textContent.trim();
 
       results.push({
         userName,
-        kid: m[1],
-        uid: m[2],
+        kid:      m ? m[1] : '',
+        uid:      m ? m[2] : '',
+        stringID,
       });
     }
 
@@ -349,16 +354,16 @@ async function processUsers(page) {
     return;
   }
 
-  for (const { userName, kid, uid } of targets) {
+  for (const { userName, kid, uid, stringID } of targets) {
     if (_shouldStop) {
       console.log('[STOP] 停止要求により中断');
       break;
     }
-    console.log(`[USER] 確認中: ${userName} (k_id=${kid}, u_id=${uid})`);
+    console.log(`[USER] 確認中: ${userName} (k_id=${kid}, u_id=${uid}, stringID=${stringID})`);
 
-    // ─── ope_menuフレームの replay() を呼び出してAjaxで詳細を取得 ──
-    // ope_main の src は変わらず mg_ope_migi.php のまま。
-    // replay(kid, uid) がAjaxで mg_ope_noframe.php を取得し #bodyKakunin を更新する。
+    // ─── ope_menuフレーム内で getElementById(stringID).submit() を実行 ──
+    // replay(stringID) の実体は $('#' + stringID).submit() と同等。
+    // submitするとAjaxでmg_ope_noframe.phpを取得し、ope_mainの#bodyKakuninを更新する。
     const menuFrame = page.frame({ name: 'ope_menu' });
     if (!menuFrame) {
       console.log(`[WARN] ${userName}: ope_menuフレームが取得できません`);
@@ -366,11 +371,13 @@ async function processUsers(page) {
     }
 
     try {
-      await menuFrame.evaluate(({ kid, uid }) => {
-        replay(kid, uid); // ope_menu内のグローバル関数を直接呼び出す
-      }, { kid: String(kid), uid: String(uid) });
+      await menuFrame.evaluate((stringID) => {
+        const form = document.getElementById(stringID);
+        if (!form) throw new Error(`id="${stringID}" のformが見つかりません`);
+        form.submit();
+      }, stringID);
     } catch (e) {
-      console.log(`[WARN] ${userName}: replay()の呼び出しに失敗: ${e.message}`);
+      console.log(`[WARN] ${userName}: form.submit()に失敗: ${e.message}`);
       continue;
     }
 
