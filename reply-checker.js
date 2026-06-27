@@ -27,6 +27,7 @@ const { chromium } = require('playwright');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const { parse: parseCSVSync } = require('csv-parse/sync');
 
 const LOGIN_URL   = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const BASE_URL    = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
@@ -100,27 +101,15 @@ function waitForLineReply() {
 
 function parseCSV(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
-  const rows = [];
-  for (const line of content.split('\n')) {
-    if (!line.trim()) continue;
-    const cols = [];
-    let inQuote = false;
-    let cur = '';
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
-        else inQuote = !inQuote;
-      } else if (ch === ',' && !inQuote) {
-        cols.push(cur); cur = '';
-      } else {
-        cur += ch;
-      }
-    }
-    cols.push(cur.replace(/\r$/, ''));
-    rows.push(cols);
-  }
-  return rows;
+  // B列にHTML(<img src=""..."">)が含まれダブルクォートが""二重になっている場合でも
+  // relax_quotes: true  → フィールド末尾以外の " をリテラルとして扱う
+  // relax_column_count: true → 列数不一致でもエラーにしない
+  // skip_empty_lines: true   → 空行スキップ
+  return parseCSVSync(content, {
+    relax_quotes:        true,
+    relax_column_count:  true,
+    skip_empty_lines:    true,
+  });
 }
 
 // "12672yu9" → "12672_yu9.csv"

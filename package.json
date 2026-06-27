@@ -15,6 +15,7 @@
   "type": "commonjs",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
+    "csv-parse": "^5.6.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
   }
