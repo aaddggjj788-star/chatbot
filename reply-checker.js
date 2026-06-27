@@ -186,17 +186,24 @@ async function openSupportPage(page) {
 // 戻り値: [{ userName, onclick }] ※ページ内の出現順
 
 async function getTargetUsers(page) {
+  // 現在のURLを確認
+  console.log(`[DEBUG] 現在のURL: ${page.url()}`);
+
+  // 赤背景セルが出現するまで最大10秒待機
+  try {
+    await page.waitForSelector('td[style*="background-color: #f00"]', { timeout: 10000 });
+  } catch (_) {
+    console.log('[DEBUG] waitForSelector タイムアウト: 赤背景セルが見つからなかった');
+  }
+
   const { results, debugInfo } = await page.evaluate(() => {
-    function normStyle(el) {
-      return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
-    }
-    function hasBg(el, colors) {
-      const s = normStyle(el);
-      return colors.some(c => s.includes('background-color:' + c));
-    }
     function getBgStyle(el) {
       return el ? (el.getAttribute('style') || '(style属性なし)') : null;
     }
+
+    // セレクターで直接件数を確認
+    const unreadCells   = Array.from(document.querySelectorAll('td[style*="background-color: #f00"]'));
+    const assignedCells = Array.from(document.querySelectorAll('td[style*="background-color: #f0fff0"]'));
 
     const rows = Array.from(document.querySelectorAll('tr'));
     const rowLogs = [];
@@ -206,10 +213,9 @@ async function getTargetUsers(page) {
       const cells = Array.from(row.querySelectorAll('td'));
       if (cells.length === 0) continue;
 
-      const unreadCell   = cells.find(td => hasBg(td, ['#f00', '#ff0000', 'red']));
-      const assignedCell = cells.find(td => hasBg(td, ['#f0fff0']));
+      const unreadCell   = cells.find(td => td.getAttribute('style') && td.getAttribute('style').includes('background-color: #f00'));
+      const assignedCell = cells.find(td => td.getAttribute('style') && td.getAttribute('style').includes('background-color: #f0fff0'));
 
-      // どちらかの色付きセルがある行のみデバッグ対象
       if (unreadCell || assignedCell) {
         rowLogs.push({
           unreadBg:   getBgStyle(unreadCell),
@@ -228,11 +234,21 @@ async function getTargetUsers(page) {
       });
     }
 
-    return { results, debugInfo: { totalRows: rows.length, rowLogs } };
+    return {
+      results,
+      debugInfo: {
+        totalRows:        rows.length,
+        unreadCellCount:  unreadCells.length,
+        assignedCellCount: assignedCells.length,
+        rowLogs,
+      },
+    };
   });
 
   // ─── デバッグログ（Node.js側で出力）────────────────────────────
   console.log(`[DEBUG] 全行数: ${debugInfo.totalRows}`);
+  console.log(`[DEBUG] 未セル(#f00)件数: ${debugInfo.unreadCellCount}`);
+  console.log(`[DEBUG] 鑑定士セル(#f0fff0)件数: ${debugInfo.assignedCellCount}`);
   for (const r of debugInfo.rowLogs) {
     if (r.unreadBg)   console.log(`[DEBUG]   未セルの背景色:    ${r.unreadBg}`);
     if (r.assignedBg) console.log(`[DEBUG]   鑑定士セルの背景色: ${r.assignedBg}`);
