@@ -317,13 +317,12 @@ async function analyzeMessages(page) {
       };
     });
 
-    // ── メッセージ収集: 下（最新）→上（古い）の逆順で走査 ───────
-    // システムは下が新しいメッセージのため、逆順にして最新から探す。
+    // ── メッセージ収集: DOM順（上=新しい → 下=古い）で走査 ──────
+    // 上（tr番号小）= 新しいメッセージ、下（tr番号大）= 古いメッセージ。
     // 背景色が tr 自体に設定されている場合も拾うため tr を追加。
-    const allEls = Array.from(document.querySelectorAll('tr, td, div')).reverse();
     const msgs = [];
     const seen = new Set();
-    for (const el of allEls) {
+    for (const el of document.querySelectorAll('tr, td, div')) {
       if (seen.has(el)) continue;
       seen.add(el);
       const bg = normStyle(el);
@@ -335,7 +334,7 @@ async function analyzeMessages(page) {
       }
     }
 
-    // ── 逆順配列の先頭 = 最新の鑑定士メッセージを探す ──────────
+    // ── DOM順の先頭 = 最新の鑑定士メッセージを探す ─────────────
     let firstKIdx = -1;
     for (let i = 0; i < msgs.length; i++) {
       if (msgs[i].type === 'kanteishi') { firstKIdx = i; break; }
@@ -345,18 +344,18 @@ async function analyzeMessages(page) {
       return { result: { target: false, reason: '鑑定士メッセージなし', kanteishiHtml: '' }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
 
-    // firstKIdx より後ろ = 最新鑑定士より上（古い）のユーザーメッセージ
-    const afterUser = msgs.slice(firstKIdx + 1).filter(m => m.type === 'user');
+    // firstKIdx より前（上=新しい）= 最新鑑定士より新しいユーザーメッセージ
+    const beforeUser = msgs.slice(0, firstKIdx).filter(m => m.type === 'user');
 
-    if (afterUser.length === 0) {
-      return { result: { target: false, reason: '鑑定士後にユーザーメッセージなし', kanteishiHtml: '' }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
+    if (beforeUser.length === 0) {
+      return { result: { target: false, reason: '鑑定士より新しいユーザーメッセージなし', kanteishiHtml: '' }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
 
-    if (afterUser.some(m => m.rowText.includes('既'))) {
-      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', kanteishiHtml: '' }, debugRows, lastKIdx: firstKIdx, afterUserCount: afterUser.length };
+    if (beforeUser.some(m => m.rowText.includes('既'))) {
+      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', kanteishiHtml: '' }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
     }
 
-    return { result: { target: true, reason: '', kanteishiHtml: msgs[firstKIdx].html }, debugRows, lastKIdx: firstKIdx, afterUserCount: afterUser.length };
+    return { result: { target: true, reason: '', kanteishiHtml: msgs[firstKIdx].html }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
   });
 
   // ── Node.js側でデバッグログ出力 ────────────────────────────────
