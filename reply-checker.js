@@ -327,7 +327,14 @@ async function analyzeMessages(page) {
       seen.add(el);
       const bg = normStyle(el);
       if (bg.includes('90ee90') || bg.includes('144,238,144')) {
-        msgs.push({ type: 'kanteishi', html: el.innerHTML });
+        // コメントアウトはtrのinnerHTMLから取得する（innerHTML必須）
+        const trEl = el.tagName === 'TR' ? el : (el.closest('tr') || el);
+        const trHtml = trEl.innerHTML;
+        const comments = [];
+        const cre = /<!--([^>]+)-->/g;
+        let cm;
+        while ((cm = cre.exec(trHtml)) !== null) { comments.push(cm[1]); }
+        msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, comments });
       } else if (bg.includes('aaaaff') || bg.includes('ffaaaa')) {
         const row = el.closest('tr') || el;
         msgs.push({ type: 'user', rowText: row.textContent || '' });
@@ -340,22 +347,27 @@ async function analyzeMessages(page) {
       if (msgs[i].type === 'kanteishi') { firstKIdx = i; break; }
     }
 
+    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiComments: [] };
+
     if (firstKIdx === -1) {
-      return { result: { target: false, reason: '鑑定士メッセージなし', kanteishiHtml: '' }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
+      return { result: { target: false, reason: '鑑定士メッセージなし', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
 
     // firstKIdx より前（上=新しい）= 最新鑑定士より新しいユーザーメッセージ
     const beforeUser = msgs.slice(0, firstKIdx).filter(m => m.type === 'user');
 
+    const km = msgs[firstKIdx];
+    const successK = { kanteishiHtml: km.html, kanteishiTrHtml: km.trHtml, kanteishiComments: km.comments };
+
     if (beforeUser.length === 0) {
-      return { result: { target: false, reason: '鑑定士より新しいユーザーメッセージなし', kanteishiHtml: '' }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
+      return { result: { target: false, reason: '鑑定士より新しいユーザーメッセージなし', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
 
     if (beforeUser.some(m => m.rowText.includes('既'))) {
-      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', kanteishiHtml: '' }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
     }
 
-    return { result: { target: true, reason: '', kanteishiHtml: msgs[firstKIdx].html }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+    return { result: { target: true, reason: '', ...successK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
   });
 
   // ── Node.js側でデバッグログ出力 ────────────────────────────────
@@ -364,8 +376,12 @@ async function analyzeMessages(page) {
       console.log(`[DEBUG] tr[${row.i}]: 色=${row.color}, 既/未=${row.hasKi ? '既' : '未'}`);
     }
   }
-  console.log(`[DEBUG] 最後の鑑定士メッセージ index: ${lastKIdx}`);
-  console.log(`[DEBUG] 鑑定士後のユーザーメッセージ: ${afterUserCount}件`);
+  console.log(`[DEBUG] 最新鑑定士メッセージ index: ${lastKIdx}`);
+  console.log(`[DEBUG] 鑑定士より新しいユーザーメッセージ: ${afterUserCount}件`);
+  if (result.kanteishiTrHtml) {
+    console.log(`[DEBUG] 鑑定士行HTML(先頭500文字): ${result.kanteishiTrHtml.slice(0, 500)}`);
+  }
+  console.log(`[DEBUG] 抽出コメント: ${JSON.stringify(result.kanteishiComments)}`);
 
   return result;
 }
@@ -446,15 +462,23 @@ async function processUsers(page) {
     }
 
     // ─── コメントアウト抽出 ──────────────────────────────────────
-    const commentMatch = analysis.kanteishiHtml.match(/<!--([a-zA-Z0-9]+)\/sinko\/?(\d+)-->/);
-    if (!commentMatch) {
-      console.log(`[WARN] ${userName}: コメントアウトなし`);
+    // HTMLコメントはinnerHTMLからのみ取得可能。analyzeMessagesで抽出済みのリストを使用。
+    const sinkoComments = analysis.kanteishiComments || [];
+    console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(sinkoComments)}`);
+
+    let charaId = null;
+    let sinkoNum = null;
+    for (const c of sinkoComments) {
+      const m = c.match(/^([a-zA-Z0-9]+)\/sinko\/?(\d+)$/);
+      if (m) { charaId = m[1]; sinkoNum = parseInt(m[2], 10); break; }
+    }
+
+    if (!charaId) {
+      console.log(`[WARN] ${userName}: sinkoコメントアウトなし`);
       await sendLine(`【要確認】${userName}：コメントアウトが見つかりません`);
       continue;
     }
 
-    const charaId  = commentMatch[1];
-    const sinkoNum = parseInt(commentMatch[2], 10);
     console.log(`[COMMENT] ${userName}: charaId=${charaId} sinko=${sinkoNum}`);
 
     // ─── CSVから次の返信文を取得 ─────────────────────────────────
