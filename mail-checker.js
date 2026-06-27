@@ -24,6 +24,22 @@ const TEST_MODE = process.env.TEST_MODE === 'true';
 // プルダウンに存在するプリセット金額（円）
 const PRESET_AMOUNTS = [1000, 1500, 3000, 5000, 10000, 15000, 20000, 30000, 50000, 70000, 100000];
 
+// 除外ID（処理しない・通知もしない）
+const EXCLUDED_IDS = [
+  '2488023', '6092588', '12516134', '16935122', '16667313',
+  '3866720', '9966839', '3569849', '1042324', '2486932',
+  '10562903', '1045392', '16166564', '2900792', '8764227',
+  '13595998', '16244500', '1494510',
+];
+
+// 通知のみID（ポイント追加はしないがLINEに通知）
+const NOTIFY_ONLY_IDS = ['19122552'];
+
+// 名前→ID変換テーブル（カタカナ氏名などIDが判別できない依頼人名の対応）
+const NAME_TO_ID = {
+  'ﾋﾖｳﾉ ｼﾝｲﾁ': '19280021',
+};
+
 // ─── ユーティリティ ──────────────────────────────────────────────────
 
 // 全角数字・英字を半角に変換
@@ -258,9 +274,27 @@ async function checkMail() {
         continue;
       }
 
-      const memberId = extractMemberId(senderName);
+      // 優先順位1: 名前→ID変換テーブルに一致すれば変換、なければ通常抽出
+      const memberId = NAME_TO_ID[senderName.trim()] || extractMemberId(senderName);
+      const nameConverted = !!NAME_TO_ID[senderName.trim()];
+      if (nameConverted) console.log(`  名前→ID変換: "${senderName}" → ${memberId}`);
 
-      // 会員IDが判別できない場合
+      // 優先順位2: 除外IDはスキップ（通知なし）
+      if (memberId && EXCLUDED_IDS.includes(memberId)) {
+        console.log(`  スキップ（除外ID） 会員ID:${memberId}`);
+        continue;
+      }
+
+      // 優先順位3: 通知のみIDはLINE通知だけ行う
+      if (memberId && NOTIFY_ONLY_IDS.includes(memberId)) {
+        console.log(`  通知のみ（NOTIFY_ONLY） 会員ID:${memberId}`);
+        await sendLine(
+          `【入金通知】会員ID：${memberId}\n入金額：${amount}円\n※処理は除外対象です`
+        );
+        continue;
+      }
+
+      // 優先順位5: IDが判別不可
       if (!memberId) {
         await sendLine(
           `【要確認】入金通知が届きましたが会員IDが判別できませんでした。\n依頼人名：${senderName}\n入金額：${amount}円`
@@ -268,6 +302,7 @@ async function checkMail() {
         continue;
       }
 
+      // 優先順位4: 通常処理
       const points = calcPoints(amount);
       console.log(`  → 会員ID: ${memberId}  追加ポイント: ${points}pt`);
 
