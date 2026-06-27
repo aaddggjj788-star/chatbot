@@ -48,10 +48,7 @@
     @keyframes blink { 0%, 80%, 100% { opacity: 0.1; } 40% { opacity: 1; } }
 
     /* 選択肢ボタン */
-    .msg.option-group {
-      align-self: flex-start; background: transparent; padding: 0;
-      max-width: 96%; display: flex; flex-direction: column; gap: 6px;
-    }
+    .option-group { align-self: flex-start; max-width: 96%; display: flex; flex-direction: column; gap: 6px; }
     .option-btn {
       padding: 10px 16px; border: 1.5px solid #0070f3; border-radius: 10px;
       background: #fff; cursor: pointer; font-size: 0.88rem; color: #0070f3;
@@ -97,14 +94,13 @@
 
 <script>
   // --- DOM ---
-  const genreScreen   = document.getElementById('genre-screen');
-  const chatScreen    = document.getElementById('chat-screen');
-  const genreLabel    = document.getElementById('genre-label');
-  const messagesEl    = document.getElementById('messages');
-  const inputEl       = document.getElementById('input');
-  const sendBtn       = document.getElementById('send');
-  const backBtn       = document.getElementById('back-btn');
-  const inputArea     = document.getElementById('input-area');
+  const genreScreen    = document.getElementById('genre-screen');
+  const chatScreen     = document.getElementById('chat-screen');
+  const genreLabel     = document.getElementById('genre-label');
+  const messagesEl     = document.getElementById('messages');
+  const inputEl        = document.getElementById('input');
+  const sendBtn        = document.getElementById('send');
+  const backBtn        = document.getElementById('back-btn');
   const headerGreeting = document.getElementById('header-greeting');
 
   // --- GETパラメータ取得（Shift-JIS / UTF-8 両対応）---
@@ -148,74 +144,20 @@
     ? `${getGreeting()}。${userInfo.user_name}さん。`
     : 'ご質問の内容に最も近いジャンルを選んでください';
 
-  // --- ジャンルデータ ---
+  // --- ジャンルデータ（選択肢ラベルのみ・回答はClaude生成）---
   const GENRE_DATA = [
-    {
-      key: 'ポイントについて', icon: '💰',
-      subs: [
-        { label: '1ポイントの金額を知りたい',
-          answer: '1ポイント＝10円です。' },
-        { label: 'メッセージ送信に必要なポイントを知りたい',
-          answer: '1通につき150pt必要です。' },
-      ]
-    },
-    {
-      key: 'ポイント購入方法', icon: '🛒',
-      subs: [
-        {
-          label: 'ポイントの購入方法を知りたい',
-          answerFn: () => {
-            const ts = Math.floor(Date.now() / 1000);
-            return {
-              text: '銀行振込、クレジットカード決済、コンビニ決済「ネットライドキャッシュ」が利用可能です。購入ページへご案内します。',
-              url: `https://x7j4l2p9m1.com/log_index.php?page=pointtuika&s=${ts}&ddv=${encodeURIComponent(userInfo.user_token)}`
-            };
-          }
-        },
-        {
-          label: '購入したけどポイントが付いていない',
-          subs: [
-            { label: '銀行振込をしたがポイントがまだ付いていない',
-              answer: '銀行振込の場合は銀行側にて入金が確認でき次第、完了通知が届きます。サポートスタッフにてその確認を行い、お客様のアカウントへ反映をしますので今しばらくお待ちください。' },
-            { label: 'クレジットカード決済したがポイントが付いていない',
-              answer: 'クレジットカード決済の場合は決済完了の即時にポイントが付与されます。付与されていない場合は決済が正常に完了していない可能性がございますので、改めて決済状況をご確認ください。' },
-            { label: 'ネットライドキャッシュを購入したがポイントが付いていない',
-              answer: 'ネットライドキャッシュは発行されたプリペイド番号を決済ページにて正しく入力することで決済が行われます。ポイントが追加されていない場合は正しくプリペイド番号が入力できていない可能性がございますので、改めてご確認ください。' },
-          ]
-        },
-      ]
-    },
-    {
-      key: '機能の説明', icon: '📖',
-      subs: [
-        { label: '送信したメッセージの確認方法',
-          answer: '送信済みメールボックスからご確認いただけます。また届いたメッセージは必ずメッセージボックスに保存されています。新着メッセージボックスは一度開封すると表示されなくなりメッセージボックスのみに表示されます。' },
-        { label: 'ラッキーくじについて',
-          answer: '1日1回無料で抽選可能です。当選賞品は受け取りページへ進むことでアカウントに登録されます。賞品の種類はポイント増加クーポン、ポイントプレゼント、メッセージ送信割引チケットがあります。' },
-        { label: '割引チケットについて',
-          answer: '割引チケットは特典申請フォームへキーワードを送信することで適用が開始されます。特典申請フォームへキーワードをお送りください。' },
-      ]
-    },
-    {
-      key: 'メッセージ機能に関して', icon: '💬',
-      subs: [
-        { label: '先生から返信が来ない',
-          answer: '返信期限は24時間以内が規定です。24時間以内であれば先生からの対応をお待ちください。メッセージ機能に不具合はなく送信されたメッセージは先生に届いています。特段先生が気づきやすい通知を送ることはできません。' },
-        { label: '先生に伝言をお願いしたい',
-          answer: '全会員様の平等性を図るため、番組側から先生への伝言は承っておりません。' },
-      ]
-    },
-    {
-      key: '所有ポイントに関して', icon: '⚠️',
-      subs: [
-        { label: '追加されたポイントがおかしい',
-          answer: '送信履歴、ポイント追加履歴を確認の上、誤差があればサポートスタッフより修正が行われますので今しばらくお待ちください。' },
-        { label: '送信履歴とポイントが合わない',
-          answer: '送信履歴、ポイント追加履歴を確認の上、誤差があればサポートスタッフより修正が行われますので今しばらくお待ちください。' },
-      ]
-    },
-    { key: 'キャンペーンについて', icon: '🎁', type: 'campaign' },
-    { key: 'その他（自由入力）',   icon: '✏️', type: 'ai_chat', full: true },
+    { key: 'ポイントについて', icon: '💰',
+      subs: ['1ポイントの金額を知りたい', 'メッセージ送信に必要なポイントを知りたい'] },
+    { key: 'ポイント購入方法', icon: '🛒',
+      subs: ['ポイントの購入方法を知りたい', '購入したけどポイントが付いていない'] },
+    { key: '機能の説明', icon: '📖',
+      subs: ['送信したメッセージの確認方法', 'ラッキーくじについて', '割引チケットについて'] },
+    { key: 'メッセージ機能に関して', icon: '💬',
+      subs: ['先生から返信が来ない', '先生に伝言をお願いしたい'] },
+    { key: '所有ポイントに関して', icon: '⚠️',
+      subs: ['追加されたポイントがおかしい', '送信履歴とポイントが合わない'] },
+    { key: 'キャンペーンについて', icon: '🎁' },
+    { key: 'その他（自由入力）', icon: '✏️', full: true },
   ];
 
   // --- 定数 ---
@@ -225,7 +167,7 @@
   let currentGenreKey = '';
   let chatHistory = [];
   let escalationState = null; // null | 'awaiting_choice' | 'awaiting_custom'
-  let phase = 'genre'; // 'genre' | 'select_sub' | 'ai_chat' | 'campaign' | 'direct_answer'
+  let busy = false;
 
   // --- ジャンルボタン生成 ---
   const genreButtonsEl = document.getElementById('genre-buttons');
@@ -242,47 +184,21 @@
     currentGenreKey = genre.key;
     chatHistory = [];
     escalationState = null;
+    busy = false;
     messagesEl.innerHTML = '';
     genreLabel.textContent = genre.key;
     genreScreen.style.display = 'none';
     chatScreen.style.display = 'flex';
 
-    if (genre.type === 'campaign') {
-      phase = 'campaign';
-      setInputVisible(true);
-      addMsg('assistant', '本日の開催企画の中でご不明な点をお気軽にご入力ください。');
-      inputEl.focus();
-    } else if (genre.type === 'ai_chat') {
-      phase = 'ai_chat';
-      setInputVisible(true);
-      addMsg('assistant', 'どのようなことでお困りですか？お気軽にご入力ください。');
-      inputEl.focus();
+    if (genre.subs && genre.subs.length > 0) {
+      addMsg('assistant', `「${genre.key}」についてのご質問ですね。\n以下よりお選びいただくか、お困りの内容をそのままご入力ください。`);
+      addOptionButtons(genre.subs);
+      inputEl.placeholder = '該当しない場合はこちらにご入力ください';
     } else {
-      phase = 'select_sub';
-      setInputVisible(false);
-      addMsg('assistant', `「${genre.key}」についてのご質問ですね。\n以下よりお選びください。`);
-      addOptionButtons(genre.subs, sub => handleSubSelection(sub));
+      addMsg('assistant', `「${genre.key}」についてのご質問ですね。\nお困りの内容をお気軽にご入力ください。`);
+      inputEl.placeholder = 'ご入力ください…';
     }
-  }
-
-  // --- サブ選択肢処理 ---
-  function handleSubSelection(sub) {
-    addMsg('user', sub.label);
-    chatHistory.push({ role: 'user', content: sub.label });
-
-    if (sub.subs) {
-      addMsg('assistant', '以下よりお選びください。');
-      addOptionButtons(sub.subs, s2 => handleSubSelection(s2));
-    } else if (sub.answerFn) {
-      const { text, url } = sub.answerFn();
-      showAnswerWithLink(text, url);
-      chatHistory.push({ role: 'assistant', content: text + '\n' + url });
-      phase = 'direct_answer';
-    } else {
-      addMsg('assistant', sub.answer);
-      chatHistory.push({ role: 'assistant', content: sub.answer });
-      phase = 'direct_answer';
-    }
+    inputEl.focus();
   }
 
   // --- 戻るボタン ---
@@ -290,7 +206,7 @@
     chatScreen.style.display = 'none';
     genreScreen.style.display = 'block';
     escalationState = null;
-    phase = 'genre';
+    busy = false;
   });
 
   // --- メッセージ追加 ---
@@ -312,27 +228,10 @@
     return div;
   }
 
-  function showAnswerWithLink(text, url) {
-    const div = document.createElement('div');
-    div.className = 'msg assistant';
-    div.style.whiteSpace = 'pre-wrap';
-    div.appendChild(document.createTextNode(text + '\n'));
-    const a = document.createElement('a');
-    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-    a.textContent = url;
-    a.style.cssText = 'word-break:break-all;color:#0070f3;display:block;margin-top:4px;';
-    div.appendChild(a);
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
   function addMsgWithLink(text, url) {
     const div = document.createElement('div');
     div.className = 'msg assistant';
-    const span = document.createElement('span');
-    span.style.whiteSpace = 'pre-wrap';
-    span.textContent = text + '\n\n';
-    div.appendChild(span);
+    div.appendChild(document.createTextNode(text + '\n\n'));
     const a = document.createElement('a');
     a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
     a.textContent = url;
@@ -342,26 +241,22 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function addOptionButtons(options, onSelect) {
+  function addOptionButtons(labels) {
     const container = document.createElement('div');
-    container.className = 'msg option-group';
-    options.forEach(opt => {
+    container.className = 'option-group';
+    labels.forEach(label => {
       const btn = document.createElement('button');
       btn.className = 'option-btn';
-      btn.textContent = opt.label;
+      btn.textContent = label;
       btn.addEventListener('click', () => {
+        if (busy) return;
         container.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
-        onSelect(opt);
+        callClaude(label);
       });
       container.appendChild(btn);
     });
     messagesEl.appendChild(container);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-    return container;
-  }
-
-  function setInputVisible(visible) {
-    inputArea.style.display = visible ? 'flex' : 'none';
   }
 
   function buildEscalationUrl(token, message) {
@@ -369,19 +264,64 @@
     return `https://x7j4l2p9m1.com/log_index.php?page=kbt&kbt=275&s=${ts}&ddv=${encodeURIComponent(token || '')}&message=${encodeURIComponent(message)}`;
   }
 
-  // --- 送信処理 ---
-  async function send() {
-    const text = inputEl.value.trim();
-    if (!text || sendBtn.disabled) return;
-    inputEl.value = '';
-    inputEl.style.height = 'auto';
+  // --- Claudeへ送信（ボタン選択・テキスト入力どちらも共通）---
+  async function callClaude(text) {
+    busy = true;
     sendBtn.disabled = true;
     addMsg('user', text);
+    chatHistory.push({ role: 'user', content: text });
 
-    // エスカレーション: 1 or 2 の選択待ち
+    const thinking = addThinking();
+    try {
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ genre: currentGenreKey, messages: chatHistory, ...userInfo }),
+      });
+      const data = await res.json();
+      thinking.remove();
+
+      if (data.error) {
+        addMsg('error', 'エラー: ' + data.error);
+        chatHistory.pop();
+        return;
+      }
+
+      if (data.can_answer) {
+        addMsg('assistant', data.reply);
+        chatHistory.push({ role: 'assistant', content: data.reply });
+        inputEl.placeholder = '引き続きご質問があればご入力ください';
+      } else {
+        addMsg('assistant', ESCALATION_MSG);
+        chatHistory.push({ role: 'assistant', content: ESCALATION_MSG });
+        escalationState = 'awaiting_choice';
+        inputEl.placeholder = '「1」または「2」をご入力ください';
+      }
+    } catch (err) {
+      thinking.remove();
+      addMsg('error', '通信エラー: ' + err.message);
+      chatHistory.pop();
+    } finally {
+      busy = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  // --- 送信ボタン・Enterキー処理 ---
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text || busy) return;
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+
+    // エスカレーション：1 or 2 の選択待ち
     if (escalationState === 'awaiting_choice') {
       if (text === '1') {
+        addMsg('user', text);
         chatHistory.push({ role: 'user', content: text });
+        busy = true;
+        sendBtn.disabled = true;
         const thinking = addThinking();
         try {
           const res = await fetch('/generate-inquiry', {
@@ -400,75 +340,41 @@
         } catch (err) {
           thinking.remove();
           addMsg('error', '通信エラー: ' + err.message);
+        } finally {
+          busy = false;
+          sendBtn.disabled = false;
+          inputEl.focus();
         }
       } else if (text === '2') {
+        addMsg('user', text);
         chatHistory.push({ role: 'user', content: text });
         addMsg('assistant', 'ありがとうございます。お客様からのお問い合わせ内容をご入力ください。');
         escalationState = 'awaiting_custom';
+        inputEl.placeholder = 'お問い合わせ内容をご入力ください';
+        inputEl.focus();
       } else {
+        addMsg('user', text);
         addMsg('assistant', '「1」または「2」をご入力ください。');
+        inputEl.focus();
       }
-      sendBtn.disabled = false;
-      inputEl.focus();
       return;
     }
 
-    // エスカレーション: カスタムメッセージ入力待ち
+    // エスカレーション：カスタムメッセージ入力待ち
     if (escalationState === 'awaiting_custom') {
+      addMsg('user', text);
       chatHistory.push({ role: 'user', content: text });
       addMsgWithLink(
         'ありがとうございます。上記の内容を転送いたしますので下記URLをクリックしサポートセンターへお問い合わせを送信してください。',
         buildEscalationUrl(userInfo.user_token, text)
       );
       escalationState = null;
-      sendBtn.disabled = false;
+      inputEl.placeholder = 'ご入力ください…';
       inputEl.focus();
       return;
     }
 
-    // キャンペーン: 入力後エスカレーション開始
-    if (phase === 'campaign') {
-      chatHistory.push({ role: 'user', content: text });
-      addMsg('assistant', ESCALATION_MSG);
-      chatHistory.push({ role: 'assistant', content: ESCALATION_MSG });
-      escalationState = 'awaiting_choice';
-      sendBtn.disabled = false;
-      inputEl.focus();
-      return;
-    }
-
-    // AIチャット (その他)
-    chatHistory.push({ role: 'user', content: text });
-    const thinking = addThinking();
-    try {
-      const res = await fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ genre: currentGenreKey, messages: chatHistory, ...userInfo }),
-      });
-      const data = await res.json();
-      thinking.remove();
-      if (data.error) {
-        addMsg('error', 'エラー: ' + data.error);
-        chatHistory.pop();
-        return;
-      }
-      if (data.can_answer) {
-        addMsg('assistant', data.reply);
-        chatHistory.push({ role: 'assistant', content: data.reply });
-      } else {
-        addMsg('assistant', ESCALATION_MSG);
-        chatHistory.push({ role: 'assistant', content: ESCALATION_MSG });
-        escalationState = 'awaiting_choice';
-      }
-    } catch (err) {
-      thinking.remove();
-      addMsg('error', '通信エラー: ' + err.message);
-      chatHistory.pop();
-    } finally {
-      sendBtn.disabled = false;
-      inputEl.focus();
-    }
+    await callClaude(text);
   }
 
   sendBtn.addEventListener('click', send);
