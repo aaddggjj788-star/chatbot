@@ -81,7 +81,8 @@ async function addPointsViaPlaywright(memberId, amount, points) {
     },
   });
   const page = await context.newPage();
-  const pointAddPath = process.env.POINT_ADD_PATH || '/member/point_add';
+  const memberSearchUrl = process.env.MEMBER_SEARCH_URL
+    || 'http://manager.x7j4l2p9m1.com/mg/mg_kyoseitaikai_list.php';
 
   try {
     // ── ログイン ──
@@ -91,49 +92,51 @@ async function addPointsViaPlaywright(memberId, amount, points) {
     await page.click(process.env.SEL_LOGIN_SUBMIT || '[type="submit"]');
     await page.waitForLoadState('networkidle');
 
-    // ── 会員検索ページへ ──
-    await page.goto(`${process.env.SYSTEM_URL}${pointAddPath}`, { waitUntil: 'networkidle' });
+    // ── 会員検索ページへ（メインコンテンツはiframe[name="main"]内に表示される）──
+    await page.goto(memberSearchUrl, { waitUntil: 'networkidle' });
 
-    // 会員ID入力（textarea）
-    await page.fill('textarea[name="ken_id"]', memberId);
+    const mainFrame = page.frame({ name: 'main' });
+    if (!mainFrame) throw new Error('iframe[name="main"] が見つかりません');
 
-    // 検索ボタンはonclick="nomalput()"を持つためevaluateで発火
-    await page.evaluate(() => {
+    // 会員ID入力（mainFrame内）
+    await mainFrame.fill('textarea[name="ken_id"]', memberId);
+
+    // 検索ボタンはonclick="nomalput()"を持つためevaluateで発火（mainFrame内）
+    await mainFrame.evaluate(() => {
       document.querySelector('input[name="userSearch"]').click();
     });
-    await page.waitForLoadState('networkidle');
+    await mainFrame.waitForLoadState('networkidle');
 
-    // ── 安全チェック: 削除ボタンが存在してもクリックしない ──
-
+    // ── ポイント追加操作（mainFrame内）──
     const isPreset = PRESET_AMOUNTS.includes(amount);
 
     if (isPreset) {
       // 固定選択ラジオをON
-      await page.click('input[name="ginkoRadio"][value="0"]');
+      await mainFrame.click('input[name="ginkoRadio"][value="0"]');
 
       // プルダウンの値形式は「金額-ポイント数」（例: 1000-105）なので前方一致で選択
-      const optionValue = await page.evaluate((amt) => {
+      const optionValue = await mainFrame.evaluate((amt) => {
         const sel = document.querySelector('select[name="point_in"]');
         const opt = Array.from(sel.options).find(o => o.value.startsWith(amt + '-'));
         return opt ? opt.value : null;
       }, String(amount));
 
       if (!optionValue) throw new Error(`プルダウンに ${amount}円 の選択肢が見つかりません`);
-      await page.selectOption('select[name="point_in"]', optionValue);
+      await mainFrame.selectOption('select[name="point_in"]', optionValue);
     } else {
       // 自由入力ラジオをON
-      await page.click('input[name="ginkoRadio"][value="1"]');
+      await mainFrame.click('input[name="ginkoRadio"][value="1"]');
 
-      await page.fill('input[name="ginkoNedan"]', String(amount));
-      await page.fill('input[name="ginkoPoint"]', String(points));
+      await mainFrame.fill('input[name="ginkoNedan"]', String(amount));
+      await mainFrame.fill('input[name="ginkoPoint"]', String(points));
     }
 
-    // ── ポイント追加ボタンをクリック ──
-    await page.click('input[name="point_bg2"]');
-    await page.waitForLoadState('networkidle');
+    // ── ポイント追加ボタンをクリック（mainFrame内）──
+    await mainFrame.click('input[name="point_bg2"]');
+    await mainFrame.waitForLoadState('networkidle');
 
-    // 成功確認: エラーメッセージが表示されていないか簡易チェック
-    const errorEl = page.locator('.error, .alert-danger, [class*="error"]');
+    // 成功確認（mainFrame内）
+    const errorEl = mainFrame.locator('.error, .alert-danger, [class*="error"]');
     const hasError = await errorEl.count() > 0;
     if (hasError) {
       const errorText = await errorEl.first().textContent();
