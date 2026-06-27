@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>サポートセンター</title>
+  <title>【RUNE】サポートチャット</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif; background: #f0f4f8; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
@@ -69,7 +69,7 @@
 <body>
 <div id="app">
   <div id="header">
-    <h1>🎧 サポートセンター</h1>
+    <h1>🎧 【RUNE】サポートチャット</h1>
     <p id="header-greeting"></p>
   </div>
 
@@ -155,7 +155,11 @@
     { key: 'メッセージ機能に関して', icon: '💬',
       subs: ['先生から返信が来ない', '先生に伝言をお願いしたい'] },
     { key: '所有ポイントに関して', icon: '⚠️',
-      subs: ['追加されたポイントがおかしい', '送信履歴とポイントが合わない'] },
+      subs: [
+        { label: '追加されたポイントがおかしい', directEscalate: true },
+        { label: '送信履歴とポイントが合わない', directEscalate: true },
+      ]
+    },
     { key: 'キャンペーンについて', icon: '🎁' },
     { key: 'その他（自由入力）', icon: '✏️', full: true },
   ];
@@ -244,19 +248,37 @@
   function addOptionButtons(labels) {
     const container = document.createElement('div');
     container.className = 'option-group';
-    labels.forEach(label => {
+    labels.forEach(item => {
+      const label = typeof item === 'string' ? item : item.label;
+      const directEscalate = typeof item === 'object' && item.directEscalate;
       const btn = document.createElement('button');
       btn.className = 'option-btn';
       btn.textContent = label;
       btn.addEventListener('click', () => {
         if (busy) return;
         container.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
-        callClaude(label);
+        if (directEscalate) {
+          showDirectEscalationUrl(label);
+        } else {
+          callClaude(label);
+        }
       });
       container.appendChild(btn);
     });
     messagesEl.appendChild(container);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function showDirectEscalationUrl(label) {
+    addMsg('user', label);
+    const ts = Math.floor(Date.now() / 1000);
+    const url = `https://x7j4l2p9m1.com/log_index.php?page=kbt&kbt=275&s=${ts}&ddv=${encodeURIComponent(userInfo.user_token || '')}&message=${encodeURIComponent(label)}`;
+    addMsgWithLink(
+      'ポイントに関するお問い合わせはサポートスタッフが確認いたします。\n下記URLをクリックしてお問い合わせ内容をお送りください。',
+      url
+    );
+    inputEl.placeholder = 'その他ご不明な点があればご入力ください';
+    inputEl.focus();
   }
 
   function buildEscalationUrl(token, message) {
