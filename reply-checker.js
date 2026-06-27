@@ -133,6 +133,11 @@ function getReplyFromCSV(charaId, sinkoNum) {
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
 
   const rows = parseCSV(csvPath);
+  console.log(`[CSV] 総行数: ${rows.length}`);
+
+  // 1行目(rows[0])は件名データとして使用する
+  const title = rows[0] ? (rows[0][0] || '') : '';
+  console.log(`[CSV] 1行目A列(件名): "${title}"`);
 
   // sinko/N の行を特定する（スラッシュあり・なし両対応）
   const targets = [
@@ -142,17 +147,19 @@ function getReplyFromCSV(charaId, sinkoNum) {
   const idx = rows.findIndex(r => targets.includes((r[0] || '').trim()));
   if (idx === -1) throw new Error(`コメント sinko${sinkoNum} がCSVに未発見`);
 
-  // 次の行 = sinko/N+1 行
+  // ヒットした行の内容をログ出力
+  const hitRow = rows[idx];
+  console.log(`[CSV] ヒット行 idx=${idx}: A列="${hitRow[0]}" B列="${(hitRow[1] || '').slice(0, 50)}"`);
+
+  // 次の行(sinko/N+1)を取得
   const nextRow = rows[idx + 1];
   if (!nextRow) return null; // 末尾に到達
 
-  // 次の行のB列 = 返信文、A列 = 次のコメントアウト（末尾に追記）
   const replyText   = nextRow[1] || '';
   const nextComment = nextRow[0] || '';
+  console.log(`[CSV] 次行 idx=${idx + 1}: A列="${nextComment}" B列="${replyText.slice(0, 50)}"`);
 
-  console.log(`[CSV] sinko${sinkoNum} 行(idx=${idx}) → 次行(idx=${idx + 1}): B列="${replyText.slice(0, 30)}..." A列="${nextComment}"`);
-
-  return { replyText, nextComment };
+  return { title, replyText, nextComment };
 }
 
 // ─── Playwright: ログイン ─────────────────────────────────────────
@@ -546,6 +553,14 @@ async function processUsers(page) {
           console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
           continue;
         }
+        // 件名入力（未入力の場合は本文1行目が件名になる仕様のため空欄でも可）
+        const titleText = replyData.title || '';
+        const titleField = sendFrame.locator('#mess_title').first();
+        if (await titleField.count() > 0) {
+          await titleField.fill(titleText);
+          console.log(`[SEND] 件名入力: "${titleText}"`);
+        }
+        // 本文：返信文 + 改行 + 次のコメントアウト
         await sendFrame.fill('textarea#mess_body', textToSend);
         await sendFrame.click('#chara_mail_send');
         await sendFrame.waitForLoadState('networkidle').catch(() => {});
