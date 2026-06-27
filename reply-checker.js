@@ -6,15 +6,19 @@
  * LINEで確認後にPlaywrightで送信するスクリプト
  *
  * 配置場所: /root/rune-bot/reply-checker.js
- * 実行: node reply-checker.js
+ * 実行: node reply-checker.js  または  server.js から checkReplies() を呼ぶ
  *
- * 【対象ユーザーの条件】
- *   「未」セル（#f00）があり、かつ鑑定士セルが #f0fff0 の行のみ処理する
- *   #87ceeb（担当外）/ #ffffe0（サポートキャラ）は除外
+ * 【対象ユーザー絞り込み（左パネル）】
+ *   「未」セル (#f00) かつ 鑑定士セル (#f0fff0) が同一行にある
+ *
+ * 【詳細判定（メッセージ履歴）】
+ *   最新の鑑定士メッセージ (#90EE90) より後に
+ *   ユーザーメッセージ (#aaaaff / #ffaaaa) が存在し、
+ *   かつそのメッセージ群に「既」が含まれない場合のみ対象
  *
  * 【LINE返信待ちの仕組み】
  *   server.js の LINE webhook と /tmp/rune-reply-state.json を共有し
- *   「送信」「スキップ」の受信をポーリングで検知する
+ *   「送信」「スキップ」の受信をポーリングで検知する（タイムアウト5分）
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
@@ -24,15 +28,14 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
-const BASE_URL = 'http://manager.x7j4l2p9m1.com/mg/';
+const LOGIN_URL = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const CSV_DIR = process.env.REPLY_CSV_DIR || path.join(__dirname, 'reply-csv');
-
 const DRY_RUN = process.env.DRY_RUN === 'true';
 
 const STATE_FILE = '/tmp/rune-reply-state.json';
 const POLL_INTERVAL_MS = 2000;
-const REPLY_TIMEOUT_MS = 10 * 60 * 1000; // 10分
+const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 // ─── LINE 送信 ────────────────────────────────────────────────────
 
@@ -41,12 +44,7 @@ async function sendLine(message) {
     await axios.post(
       'https://api.line.me/v2/bot/message/broadcast',
       { messages: [{ type: 'text', text: message }] },
-      {
-        headers: {
-          Authorization: `Bearer ${LINE_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-      }
+      { headers: { Authorization: `Bearer ${LINE_TOKEN}`, 'Content-Type': 'application/json' } }
     );
     await new Promise(r => setTimeout(r, 1000));
   } catch (err) {
@@ -55,7 +53,6 @@ async function sendLine(message) {
 }
 
 // ─── LINE 返信待ち（ファイルポーリング）─────────────────────────────
-// server.js が /tmp/rune-reply-state.json に返信内容を書き込むのを待つ
 
 function setWaiting() {
   fs.writeFileSync(STATE_FILE, JSON.stringify({ status: 'waiting', reply: null }));
@@ -83,7 +80,7 @@ function waitForLineReply() {
       if (Date.now() - start > REPLY_TIMEOUT_MS) {
         clearInterval(timer);
         clearState();
-        reject(new Error('LINE返信タイムアウト（10分）'));
+        reject(new Error('タイムアウト'));
       }
     }, POLL_INTERVAL_MS);
   });
@@ -126,7 +123,7 @@ function getReplyFromCSV(charaId, sinkoNum) {
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
 
   const rows = parseCSV(csvPath);
-  // スラッシュあり・なし両方に対応: <!--12672yu9/sinko3--> / <!--12672yu9/sinko/3-->
+  // スラッシュあり・なし両方に対応
   const targets = [
     `<!--${charaId}/sinko${sinkoNum}-->`,
     `<!--${charaId}/sinko/${sinkoNum}-->`,
@@ -145,13 +142,13 @@ function getReplyFromCSV(charaId, sinkoNum) {
 // ─── Playwright: ログイン ─────────────────────────────────────────
 
 async function login(page) {
-  await page.goto(BASE_URL + 'mg_ope.php', { waitUntil: 'networkidle' });
+  await page.goto(LOGIN_URL, { waitUntil: 'networkidle' });
   console.log('[LOGIN] タイトル:', await page.title());
 
   // セッション切れ対応（mail-checker.js と同じ方法）
   const sessionLink = page.locator('a[href*="s_system"]');
   if (await sessionLink.count() > 0) {
-    console.log('[LOGIN] セッション切れ検知 → リンクをクリック');
+    console.log('[LOGIN] セッション切れ検知 → クリック');
     await sessionLink.first().click();
     await page.waitForLoadState('networkidle');
   }
@@ -166,10 +163,10 @@ async function login(page) {
 // ─── Playwright: サポート画面を新タブで開く ──────────────────────
 
 async function openSupportPage(context, page) {
-  const supportLoc = page.locator('a[href="mg_ope.php"].link_whi, a:text("サポート画面")');
+  const supportLoc = page.locator('a[href="mg_ope.php"]').first();
   const [supportPage] = await Promise.all([
     context.waitForEvent('page'),
-    supportLoc.first().click(),
+    supportLoc.click(),
   ]);
   await supportPage.waitForLoadState('networkidle');
   console.log('[SUPPORT] タブ切替完了:', await supportPage.title());
@@ -178,26 +175,25 @@ async function openSupportPage(context, page) {
 
 // ─── 対象ユーザー絞り込み（JS評価）─────────────────────────────────
 //
-// テーブル行を走査し、以下の両条件を満たす行のユーザー情報を返す:
-//   1. いずれかのセルの style に "#f00" / "red" / "#ff0000" が含まれる（未対応）
-//   2. いずれかのセルの style に "#f0fff0" が含まれる（担当鑑定士）
+// 左パネルのテーブル行を走査し、以下の両条件を満たす行のユーザー情報を返す:
+//   1. いずれかのセルのstyleに "#f00" / "#ff0000" / "red" が含まれる（未対応）
+//   2. いずれかのセルのstyleに "#f0fff0" が含まれる（担当鑑定士）
 //
 // 戻り値: [{ userName, onclick }] ※ページ内の出現順
 
 async function getTargetUsers(page) {
   return await page.evaluate(() => {
-    function hasBg(td, colors) {
-      const s = (td.getAttribute('style') || '').toLowerCase().replace(/\s/g, '');
-      return colors.some(c => s.includes(c.toLowerCase()));
+    function normStyle(el) {
+      return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
+    }
+    function hasBg(el, colors) {
+      const s = normStyle(el);
+      return colors.some(c => s.includes('background-color:' + c));
     }
 
     const results = [];
-    const rows = document.querySelectorAll('tr');
-
-    for (const row of rows) {
+    for (const row of document.querySelectorAll('tr')) {
       const cells = Array.from(row.querySelectorAll('td'));
-      if (cells.length === 0) continue;
-
       const isUnread   = cells.some(td => hasBg(td, ['#f00', '#ff0000', 'red']));
       const isAssigned = cells.some(td => hasBg(td, ['#f0fff0']));
       if (!isUnread || !isAssigned) continue;
@@ -210,93 +206,121 @@ async function getTargetUsers(page) {
         onclick:  link.getAttribute('onclick'),
       });
     }
-
     return results;
   });
 }
 
-// ─── Playwright: ユーザーを順番に処理 ────────────────────────────
+// ─── メッセージ履歴の詳細判定（JS評価）──────────────────────────────
+//
+// 右パネルのメッセージを上から順に走査し、以下を判定:
+//   - 最新の鑑定士メッセージ (#90EE90) を特定
+//   - その後にユーザーメッセージ (#aaaaff / #ffaaaa) が存在するか
+//   - そのユーザーメッセージ群に「既」が一つでもあるか
+//
+// 戻り値: { target: bool, reason: string, kanteishiHtml: string }
 
-async function processUsers(supportPage) {
-  let userIndex = 0;
-
-  while (true) {
-    // 最新状態を取得するためリロード
-    await supportPage.reload({ waitUntil: 'networkidle' });
-
-    // 担当かつ未対応のユーザーを絞り込む
-    const targets = await getTargetUsers(supportPage);
-    console.log(`[SUPPORT] 対象ユーザー: ${targets.length}件 (処理済: ${userIndex}件)`);
-
-    if (targets.length === 0 || userIndex >= targets.length) {
-      console.log('[SUPPORT] 処理対象なし。終了');
-      break;
+async function analyzeMessages(page) {
+  return await page.evaluate(() => {
+    function normStyle(el) {
+      return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
     }
 
-    const { userName, onclick } = targets[userIndex];
-    console.log(`[USER] 処理中: ${userName}`);
+    // td / div からメッセージ要素をDOM順に収集
+    const msgs = [];
+    for (const el of document.querySelectorAll('td, div')) {
+      const bg = normStyle(el);
+      if (bg.includes('#90ee90') || bg.includes('rgb(144,238,144)')) {
+        msgs.push({ type: 'kanteishi', html: el.innerHTML });
+      } else if (bg.includes('#aaaaff') || bg.includes('#ffaaaa')) {
+        const row = el.closest('tr') || el;
+        msgs.push({ type: 'user', rowText: row.textContent || '' });
+      }
+    }
 
-    // onclick属性で該当リンクを特定してクリック（JS経由で確実に実行）
-    await supportPage.evaluate((onclickVal) => {
+    // 最後の鑑定士メッセージのインデックスを探す
+    let lastKIdx = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].type === 'kanteishi') { lastKIdx = i; break; }
+    }
+
+    if (lastKIdx === -1) {
+      return { target: false, reason: '鑑定士メッセージなし', kanteishiHtml: '' };
+    }
+
+    const afterUser = msgs.slice(lastKIdx + 1).filter(m => m.type === 'user');
+
+    if (afterUser.length === 0) {
+      return { target: false, reason: '鑑定士後にユーザーメッセージなし', kanteishiHtml: '' };
+    }
+
+    if (afterUser.some(m => m.rowText.includes('既'))) {
+      return { target: false, reason: 'ユーザーメッセージに「既」あり', kanteishiHtml: '' };
+    }
+
+    return { target: true, reason: '', kanteishiHtml: msgs[lastKIdx].html };
+  });
+}
+
+// ─── 返信処理メインループ ─────────────────────────────────────────
+
+async function processUsers(supportPage) {
+  await supportPage.reload({ waitUntil: 'networkidle' });
+
+  const targets = await getTargetUsers(supportPage);
+  console.log(`[LIST] 対象ユーザー: ${targets.length}件`);
+
+  if (targets.length === 0) {
+    await sendLine('未返信の対象ユーザーはいませんでした');
+    return;
+  }
+
+  for (const { userName, onclick } of targets) {
+    console.log(`[USER] 確認中: ${userName}`);
+
+    // onclick属性で該当リンクを特定してクリック（Ajax前提のためJS経由）
+    await supportPage.evaluate((oc) => {
       const link = Array.from(document.querySelectorAll('a[onclick*="replay"]'))
-        .find(a => a.getAttribute('onclick') === onclickVal);
+        .find(a => a.getAttribute('onclick') === oc);
       if (link) link.click();
     }, onclick);
-
-    // replay() はAjaxの可能性があるため networkidle + 追加待機
     await supportPage.waitForLoadState('networkidle').catch(() => {});
     await supportPage.waitForTimeout(1500);
 
-    // 緑枠メッセージ一覧（innerHTML でHTMLコメントを含む）
-    const greenEls = supportPage.locator(
-      '[style*="background-color: #90EE90"],' +
-      '[style*="background-color:#90EE90"],' +
-      '[style*="background-color: rgb(144, 238, 144)"]'
-    );
-    const greenCount = await greenEls.count();
-
-    if (greenCount === 0) {
-      console.log(`[USER] ${userName}: 緑メッセージなし → スキップ`);
-      userIndex++;
+    // ─── メッセージ履歴の詳細判定 ───────────────────────────────
+    const analysis = await analyzeMessages(supportPage);
+    if (!analysis.target) {
+      console.log(`[SKIP] ${userName}: ${analysis.reason}`);
       continue;
     }
 
-    // 最新（最後）の緑メッセージのHTML（HTMLコメントは innerText で取得不可のため innerHTML を使用）
-    const lastGreenHtml = await greenEls.nth(greenCount - 1).innerHTML();
-    console.log(`[MSG] HTML先頭150: ${lastGreenHtml.slice(0, 150)}`);
-
-    // コメントアウト抽出: <!--12672yu9/sinko3--> / <!--12672yu9/sinko/3-->
-    const commentMatch = lastGreenHtml.match(/<!--([a-zA-Z0-9]+)\/sinko\/?(\d+)-->/);
+    // ─── コメントアウト抽出 ──────────────────────────────────────
+    // HTMLコメントは innerHTML から取得（innerText では不可）
+    const commentMatch = analysis.kanteishiHtml.match(/<!--([a-zA-Z0-9]+)\/sinko\/?(\d+)-->/);
     if (!commentMatch) {
-      await sendLine(
-        `【要確認】${userName}のメッセージからコメントを抽出できませんでした\n` +
-        `HTML先頭：${lastGreenHtml.slice(0, 100)}`
-      );
-      userIndex++;
+      console.log(`[WARN] ${userName}: コメントアウトなし`);
+      await sendLine(`【要確認】${userName}：コメントアウトが見つかりません`);
       continue;
     }
 
     const charaId  = commentMatch[1]; // 例: "12672yu9"
     const sinkoNum = parseInt(commentMatch[2], 10); // 例: 3
-    console.log(`[COMMENT] charaId=${charaId} sinko=${sinkoNum}`);
+    console.log(`[COMMENT] ${userName}: charaId=${charaId} sinko=${sinkoNum}`);
 
-    // CSV から次の返信文を取得
+    // ─── CSVから次の返信文を取得 ─────────────────────────────────
     let replyData;
     try {
       replyData = getReplyFromCSV(charaId, sinkoNum);
     } catch (e) {
-      await sendLine(`【エラー】CSV取得失敗: ${e.message}`);
-      userIndex++;
+      await sendLine(`【エラー】CSV取得失敗 (${userName}): ${e.message}`);
       continue;
     }
 
     if (!replyData) {
       await sendLine(`【終了】${userName}の返信文章が終了しました`);
-      userIndex++;
       continue;
     }
 
-    // LINEに確認メッセージを送信
+    // ─── LINEに確認メッセージを送信 ─────────────────────────────
     const lineMsg = [
       '【返信確認】',
       `ユーザー：${userName}`,
@@ -308,26 +332,27 @@ async function processUsers(supportPage) {
       '送信する場合は「送信」',
       'スキップする場合は「スキップ」と返信してください',
     ].join('\n');
-
     await sendLine(lineMsg);
 
-    // LINE返信を待つ（server.js が state file に書き込むまでポーリング）
+    // ─── LINE返信を待つ（5分タイムアウト → スキップ）────────────
     let reply;
     try {
       reply = await waitForLineReply();
     } catch (e) {
-      await sendLine(`【タイムアウト】${userName}の返信待ちがタイムアウトしました`);
-      break;
+      console.log(`[TIMEOUT] ${userName}: 5分タイムアウト → スキップ`);
+      continue;
     }
 
     console.log(`[LINE] 返信: ${reply}`);
 
+    // ─── 送信 or スキップ ────────────────────────────────────────
     if (reply === '送信') {
+      const textToSend = replyData.replyText + '\n' + replyData.nextComment;
       if (DRY_RUN) {
         console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
         await sendLine(`【DRY RUN】${userName}への返信送信をスキップしました`);
       } else {
-        await supportPage.fill('textarea#mess_body', replyData.replyText);
+        await supportPage.fill('textarea#mess_body', textToSend);
         await supportPage.click('#chara_mail_send');
         await supportPage.waitForLoadState('networkidle').catch(() => {});
         console.log(`[SEND] ${userName} 送信完了`);
@@ -336,14 +361,14 @@ async function processUsers(supportPage) {
     } else {
       console.log(`[SKIP] ${userName} スキップ`);
     }
-    userIndex++;
   }
 }
 
-// ─── メイン ───────────────────────────────────────────────────────
+// ─── エントリポイント ─────────────────────────────────────────────
 
-async function main() {
+async function checkReplies() {
   console.log('=== reply-checker 起動 ===');
+  if (DRY_RUN) console.log('[DRY RUN] モード有効');
   clearState();
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
@@ -359,7 +384,7 @@ async function main() {
     await login(page);
     const supportPage = await openSupportPage(context, page);
     await processUsers(supportPage);
-    console.log('=== reply-checker 正常終了 ===');
+    console.log('=== reply-checker 完了 ===');
   } catch (err) {
     console.error('[FATAL]', err.message, err.stack);
     await sendLine(`【システムエラー】reply-checker: ${err.message}`);
@@ -369,4 +394,8 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  checkReplies();
+}
+
+module.exports = { checkReplies };

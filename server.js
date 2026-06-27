@@ -19,6 +19,15 @@ try {
   console.warn('mail-checker のロードに失敗しました:', e.message);
 }
 
+// reply-checker は依存パッケージが別環境にある場合があるため安全に読み込む
+let checkReplies = () => console.warn('reply-checker 未ロード');
+try {
+  const rc = require('./reply-checker');
+  checkReplies = rc.checkReplies;
+} catch (e) {
+  console.warn('reply-checker のロードに失敗しました:', e.message);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const INQUIRY_POST_URL = ''; // 後で設定
@@ -254,6 +263,11 @@ async function handleEvent(event) {
         return;
       }
     } catch (_) {}
+  }
+
+  if (text === '返信チェック開始') {
+    checkReplies().catch(err => console.error('[REPLY] エラー:', err.message));
+    return lineReply(replyToken, '返信チェックを開始しました');
   }
 
   if (text === '入金処理開始') {
