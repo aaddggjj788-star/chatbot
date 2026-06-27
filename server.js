@@ -1,6 +1,10 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk').default;
+const fs = require('fs');
+
+// reply-checker.js との連携用（LINEから「送信」「スキップ」を受け取りポーリング通知）
+const REPLY_STATE_FILE = '/tmp/rune-reply-state.json';
 
 // mail-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let startMailCheck = () => console.warn('mail-checker 未ロード');
@@ -240,6 +244,17 @@ async function handleEvent(event) {
   const replyToken = event.replyToken;
 
   console.log('[LINE] 受信:', JSON.stringify(text));
+
+  // reply-checker.js が返信待ち中なら「送信」「スキップ」をstate fileに書き込んで終了
+  if ((text === '送信' || text === 'スキップ') && fs.existsSync(REPLY_STATE_FILE)) {
+    try {
+      const state = JSON.parse(fs.readFileSync(REPLY_STATE_FILE, 'utf8'));
+      if (state.status === 'waiting') {
+        fs.writeFileSync(REPLY_STATE_FILE, JSON.stringify({ status: 'replied', reply: text }));
+        return;
+      }
+    } catch (_) {}
+  }
 
   if (text === '入金処理開始') {
     startMailCheck();
