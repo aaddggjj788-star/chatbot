@@ -170,12 +170,12 @@ async function login(page) {
 
 // ─── Playwright: サポート画面を新タブで開く ──────────────────────
 
-async function openSupportPage(browser, page) {
+async function openSupportPage(context, page) {
   const [newPage] = await Promise.all([
-    browser.waitForEvent('page'),
+    context.waitForEvent('page'),
     page.click('a[href="mg_ope.php"]'),
   ]);
-  await newPage.waitForLoadState();
+  await newPage.waitForLoadState('load');
   console.log('[SUPPORT] タブ切替完了:', await newPage.title());
   return newPage;
 }
@@ -399,7 +399,7 @@ async function checkReplies() {
   try {
     const page = await context.newPage();
     await login(page);
-    const supportPage = await openSupportPage(browser, page);
+    const supportPage = await openSupportPage(context, page);
     await processUsers(supportPage);
     console.log('=== reply-checker 完了 ===');
   } catch (err) {
