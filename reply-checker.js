@@ -186,7 +186,7 @@ async function openSupportPage(page) {
 // 戻り値: [{ userName, onclick }] ※ページ内の出現順
 
 async function getTargetUsers(page) {
-  return await page.evaluate(() => {
+  const { results, debugInfo } = await page.evaluate(() => {
     function normStyle(el) {
       return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
     }
@@ -194,13 +194,30 @@ async function getTargetUsers(page) {
       const s = normStyle(el);
       return colors.some(c => s.includes('background-color:' + c));
     }
+    function getBgStyle(el) {
+      return el ? (el.getAttribute('style') || '(style属性なし)') : null;
+    }
 
+    const rows = Array.from(document.querySelectorAll('tr'));
+    const rowLogs = [];
     const results = [];
-    for (const row of document.querySelectorAll('tr')) {
+
+    for (const row of rows) {
       const cells = Array.from(row.querySelectorAll('td'));
-      const isUnread   = cells.some(td => hasBg(td, ['#f00', '#ff0000', 'red']));
-      const isAssigned = cells.some(td => hasBg(td, ['#f0fff0']));
-      if (!isUnread || !isAssigned) continue;
+      if (cells.length === 0) continue;
+
+      const unreadCell   = cells.find(td => hasBg(td, ['#f00', '#ff0000', 'red']));
+      const assignedCell = cells.find(td => hasBg(td, ['#f0fff0']));
+
+      // どちらかの色付きセルがある行のみデバッグ対象
+      if (unreadCell || assignedCell) {
+        rowLogs.push({
+          unreadBg:   getBgStyle(unreadCell),
+          assignedBg: getBgStyle(assignedCell),
+        });
+      }
+
+      if (!unreadCell || !assignedCell) continue;
 
       const link = row.querySelector('a[onclick*="replay"]');
       if (!link) continue;
@@ -210,8 +227,19 @@ async function getTargetUsers(page) {
         onclick:  link.getAttribute('onclick'),
       });
     }
-    return results;
+
+    return { results, debugInfo: { totalRows: rows.length, rowLogs } };
   });
+
+  // ─── デバッグログ（Node.js側で出力）────────────────────────────
+  console.log(`[DEBUG] 全行数: ${debugInfo.totalRows}`);
+  for (const r of debugInfo.rowLogs) {
+    if (r.unreadBg)   console.log(`[DEBUG]   未セルの背景色:    ${r.unreadBg}`);
+    if (r.assignedBg) console.log(`[DEBUG]   鑑定士セルの背景色: ${r.assignedBg}`);
+  }
+  console.log(`[DEBUG] 条件に合った行数: ${results.length}`);
+
+  return results;
 }
 
 // ─── メッセージ履歴の詳細判定（JS評価）──────────────────────────────
