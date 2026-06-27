@@ -139,13 +139,19 @@ function getReplyFromCSV(charaId, sinkoNum) {
   const title = rows[0] ? (rows[0][0] || '') : '';
   console.log(`[CSV] 1行目A列(件名): "${title}"`);
 
-  // sinko/N の行を特定する（スラッシュあり・なし両対応）
-  const targets = [
-    `<!--${charaId}/sinko${sinkoNum}-->`,
-    `<!--${charaId}/sinko/${sinkoNum}-->`,
-  ];
-  const idx = rows.findIndex(r => targets.includes((r[0] || '').trim()));
-  if (idx === -1) throw new Error(`コメント sinko${sinkoNum} がCSVに未発見`);
+  // sinko/N の行を特定する
+  // HTMLコメントは sinko/2 形式、CSVは sinko2 形式の場合があるため
+  // 正規表現で sinko\/?数字 として両形式に対応する
+  const sinkoPattern = new RegExp(
+    `<!--${charaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/sinko\\/?${sinkoNum}-->`
+  );
+  console.log(`[CSV] 検索パターン: ${sinkoPattern}`);
+  const idx = rows.findIndex(r => sinkoPattern.test((r[0] || '').trim()));
+  if (idx === -1) {
+    // デバッグ: 先頭10行のA列を出力して何が入っているか確認
+    const sample = rows.slice(0, 10).map((r, i) => `  row[${i}]: "${r[0] || ''}"`).join('\n');
+    throw new Error(`コメント sinko${sinkoNum} がCSVに未発見\nCSV先頭10行:\n${sample}`);
+  }
 
   // ヒットした行の内容をログ出力
   const hitRow = rows[idx];
