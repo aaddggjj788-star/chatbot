@@ -356,44 +356,42 @@ async function processUsers(page) {
     }
     console.log(`[USER] 確認中: ${userName} (k_id=${kid}, u_id=${uid})`);
 
-    // ─── ope_menuフレーム内のformをsubmit → ope_mainに詳細が表示される ──
+    // ─── ope_menuフレームの replay() を呼び出してAjaxで詳細を取得 ──
+    // ope_main の src は変わらず mg_ope_migi.php のまま。
+    // replay(kid, uid) がAjaxで mg_ope_noframe.php を取得し #bodyKakunin を更新する。
     const menuFrame = page.frame({ name: 'ope_menu' });
     if (!menuFrame) {
       console.log(`[WARN] ${userName}: ope_menuフレームが取得できません`);
       continue;
     }
 
-    const formFound = await menuFrame.evaluate(({ kid, uid }) => {
-      for (const row of document.querySelectorAll('tr')) {
-        const form = row.querySelector('form[action*="k_id="]');
-        if (!form) continue;
-        const action = form.getAttribute('action') || '';
-        if (action.includes(`k_id=${kid}`) && action.includes(`u_id=${uid}`)) {
-          form.submit(); // target="ope_main" のまま送信（ope_mainフレームに表示される）
-          return true;
-        }
-      }
-      return false;
-    }, { kid: String(kid), uid: String(uid) });
-
-    if (!formFound) {
-      console.log(`[WARN] ${userName}: フォームが見つかりません (k_id=${kid}, u_id=${uid})`);
+    try {
+      await menuFrame.evaluate(({ kid, uid }) => {
+        replay(kid, uid); // ope_menu内のグローバル関数を直接呼び出す
+      }, { kid: String(kid), uid: String(uid) });
+    } catch (e) {
+      console.log(`[WARN] ${userName}: replay()の呼び出しに失敗: ${e.message}`);
       continue;
     }
 
-    // ─── ope_mainフレームの読み込みを待つ ───────────────────────
+    // ─── ope_mainフレームのAjax完了を待つ（#bodyKakuninに内容が入るまで）─
     const mainFrame = page.frame({ name: 'ope_main' });
-    if (mainFrame) {
-      await mainFrame.waitForLoadState('load').catch(() => {});
-    } else {
-      await page.waitForTimeout(2000);
+    if (!mainFrame) {
+      console.log(`[WARN] ${userName}: ope_mainフレームが取得できません`);
+      continue;
+    }
+
+    try {
+      await mainFrame.waitForFunction(() => {
+        const el = document.querySelector('#bodyKakunin');
+        return el !== null && el.innerHTML.length > 0;
+      }, { timeout: 10000 });
+    } catch (_) {
+      console.log(`[WARN] ${userName}: #bodyKakunin のタイムアウト`);
     }
 
     // ─── デバッグログ ──────────────────────────────────────────
-    const mainFrameNow = page.frame({ name: 'ope_main' });
-    if (mainFrameNow) {
-      console.log(`[DEBUG] ope_main URL: ${mainFrameNow.url()}`);
-    }
+    console.log(`[DEBUG] ope_main URL: ${mainFrame.url()}`);
     const greenCount = await page.frameLocator('iframe[name="ope_main"]')
       .locator('tr[style*="background-color: #90EE90"], td[style*="background-color: #90EE90"]')
       .count().catch(() => 0);
