@@ -317,13 +317,18 @@ async function analyzeMessages(page) {
       };
     });
 
-    // ── メッセージ収集: td / div ────────────────────────────────
+    // ── メッセージ収集: tr / td / div ────────────────────────────
+    // 背景色が tr 自体に設定されている場合も拾うため tr を追加。
+    // 比較は # なし小文字で統一し大文字小文字・スペース差異を吸収。
     const msgs = [];
-    for (const el of document.querySelectorAll('td, div')) {
+    const seen = new Set();
+    for (const el of document.querySelectorAll('tr, td, div')) {
+      if (seen.has(el)) continue;
+      seen.add(el);
       const bg = normStyle(el);
-      if (bg.includes('#90ee90') || bg.includes('rgb(144,238,144)')) {
+      if (bg.includes('90ee90') || bg.includes('144,238,144')) {
         msgs.push({ type: 'kanteishi', html: el.innerHTML });
-      } else if (bg.includes('#aaaaff') || bg.includes('#ffaaaa')) {
+      } else if (bg.includes('aaaaff') || bg.includes('ffaaaa')) {
         const row = el.closest('tr') || el;
         msgs.push({ type: 'user', rowText: row.textContent || '' });
       }
