@@ -335,15 +335,41 @@ async function checkMail() {
   }
 }
 
-// ─── 起動 ────────────────────────────────────────────────────────
+// ─── 制御 API ────────────────────────────────────────────────────
 
-console.log('=== 銀行入金メール自動処理 起動 ===');
-console.log(`チェック間隔: ${CHECK_INTERVAL_MS / 1000}秒`);
+let _intervalId = null;
 
-// 起動直後に1回実行
-checkMail().catch(console.error);
-
-// 以降は定期実行
-setInterval(() => {
+function startMailCheck() {
+  if (_intervalId) {
+    console.log('入金処理チェックは既に稼働中です');
+    return;
+  }
+  console.log('=== 入金処理チェック 開始 ===');
   checkMail().catch(console.error);
-}, CHECK_INTERVAL_MS);
+  _intervalId = setInterval(() => {
+    checkMail().catch(console.error);
+  }, CHECK_INTERVAL_MS);
+}
+
+function stopMailCheck() {
+  if (!_intervalId) {
+    console.log('入金処理チェックは既に停止中です');
+    return;
+  }
+  clearInterval(_intervalId);
+  _intervalId = null;
+  console.log('=== 入金処理チェック 停止 ===');
+}
+
+function isMailCheckRunning() {
+  return _intervalId !== null;
+}
+
+// 単体実行（node mail-checker.js）の場合のみ自動起動
+if (require.main === module) {
+  console.log('=== 銀行入金メール自動処理 起動 ===');
+  console.log(`チェック間隔: ${CHECK_INTERVAL_MS / 1000}秒`);
+  startMailCheck();
+}
+
+module.exports = { startMailCheck, stopMailCheck, isMailCheckRunning };

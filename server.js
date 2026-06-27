@@ -1,6 +1,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk').default;
+const { startMailCheck, stopMailCheck, isMailCheckRunning } = require('./mail-checker');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -202,6 +203,44 @@ app.post('/inquiry', async (req, res) => {
   }
 
   res.json({ success: true });
+});
+
+// ─── LINE Bot Webhook ─────────────────────────────────────────────
+
+async function lineReply(replyToken, text) {
+  await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [{ type: 'text', text }],
+    }),
+  }).catch(err => console.error('LINE返信エラー:', err.message));
+}
+
+app.post('/webhook', async (req, res) => {
+  res.sendStatus(200); // LINEは即時200が必要
+
+  const events = req.body.events || [];
+  for (const event of events) {
+    if (event.type !== 'message' || event.message.type !== 'text') continue;
+
+    const text = event.message.text.trim();
+    const replyToken = event.replyToken;
+
+    if (text === '入金処理開始') {
+      startMailCheck();
+      await lineReply(replyToken, '入金処理を開始しました');
+    } else if (text === '入金処理停止') {
+      stopMailCheck();
+      await lineReply(replyToken, '入金処理を停止しました');
+    } else if (text === 'ステータス') {
+      await lineReply(replyToken, isMailCheckRunning() ? '稼働中' : '停止中');
+    }
+  }
 });
 
 app.listen(PORT, () => {
