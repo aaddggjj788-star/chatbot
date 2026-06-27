@@ -8,6 +8,10 @@
  * 配置場所: /root/rune-bot/reply-checker.js
  * 実行: node reply-checker.js
  *
+ * 【対象ユーザーの条件】
+ *   「未」セル（#f00）があり、かつ鑑定士セルが #f0fff0 の行のみ処理する
+ *   #87ceeb（担当外）/ #ffffe0（サポートキャラ）は除外
+ *
  * 【LINE返信待ちの仕組み】
  *   server.js の LINE webhook と /tmp/rune-reply-state.json を共有し
  *   「送信」「スキップ」の受信をポーリングで検知する
@@ -120,7 +124,7 @@ function getReplyFromCSV(charaId, sinkoNum) {
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
 
   const rows = parseCSV(csvPath);
-  // スラッシュあり・なし両方に対応
+  // スラッシュあり・なし両方に対応: <!--12672yu9/sinko3--> / <!--12672yu9/sinko/3-->
   const targets = [
     `<!--${charaId}/sinko${sinkoNum}-->`,
     `<!--${charaId}/sinko/${sinkoNum}-->`,
@@ -170,6 +174,45 @@ async function openSupportPage(context, page) {
   return supportPage;
 }
 
+// ─── 対象ユーザー絞り込み（JS評価）─────────────────────────────────
+//
+// テーブル行を走査し、以下の両条件を満たす行のユーザー情報を返す:
+//   1. いずれかのセルの style に "#f00" / "red" / "#ff0000" が含まれる（未対応）
+//   2. いずれかのセルの style に "#f0fff0" が含まれる（担当鑑定士）
+//
+// 戻り値: [{ userName, onclick }] ※ページ内の出現順
+
+async function getTargetUsers(page) {
+  return await page.evaluate(() => {
+    function hasBg(td, colors) {
+      const s = (td.getAttribute('style') || '').toLowerCase().replace(/\s/g, '');
+      return colors.some(c => s.includes(c.toLowerCase()));
+    }
+
+    const results = [];
+    const rows = document.querySelectorAll('tr');
+
+    for (const row of rows) {
+      const cells = Array.from(row.querySelectorAll('td'));
+      if (cells.length === 0) continue;
+
+      const isUnread   = cells.some(td => hasBg(td, ['#f00', '#ff0000', 'red']));
+      const isAssigned = cells.some(td => hasBg(td, ['#f0fff0']));
+      if (!isUnread || !isAssigned) continue;
+
+      const link = row.querySelector('a[onclick*="replay"]');
+      if (!link) continue;
+
+      results.push({
+        userName: link.textContent.trim(),
+        onclick:  link.getAttribute('onclick'),
+      });
+    }
+
+    return results;
+  });
+}
+
 // ─── Playwright: ユーザーを順番に処理 ────────────────────────────
 
 async function processUsers(supportPage) {
@@ -179,26 +222,26 @@ async function processUsers(supportPage) {
     // 最新状態を取得するためリロード
     await supportPage.reload({ waitUntil: 'networkidle' });
 
-    // 「未」ユーザー（赤背景セル内のreplayリンク）を取得
-    const unreadLinks = supportPage.locator(
-      '[style*="background-color: #f00"] a[onclick*="replay"],' +
-      '[style*="background-color:#f00"] a[onclick*="replay"],' +
-      '[style*="background-color: red"] a[onclick*="replay"]'
-    );
-    const totalCount = await unreadLinks.count();
-    console.log(`[SUPPORT] 未対応: ${totalCount}件 (処理済: ${userIndex}件)`);
+    // 担当かつ未対応のユーザーを絞り込む
+    const targets = await getTargetUsers(supportPage);
+    console.log(`[SUPPORT] 対象ユーザー: ${targets.length}件 (処理済: ${userIndex}件)`);
 
-    if (totalCount === 0 || userIndex >= totalCount) {
-      console.log('[SUPPORT] 未対応ユーザーなし。終了');
+    if (targets.length === 0 || userIndex >= targets.length) {
+      console.log('[SUPPORT] 処理対象なし。終了');
       break;
     }
 
-    const userLink = unreadLinks.nth(userIndex);
-    const userName = (await userLink.textContent()).trim();
+    const { userName, onclick } = targets[userIndex];
     console.log(`[USER] 処理中: ${userName}`);
 
-    await userLink.click();
-    // replay()はAjaxの可能性があるため networkidle + 追加待機
+    // onclick属性で該当リンクを特定してクリック（JS経由で確実に実行）
+    await supportPage.evaluate((onclickVal) => {
+      const link = Array.from(document.querySelectorAll('a[onclick*="replay"]'))
+        .find(a => a.getAttribute('onclick') === onclickVal);
+      if (link) link.click();
+    }, onclick);
+
+    // replay() はAjaxの可能性があるため networkidle + 追加待機
     await supportPage.waitForLoadState('networkidle').catch(() => {});
     await supportPage.waitForTimeout(1500);
 
@@ -216,11 +259,11 @@ async function processUsers(supportPage) {
       continue;
     }
 
-    // 最新（最後）の緑メッセージのHTML（コメントアウトはinnerTextでは取得不可）
+    // 最新（最後）の緑メッセージのHTML（HTMLコメントは innerText で取得不可のため innerHTML を使用）
     const lastGreenHtml = await greenEls.nth(greenCount - 1).innerHTML();
     console.log(`[MSG] HTML先頭150: ${lastGreenHtml.slice(0, 150)}`);
 
-    // コメントアウト抽出: <!--12672yu9/sinko3--> または <!--12672yu9/sinko/3-->
+    // コメントアウト抽出: <!--12672yu9/sinko3--> / <!--12672yu9/sinko/3-->
     const commentMatch = lastGreenHtml.match(/<!--([a-zA-Z0-9]+)\/sinko\/?(\d+)-->/);
     if (!commentMatch) {
       await sendLine(
@@ -266,7 +309,7 @@ async function processUsers(supportPage) {
 
     await sendLine(lineMsg);
 
-    // LINE返信を待つ（server.js がstate fileに書き込むまでポーリング）
+    // LINE返信を待つ（server.js が state file に書き込むまでポーリング）
     let reply;
     try {
       reply = await waitForLineReply();
