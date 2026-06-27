@@ -17,6 +17,8 @@ const axios = require('axios');
 // ─── 設定 ─────────────────────────────────────────────────────────
 const TARGET_SUBJECT = '[SUI 銀行口座決済サービス] 入金のお知らせ';
 const CHECK_INTERVAL_MS = 60 * 1000; // 1分ごとにチェック
+const DRY_RUN = process.env.DRY_RUN === 'true';
+const MAX_PROCESS = parseInt(process.env.MAX_PROCESS || '0', 10); // 0 = 無制限
 
 // プルダウンに存在するプリセット金額（円）
 const PRESET_AMOUNTS = [1000, 1500, 3000, 5000, 10000, 15000, 20000, 30000, 50000, 70000, 100000];
@@ -203,6 +205,7 @@ async function checkMail() {
       }
     }
 
+    let processedCount = 0;
     for (const msg of messages) {
       const rawPart = msg.parts.find(p => p.which === '');
       if (!rawPart) continue;
@@ -247,17 +250,26 @@ async function checkMail() {
       const points = calcPoints(amount);
       console.log(`  → 会員ID: ${memberId}  追加ポイント: ${points}pt`);
 
-      try {
-        await addPointsViaPlaywright(memberId, amount, points);
-        await sendLine(
-          `【入金処理完了】\n会員ID：${memberId}\n入金額：${amount}円\n追加ポイント：${points}pt`
-        );
-        console.log(`  ✓ 処理完了 会員ID:${memberId} ${amount}円 → ${points}pt`);
-      } catch (err) {
-        console.error('ポイント追加エラー:', err.message);
-        await sendLine(
-          `【処理エラー】ポイント追加に失敗しました。手動対応をお願いします。\n会員ID：${memberId}\n入金額：${amount}円\n追加ポイント：${points}pt\nエラー：${err.message}`
-        );
+      if (DRY_RUN) {
+        console.log(`  [DRY RUN] ポイント追加をスキップ 会員ID:${memberId} ${amount}円 → ${points}pt`);
+      } else {
+        try {
+          await addPointsViaPlaywright(memberId, amount, points);
+          await sendLine(
+            `【入金処理完了】\n会員ID：${memberId}\n入金額：${amount}円\n追加ポイント：${points}pt`
+          );
+          console.log(`  ✓ 処理完了 会員ID:${memberId} ${amount}円 → ${points}pt`);
+        } catch (err) {
+          console.error('ポイント追加エラー:', err.message);
+          await sendLine(
+            `【処理エラー】ポイント追加に失敗しました。手動対応をお願いします。\n会員ID：${memberId}\n入金額：${amount}円\n追加ポイント：${points}pt\nエラー：${err.message}`
+          );
+        }
+      }
+
+      if (MAX_PROCESS > 0 && ++processedCount >= MAX_PROCESS) {
+        console.log(`  [MAX_PROCESS=${MAX_PROCESS}] 処理件数上限に達したため終了`);
+        break;
       }
     }
   } catch (err) {
