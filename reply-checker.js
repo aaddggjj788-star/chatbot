@@ -28,8 +28,11 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
-const LOGIN_URL = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
-const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const LOGIN_URL   = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
+const BASE_URL    = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
+const MENU_URL    = BASE_URL + 'mg_ope_menu.php?ken=1&tai=0&mato=0';
+const DETAIL_BASE = BASE_URL + 'mg_ope_noframe.php';
+const LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const CSV_DIR = process.env.REPLY_CSV_DIR || path.join(__dirname, 'reply-csv');
 const DRY_RUN = process.env.DRY_RUN === 'true';
 
@@ -168,12 +171,12 @@ async function login(page) {
   console.log('[LOGIN] 完了:', await page.title());
 }
 
-// ─── Playwright: サポート画面を新タブで開く ──────────────────────
+// ─── Playwright: サポート左側一覧を開く ──────────────────────────
 
 async function openSupportPage(page) {
-  await page.goto(LOGIN_URL);
+  await page.goto(MENU_URL);
   await page.waitForLoadState('load');
-  console.log('[SUPPORT] 遷移完了:', await page.title());
+  console.log('[SUPPORT] 一覧画面:', page.url());
   return page;
 }
 
@@ -228,9 +231,15 @@ async function getTargetUsers(page) {
       const link = row.querySelector('a[onclick*="replay"]');
       if (!link) continue;
 
+      // onclick="replay('12672','1042287')" などから k_id と u_id を抽出
+      const onclickVal = link.getAttribute('onclick') || '';
+      const m = onclickVal.match(/replay\(\s*['"]?(\d+)['"]?\s*,\s*['"]?(\d+)['"]?\s*\)/);
+      if (!m) continue;
+
       results.push({
         userName: link.textContent.trim(),
-        onclick:  link.getAttribute('onclick'),
+        kid: m[1],
+        uid: m[2],
       });
     }
 
@@ -312,7 +321,9 @@ async function analyzeMessages(page) {
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
 async function processUsers(supportPage) {
-  await supportPage.reload({ waitUntil: 'networkidle' });
+  // 左側一覧を再読み込み
+  await supportPage.goto(MENU_URL);
+  await supportPage.waitForLoadState('load');
 
   const targets = await getTargetUsers(supportPage);
   console.log(`[LIST] 対象ユーザー: ${targets.length}件`);
@@ -322,21 +333,16 @@ async function processUsers(supportPage) {
     return;
   }
 
-  for (const { userName, onclick } of targets) {
+  for (const { userName, kid, uid } of targets) {
     if (_shouldStop) {
       console.log('[STOP] 停止要求により中断');
       break;
     }
-    console.log(`[USER] 確認中: ${userName}`);
+    console.log(`[USER] 確認中: ${userName} (k_id=${kid}, u_id=${uid})`);
 
-    // onclick属性で該当リンクを特定してクリック（Ajax前提のためJS経由）
-    await supportPage.evaluate((oc) => {
-      const link = Array.from(document.querySelectorAll('a[onclick*="replay"]'))
-        .find(a => a.getAttribute('onclick') === oc);
-      if (link) link.click();
-    }, onclick);
-    await supportPage.waitForLoadState('networkidle').catch(() => {});
-    await supportPage.waitForTimeout(1500);
+    // ユーザー詳細を直接URLで開く
+    await supportPage.goto(`${DETAIL_BASE}?k_id=${kid}&u_id=${uid}`);
+    await supportPage.waitForLoadState('load');
 
     // ─── メッセージ履歴の詳細判定 ───────────────────────────────
     const analysis = await analyzeMessages(supportPage);
