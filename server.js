@@ -265,6 +265,17 @@ app.post('/webhook', async (req, res) => {
   await Promise.all(events.map(handleEvent));
 });
 
-app.listen(PORT, () => {
+// 未捕捉の例外・Promise拒否でプロセスが落ちないようにする
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] 未捕捉の例外:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] 未処理のPromise拒否:', reason);
+});
+
+const server = app.listen(PORT, () => {
   console.log(`サーバー起動: http://localhost:${PORT}`);
+});
+server.on('error', (err) => {
+  console.error('[SERVER] listenエラー:', err.message);
 });
