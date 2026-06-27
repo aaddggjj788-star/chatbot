@@ -195,17 +195,6 @@ async function checkMail() {
     connection = await imapSimple.connect(imapConfig);
     await connection.openBox('INBOX');
 
-    // ── デバッグ: メールボックス全件確認 ──
-    const allMessages = await connection.search(['ALL'], { bodies: ['HEADER.FIELDS (SUBJECT)'], markSeen: false });
-    console.log(`  メールボックス合計: ${allMessages.length}件`);
-    const recent = allMessages.slice(-5).reverse();
-    for (const m of recent) {
-      const headerPart = m.parts.find(p => p.which === 'HEADER.FIELDS (SUBJECT)');
-      const rawSubject = headerPart ? headerPart.body.subject?.[0] || '(件名なし)' : '(取得失敗)';
-      console.log(`  件名サンプル: ${JSON.stringify(rawSubject)}`);
-    }
-    console.log(`  検索対象件名: ${JSON.stringify(TARGET_SUBJECT)}`);
-
     const searchCriteria = TEST_MODE
       ? ['UNSEEN']
       : ['UNSEEN', ['SUBJECT', TARGET_SUBJECT]];
@@ -218,24 +207,6 @@ async function checkMail() {
     let messages = await connection.search(searchCriteria, fetchOptions);
     if (TEST_MODE && messages.length > 1) messages = messages.slice(-1); // 最新1件のみ
     console.log(`  対象メール: ${messages.length}件`);
-
-    // ── デバッグ: 最初の1件の生データを出力 ──
-    if (messages.length > 0) {
-      const firstRaw = messages[0].parts.find(p => p.which === '');
-      if (firstRaw) {
-        const rawBody = String(firstRaw.body);
-        // ヘッダーとボディの境界（空行）で分割
-        const headerEnd = rawBody.indexOf('\r\n\r\n') !== -1
-          ? rawBody.indexOf('\r\n\r\n')
-          : rawBody.indexOf('\n\n');
-        const rawHeaders = headerEnd !== -1 ? rawBody.slice(0, headerEnd) : rawBody.slice(0, 1000);
-        const rawBodyText = headerEnd !== -1 ? rawBody.slice(headerEnd).slice(0, 1000) : '';
-        console.log('=== [DEBUG] rawHeaders ===');
-        console.log(rawHeaders);
-        console.log('=== [DEBUG] rawBody (先頭1000文字) ===');
-        console.log(rawBodyText);
-      }
-    }
 
     let processedCount = 0;
     for (const msg of messages) {
@@ -257,9 +228,6 @@ async function checkMail() {
       }
 
       const text = parsed.text || '';
-      // ── デバッグ: パース後の件名・本文先頭を出力 ──
-      console.log('=== [DEBUG] parsed.subject ===', JSON.stringify(parsed.subject));
-      console.log('=== [DEBUG] parsed.text (先頭300文字) ===', text.slice(0, 300));
 
       const senderName = extractSenderName(text);
       const amount = extractAmount(text);
