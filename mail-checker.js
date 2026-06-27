@@ -163,10 +163,22 @@ async function checkMail() {
     connection = await imapSimple.connect(imapConfig);
     await connection.openBox('INBOX');
 
-    const searchCriteria = ['UNSEEN', ['SUBJECT', TARGET_SUBJECT]];
+    // ── デバッグ: メールボックス全件確認 ──
+    const allMessages = await connection.search(['ALL'], { bodies: ['HEADER.FIELDS (SUBJECT)'], markSeen: false });
+    console.log(`  メールボックス合計: ${allMessages.length}件`);
+    const recent = allMessages.slice(-5).reverse();
+    for (const m of recent) {
+      const headerPart = m.parts.find(p => p.which === 'HEADER.FIELDS (SUBJECT)');
+      const rawSubject = headerPart ? headerPart.body.subject?.[0] || '(件名なし)' : '(取得失敗)';
+      console.log(`  件名サンプル: ${JSON.stringify(rawSubject)}`);
+    }
+    console.log(`  検索対象件名: ${JSON.stringify(TARGET_SUBJECT)}`);
+
+    // UNSEEN → ALL に変更（テスト用。動作確認後はUNSEENに戻す）
+    const searchCriteria = ['ALL', ['SUBJECT', TARGET_SUBJECT]];
     const fetchOptions = {
-      bodies: [''],       // メール全体を取得
-      markSeen: true,     // 取得済みとしてマーク（再処理防止）
+      bodies: [''],
+      markSeen: false,    // テスト中は既読にしない
     };
 
     const messages = await connection.search(searchCriteria, fetchOptions);
