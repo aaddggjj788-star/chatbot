@@ -73,70 +73,61 @@ function extractAmount(text) {
 // ─── Playwright: ポイント追加処理 ───────────────────────────────────
 
 async function addPointsViaPlaywright(memberId, amount, points) {
+  const BASE_URL = 'http://manager.x7j4l2p9m1.com/mg/';
+
+  // ベーシック認証をURLに埋め込む形式で構築
+  const loginUrlObj = new URL(BASE_URL + 'mg_ope.php');
+  loginUrlObj.username = process.env.BASIC_AUTH_ID;
+  loginUrlObj.password = process.env.BASIC_AUTH_PASS;
+  const loginUrl = loginUrlObj.toString();
+
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  const context = await browser.newContext({
-    httpCredentials: {
-      username: process.env.BASIC_AUTH_ID,
-      password: process.env.BASIC_AUTH_PASS,
-    },
-  });
+  const context = await browser.newContext();
   const page = await context.newPage();
-  const memberSearchUrl = process.env.MEMBER_SEARCH_URL
-    || 'http://manager.x7j4l2p9m1.com/mg/mg_kyoseitaikai_list.php';
 
   try {
-    // ── ログイン ──
-    await page.goto(process.env.SYSTEM_URL, { waitUntil: 'networkidle' });
-    await page.fill(process.env.SEL_LOGIN_ID   || '[name="login_id"]', process.env.LOGIN_ID);
-    await page.fill(process.env.SEL_LOGIN_PASS || '[name="password"]', process.env.LOGIN_PASS);
+    // ── ベーシック認証付きでログインページを開く ──
+    await page.goto(loginUrl, { waitUntil: 'networkidle' });
+
+    // ── ログインフォームを入力・送信 ──
+    await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.LOGIN_ID);
+    await page.fill(process.env.SEL_LOGIN_PASS  || '[name="password"]', process.env.LOGIN_PASS);
     await page.click(process.env.SEL_LOGIN_SUBMIT || '[type="submit"]');
     await page.waitForLoadState('networkidle');
 
-    // ── 会員検索ページへ（メインコンテンツはiframe[name="main"]内に表示される）──
-    await page.goto(memberSearchUrl, { waitUntil: 'networkidle' });
+    // ── 会員詳細ページへ直接アクセス（検索不要）──
+    const detailUrl = `${BASE_URL}mg_kyoseitaikai.php?ken=1&ken_id=${encodeURIComponent(memberId)}`;
+    await page.goto(detailUrl, { waitUntil: 'networkidle' });
 
-    const mainFrame = page.frame({ name: 'main' });
-    if (!mainFrame) throw new Error('iframe[name="main"] が見つかりません');
+    // iframeがあればその中、なければページ直接で操作
+    const frame = page.frame({ name: 'main' }) || page;
 
-    // 会員ID入力（mainFrame内）
-    await mainFrame.fill('textarea[name="ken_id"]', memberId);
-
-    // 検索ボタンはonclick="nomalput()"を持つためevaluateで発火（mainFrame内）
-    await mainFrame.evaluate(() => {
-      document.querySelector('input[name="userSearch"]').click();
-    });
-    await mainFrame.waitForLoadState('networkidle');
-
-    // ── ポイント追加操作（mainFrame内）──
+    // ── ポイント追加フォームを操作 ──
     const isPreset = PRESET_AMOUNTS.includes(amount);
 
     if (isPreset) {
-      // 固定選択ラジオをON
-      await mainFrame.click('input[name="ginkoRadio"][value="0"]');
-
       // プルダウンの値形式は「金額-ポイント数」（例: 1000-105）なので前方一致で選択
-      const optionValue = await mainFrame.evaluate((amt) => {
+      const optionValue = await frame.evaluate((amt) => {
         const sel = document.querySelector('select[name="point_in"]');
         const opt = Array.from(sel.options).find(o => o.value.startsWith(amt + '-'));
         return opt ? opt.value : null;
       }, String(amount));
 
       if (!optionValue) throw new Error(`プルダウンに ${amount}円 の選択肢が見つかりません`);
-      await mainFrame.selectOption('select[name="point_in"]', optionValue);
+      await frame.selectOption('select[name="point_in"]', optionValue);
     } else {
-      // 自由入力ラジオをON
-      await mainFrame.click('input[name="ginkoRadio"][value="1"]');
-
-      await mainFrame.fill('input[name="ginkoNedan"]', String(amount));
-      await mainFrame.fill('input[name="ginkoPoint"]', String(points));
+      // 自由入力
+      await frame.click('input[name="ginkoRadio"][value="1"]');
+      await frame.fill('input[name="ginkoNedan"]', String(amount));
+      await frame.fill('input[name="ginkoPoint"]', String(points));
     }
 
-    // ── ポイント追加ボタンをクリック（mainFrame内）──
-    await mainFrame.click('input[name="point_bg2"]');
-    await mainFrame.waitForLoadState('networkidle');
+    // ── ポイント追加ボタンをクリック ──
+    await frame.click('input[name="point_bg2"]');
+    await frame.waitForLoadState('networkidle');
 
-    // 成功確認（mainFrame内）
-    const errorEl = mainFrame.locator('.error, .alert-danger, [class*="error"]');
+    // 成功確認
+    const errorEl = frame.locator('.error, .alert-danger, [class*="error"]');
     const hasError = await errorEl.count() > 0;
     if (hasError) {
       const errorText = await errorEl.first().textContent();
