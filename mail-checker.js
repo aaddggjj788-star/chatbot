@@ -184,6 +184,24 @@ async function checkMail() {
     const messages = await connection.search(searchCriteria, fetchOptions);
     console.log(`  対象メール: ${messages.length}件`);
 
+    // ── デバッグ: 最初の1件の生データを出力 ──
+    if (messages.length > 0) {
+      const firstRaw = messages[0].parts.find(p => p.which === '');
+      if (firstRaw) {
+        const rawBody = String(firstRaw.body);
+        // ヘッダーとボディの境界（空行）で分割
+        const headerEnd = rawBody.indexOf('\r\n\r\n') !== -1
+          ? rawBody.indexOf('\r\n\r\n')
+          : rawBody.indexOf('\n\n');
+        const rawHeaders = headerEnd !== -1 ? rawBody.slice(0, headerEnd) : rawBody.slice(0, 1000);
+        const rawBodyText = headerEnd !== -1 ? rawBody.slice(headerEnd).slice(0, 1000) : '';
+        console.log('=== [DEBUG] rawHeaders ===');
+        console.log(rawHeaders);
+        console.log('=== [DEBUG] rawBody (先頭1000文字) ===');
+        console.log(rawBodyText);
+      }
+    }
+
     for (const msg of messages) {
       const rawPart = msg.parts.find(p => p.which === '');
       if (!rawPart) continue;
@@ -198,6 +216,10 @@ async function checkMail() {
       }
 
       const text = parsed.text || '';
+      // ── デバッグ: パース後の件名・本文先頭を出力 ──
+      console.log('=== [DEBUG] parsed.subject ===', JSON.stringify(parsed.subject));
+      console.log('=== [DEBUG] parsed.text (先頭300文字) ===', text.slice(0, 300));
+
       const senderName = extractSenderName(text);
       const amount = extractAmount(text);
 
