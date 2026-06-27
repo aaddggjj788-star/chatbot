@@ -228,16 +228,21 @@ async function getTargetUsers(page) {
 
       if (!unreadCell || !assignedCell) continue;
 
-      const link = row.querySelector('a[onclick*="replay"]');
-      if (!link) continue;
+      // formのaction属性からk_idとu_idを抽出
+      // 例: <form action="mg_ope_noframe.php?k_id=12638&u_id=3866720">
+      const form = row.querySelector('form[action*="k_id="]');
+      if (!form) continue;
 
-      // onclick="replay('12672','1042287')" などから k_id と u_id を抽出
-      const onclickVal = link.getAttribute('onclick') || '';
-      const m = onclickVal.match(/replay\(\s*['"]?(\d+)['"]?\s*,\s*['"]?(\d+)['"]?\s*\)/);
+      const action = form.getAttribute('action') || '';
+      const m = action.match(/k_id=(\d+)&(?:amp;)?u_id=(\d+)/);
       if (!m) continue;
 
+      // ユーザー名はrow内のリンクテキストまたはフォーム内テキストから取得
+      const link = row.querySelector('a');
+      const userName = link ? link.textContent.trim() : form.textContent.trim();
+
       results.push({
-        userName: link.textContent.trim(),
+        userName,
         kid: m[1],
         uid: m[2],
       });
