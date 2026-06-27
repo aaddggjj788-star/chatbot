@@ -7,7 +7,7 @@
  * 実行: node mail-checker.js (PM2推奨: pm2 start mail-checker.js)
  */
 
-require('dotenv').config({ path: '/root/rune-bot/.env' });
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const imapSimple = require('imap-simple');
 const { simpleParser } = require('mailparser');
