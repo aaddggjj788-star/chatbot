@@ -28,6 +28,8 @@ const BASE_URL = 'http://manager.x7j4l2p9m1.com/mg/';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const CSV_DIR = process.env.REPLY_CSV_DIR || path.join(__dirname, 'reply-csv');
 
+const DRY_RUN = process.env.DRY_RUN === 'true';
+
 const STATE_FILE = '/tmp/rune-reply-state.json';
 const POLL_INTERVAL_MS = 2000;
 const REPLY_TIMEOUT_MS = 10 * 60 * 1000; // 10分
@@ -321,15 +323,19 @@ async function processUsers(supportPage) {
     console.log(`[LINE] 返信: ${reply}`);
 
     if (reply === '送信') {
-      await supportPage.fill('textarea#mess_body', replyData.replyText);
-      await supportPage.click('#chara_mail_send');
-      await supportPage.waitForLoadState('networkidle').catch(() => {});
-      console.log(`[SEND] ${userName} 送信完了`);
-      await sendLine(`【送信完了】${userName}への返信を送信しました`);
+      if (DRY_RUN) {
+        console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
+        await sendLine(`【DRY RUN】${userName}への返信送信をスキップしました`);
+      } else {
+        await supportPage.fill('textarea#mess_body', replyData.replyText);
+        await supportPage.click('#chara_mail_send');
+        await supportPage.waitForLoadState('networkidle').catch(() => {});
+        console.log(`[SEND] ${userName} 送信完了`);
+        await sendLine(`【送信完了】${userName}への返信を送信しました`);
+      }
     } else {
       console.log(`[SKIP] ${userName} スキップ`);
     }
-
     userIndex++;
   }
 }
