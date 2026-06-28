@@ -163,8 +163,8 @@ function getReplyFromCSV(charaId, sinkoNum) {
 
   // A列(index 0): コメントアウト(例: <!--sinko3-->)  → 返信末尾に追記
   // B列(index 1): 返信文                              → これを返信本文として使用
-  const nextComment = (nextRow[0] || '').trim();   // A列
-  const replyText   = (nextRow[1] || '').trim();   // B列
+  const nextComment = (nextRow[0] || '').trim();                    // A列
+  const replyText   = (nextRow[1] || '').trim().replace(/\\n/g, '\n'); // B列: \n→改行
 
   console.log(`[CSV] A列(nextComment)="${nextComment}"`);
   console.log(`[CSV] B列(replyText)="${replyText.slice(0, 80)}"`);
