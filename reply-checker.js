@@ -45,15 +45,26 @@ let _shouldStop = false;
 // ─── LINE 送信 ────────────────────────────────────────────────────
 
 async function sendLine(message) {
-  try {
-    await axios.post(
-      'https://api.line.me/v2/bot/message/broadcast',
-      { messages: [{ type: 'text', text: message }] },
-      { headers: { Authorization: `Bearer ${LINE_TOKEN}`, 'Content-Type': 'application/json' } }
-    );
-    await new Promise(r => setTimeout(r, 1000));
-  } catch (err) {
-    console.error('LINE送信エラー:', err.message);
+  const MAX_RETRY = 3;
+  for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    try {
+      await axios.post(
+        'https://api.line.me/v2/bot/message/broadcast',
+        { messages: [{ type: 'text', text: message }] },
+        { headers: { Authorization: `Bearer ${LINE_TOKEN}`, 'Content-Type': 'application/json' } }
+      );
+      await new Promise(r => setTimeout(r, 2000)); // 429対策: 送信後2秒待機
+      return;
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 429 && attempt < MAX_RETRY) {
+        console.warn(`[LINE] 429 Too Many Requests → 10秒待ってリトライ (${attempt}/${MAX_RETRY})`);
+        await new Promise(r => setTimeout(r, 10000));
+      } else {
+        console.error(`[LINE] 送信エラー (attempt ${attempt}):`, err.message);
+        return;
+      }
+    }
   }
 }
 
@@ -106,9 +117,11 @@ function parseCSV(filePath) {
   // relax_column_count: true → 列数不一致でもエラーにしない
   // skip_empty_lines: true   → 空行スキップ
   return parseCSVSync(content, {
-    relax_quotes:        true,
-    relax_column_count:  true,
-    skip_empty_lines:    true,
+    relax_quotes:        true,   // フィールド途中の " をリテラルとして扱う（HTMLの""対応）
+    relax_column_count:  true,   // 列数不一致でもエラーにしない
+    skip_empty_lines:    true,   // 空行スキップ
+    quote:               '"',    // クォート文字を明示
+    escape:              '"',    // エスケープ文字（RFC4180: ""→"）
   });
 }
 
