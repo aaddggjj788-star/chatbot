@@ -528,12 +528,14 @@ async function processUsers(page) {
     }
 
     // ─── LINEに確認メッセージを送信 ─────────────────────────────
+    // \n（リテラル）が残っている場合に備えて実際の改行に変換してから表示
+    const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
     const lineMsg = [
       '【返信確認】',
       `ユーザー：${userName}`,
       '返信文：',
       '---',
-      replyData.replyText,
+      displayReplyText,
       replyData.nextComment,
       '---',
       '送信する場合は「送信」',
