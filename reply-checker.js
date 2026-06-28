@@ -538,7 +538,6 @@ async function processUsers(page) {
     // 判定2: sinkoコメントが一つもない → スキップ
     if (sinkoComments.length === 0) {
       console.log(`[SKIP] ${userName}: sinkoコメントなし`);
-      await sendLine(`【要確認】${userName}：sinkoコメントアウトが見つかりません`);
       continue;
     }
 
@@ -573,7 +572,6 @@ async function processUsers(page) {
       const spanMatch = bodyText.match(/<span class="fortune-word-insert">([^<]+)<\/span>/);
       if (!spanMatch) {
         console.log(`[WARN] ${userName}: spanワードが見つかりません (bodyText長=${bodyText.length})`);
-        await sendLine(`【要確認】${userName}：spanワードが見つかりません`);
         continue;
       }
       const spanWord = spanMatch[1];
@@ -581,7 +579,7 @@ async function processUsers(page) {
       try {
         replyData = getReplyFromCSVBySpan(charaId, spanWord);
       } catch (e) {
-        await sendLine(`【エラー】CSV取得失敗 (${userName}): ${e.message}`);
+        console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
         continue;
       }
     } else {
@@ -591,7 +589,7 @@ async function processUsers(page) {
       try {
         replyData = getReplyFromCSV(charaId, maxSinko);
       } catch (e) {
-        await sendLine(`【エラー】CSV取得失敗 (${userName}): ${e.message}`);
+        console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
         continue;
       }
     }
@@ -648,7 +646,7 @@ async function processUsers(page) {
         await sendFrame.click('#chara_mail_send');
         await sendFrame.waitForLoadState('networkidle').catch(() => {});
         console.log(`[SEND] ${userName} 送信完了`);
-        await sendLine(`【送信完了】${userName}への返信を送信しました`);
+        await sendLine(`【送信完了】${uid}へ${kid}からの返信を送信しました`);
       }
     } else {
       console.log(`[SKIP] ${userName} スキップ`);
