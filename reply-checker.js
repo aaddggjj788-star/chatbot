@@ -394,38 +394,52 @@ async function analyzeMessages(page) {
       }
     }
 
-    // ── DOM順の先頭 = 最新の鑑定士メッセージを探す ─────────────
+    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], spanCount: 0, userMsgCount: 0 };
+
+    // 【判定2】最新メッセージチェック（DOM最上位 = 最新）
+    if (msgs.length === 0) {
+      return { result: { target: false, reason: 'メッセージなし', ...emptyK }, debugRows, lastKIdx: -1, afterUserCount: 0 };
+    }
+    if (msgs[0].type === 'kanteishi') {
+      return { result: { target: false, reason: '最新メッセージが鑑定士（返信済み）', ...emptyK }, debugRows, lastKIdx: 0, afterUserCount: 0 };
+    }
+
+    // 最新の鑑定士メッセージを探す
     let firstKIdx = -1;
     for (let i = 0; i < msgs.length; i++) {
       if (msgs[i].type === 'kanteishi') { firstKIdx = i; break; }
     }
 
-    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiComments: [] };
-
     if (firstKIdx === -1) {
       return { result: { target: false, reason: '鑑定士メッセージなし', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
 
-    // firstKIdx より前（上=新しい）= 最新鑑定士より新しいユーザーメッセージ
+    // 最新鑑定士より上（新しい）のユーザーメッセージ
     const beforeUser = msgs.slice(0, firstKIdx).filter(m => m.type === 'user');
 
     const km = msgs[firstKIdx];
-    const successK = { kanteishiHtml: km.html, kanteishiTrHtml: km.trHtml, kanteishiBodyText: km.bodyText, kanteishiComments: km.comments };
+    const bodyText = km.bodyText || '';
 
-    // 全鑑定士メッセージのコメントをまとめて収集（判定ロジック用）
-    const allKanteishiComments = msgs
-      .filter(m => m.type === 'kanteishi')
-      .reduce((acc, m) => acc.concat(m.comments), []);
+    // spanCount: 最新鑑定士bodyTextのspan個数を計算
+    const spanRe = /<span class="fortune-word-insert">[^<]+<\/span>/g;
+    let spanCount = 0;
+    while (spanRe.exec(bodyText) !== null) spanCount++;
 
-    if (beforeUser.length === 0) {
-      return { result: { target: false, reason: '鑑定士より新しいユーザーメッセージなし', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
-    }
+    const successK = {
+      kanteishiHtml: km.html,
+      kanteishiTrHtml: km.trHtml,
+      kanteishiBodyText: bodyText,
+      kanteishiComments: km.comments,
+      spanCount,
+      userMsgCount: beforeUser.length,
+    };
 
+    // 【判定3】既読チェック
     if (beforeUser.some(m => m.rowText.includes('既'))) {
       return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
     }
 
-    return { result: { target: true, reason: '', ...successK, allKanteishiComments }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+    return { result: { target: true, reason: '', ...successK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
   });
 
   // ── Node.js側でデバッグログ出力 ────────────────────────────────
@@ -440,7 +454,7 @@ async function analyzeMessages(page) {
     console.log(`[DEBUG] 鑑定士行HTML(先頭500文字): ${result.kanteishiTrHtml.slice(0, 500)}`);
   }
   console.log(`[DEBUG] 最新鑑定士コメント: ${JSON.stringify(result.kanteishiComments)}`);
-  console.log(`[DEBUG] 全鑑定士コメント: ${JSON.stringify(result.allKanteishiComments)}`);
+  console.log(`[DEBUG] span個数: ${result.spanCount}, ユーザーメッセージ通数: ${result.userMsgCount}`);
 
   return result;
 }
@@ -522,24 +536,32 @@ async function processUsers(page) {
       continue;
     }
 
-    // ─── コメントアウト判定 ──────────────────────────────────────
-    const allComments = analysis.allKanteishiComments || [];
+    // ─── 判定4: span個数とユーザーメッセージ通数の照合 ──────────
+    const { spanCount, userMsgCount } = analysis;
+    console.log(`[SPAN-CHECK] ${userName}: ユーザーメッセージ=${userMsgCount}通, span個数=${spanCount}`);
+    if (userMsgCount !== spanCount) {
+      console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount})とspan個数(${spanCount})が不一致`);
+      continue;
+    }
+
+    // ─── 判定5: コメントアウト判定（最新鑑定士メッセージのみ）──
+    const allComments = analysis.kanteishiComments || [];
     console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
 
-    // 判定1: /ho または /mtm を含むコメントがある → スキップ
+    // /ho または /mtm を含むコメントがある → スキップ
     if (allComments.some(c => /\/ho\b|\/mtm\b/.test(c))) {
       console.log(`[SKIP] ${userName}: /ho または /mtm コメントあり`);
       continue;
     }
 
-    // sinkoコメントのみ抽出
-    const sinkoComments = allComments.filter(c => /sinko\/?(\d+)/.test(c));
-
-    // 判定2: sinkoコメントが一つもない → スキップ
-    if (sinkoComments.length === 0) {
-      console.log(`[SKIP] ${userName}: sinkoコメントなし`);
+    // /sinko が含まれない → スキップ
+    if (!allComments.some(c => c.includes('/sinko'))) {
+      console.log(`[SKIP] ${userName}: /sinkoコメントなし`);
       continue;
     }
+
+    // sinkoコメントのみ抽出
+    const sinkoComments = allComments.filter(c => /sinko\/?(\d+)/.test(c));
 
     // sinko番号を全件収集（sinko1 も sinko/1 も両対応）
     const sinkoNums = sinkoComments
@@ -553,7 +575,7 @@ async function processUsers(page) {
       if (m) { charaId = m[1]; break; }
     }
 
-    // 判定3: sinko1が1件のみ → スキップ（初回メッセージ）
+    // sinkoが1件のみ かつ 番号が1 → スキップ
     if (sinkoNums.length === 1 && sinkoNums[0] === 1) {
       console.log(`[SKIP] ${userName}: sinko1のみ（初回メッセージ）`);
       continue;
@@ -562,7 +584,7 @@ async function processUsers(page) {
     console.log(`[COMMENT] ${userName}: charaId=${charaId} sinkoNums=${JSON.stringify(sinkoNums)}`);
 
     // ─── CSVから次の返信文を取得 ─────────────────────────────────
-    // 判定4: 番号が全て同じ → span検索 / 増えている → 最大番号+1で検索
+    // 判定5（続き）: 番号が全て同じ → span検索 / 増えている → 最新番号+1で検索
     const allSameNum = sinkoNums.every(n => n === sinkoNums[0]);
     let replyData;
 
