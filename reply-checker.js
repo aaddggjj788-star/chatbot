@@ -176,6 +176,29 @@ function getReplyFromCSV(charaId, sinkoNum) {
   return { title, replyText, nextComment };
 }
 
+// spanワードでCSVを検索して次の行のB列を返す
+function getReplyFromCSVBySpan(charaId, spanWord) {
+  const csvPath = path.join(CSV_DIR, charaIdToCsvName(charaId));
+  if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
+  const rows = parseCSV(csvPath);
+  console.log(`[CSV] span検索: "${spanWord}" (総行数: ${rows.length})`);
+
+  // A列にspanWordを含む行を検索
+  const idx = rows.findIndex(r => (r[0] || '').includes(spanWord));
+  if (idx === -1) throw new Error(`spanWord "${spanWord}" がCSVのA列に未発見`);
+
+  console.log(`[CSV] span ヒット行 idx=${idx}: A列="${rows[idx][0]}"`);
+
+  const nextRow = rows[idx + 1];
+  if (!nextRow) return null;
+
+  const nextComment = (nextRow[0] || '').trim();
+  const replyText   = (nextRow[1] || '').trim().replace(/\\n/g, '\n');
+  console.log(`[CSV] 次行 idx=${idx + 1}: A列="${nextComment}" B列="${replyText.slice(0, 50)}"`);
+
+  return { replyText, nextComment };
+}
+
 // ─── Playwright: ログイン ─────────────────────────────────────────
 
 async function login(page) {
@@ -389,6 +412,11 @@ async function analyzeMessages(page) {
     const km = msgs[firstKIdx];
     const successK = { kanteishiHtml: km.html, kanteishiTrHtml: km.trHtml, kanteishiBodyText: km.bodyText, kanteishiComments: km.comments };
 
+    // 全鑑定士メッセージのコメントをまとめて収集（判定ロジック用）
+    const allKanteishiComments = msgs
+      .filter(m => m.type === 'kanteishi')
+      .reduce((acc, m) => acc.concat(m.comments), []);
+
     if (beforeUser.length === 0) {
       return { result: { target: false, reason: '鑑定士より新しいユーザーメッセージなし', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
@@ -397,7 +425,7 @@ async function analyzeMessages(page) {
       return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
     }
 
-    return { result: { target: true, reason: '', ...successK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+    return { result: { target: true, reason: '', ...successK, allKanteishiComments }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
   });
 
   // ── Node.js側でデバッグログ出力 ────────────────────────────────
@@ -411,7 +439,8 @@ async function analyzeMessages(page) {
   if (result.kanteishiTrHtml) {
     console.log(`[DEBUG] 鑑定士行HTML(先頭500文字): ${result.kanteishiTrHtml.slice(0, 500)}`);
   }
-  console.log(`[DEBUG] 抽出コメント: ${JSON.stringify(result.kanteishiComments)}`);
+  console.log(`[DEBUG] 最新鑑定士コメント: ${JSON.stringify(result.kanteishiComments)}`);
+  console.log(`[DEBUG] 全鑑定士コメント: ${JSON.stringify(result.allKanteishiComments)}`);
 
   return result;
 }
@@ -493,33 +522,78 @@ async function processUsers(page) {
       continue;
     }
 
-    // ─── コメントアウト抽出 ──────────────────────────────────────
-    // HTMLコメントはinnerHTMLからのみ取得可能。analyzeMessagesで抽出済みのリストを使用。
-    const sinkoComments = analysis.kanteishiComments || [];
-    console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(sinkoComments)}`);
+    // ─── コメントアウト判定 ──────────────────────────────────────
+    const allComments = analysis.allKanteishiComments || [];
+    console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
 
+    // 判定1: /ho または /mtm を含むコメントがある → スキップ
+    if (allComments.some(c => /\/ho\b|\/mtm\b/.test(c))) {
+      console.log(`[SKIP] ${userName}: /ho または /mtm コメントあり`);
+      continue;
+    }
+
+    // sinkoコメントのみ抽出
+    const sinkoComments = allComments.filter(c => /sinko\/?(\d+)/.test(c));
+
+    // 判定2: sinkoコメントが一つもない → スキップ
+    if (sinkoComments.length === 0) {
+      console.log(`[SKIP] ${userName}: sinkoコメントなし`);
+      await sendLine(`【要確認】${userName}：sinkoコメントアウトが見つかりません`);
+      continue;
+    }
+
+    // sinko番号を全件収集（sinko1 も sinko/1 も両対応）
+    const sinkoNums = sinkoComments
+      .map(c => { const m = c.match(/sinko\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+      .filter(n => n !== null);
+
+    // charaId を抽出（"12672yu9/sinko2" → "12672yu9"）
     let charaId = null;
-    let sinkoNum = null;
     for (const c of sinkoComments) {
       const m = c.match(/^([a-zA-Z0-9]+)\/sinko\/?(\d+)$/);
-      if (m) { charaId = m[1]; sinkoNum = parseInt(m[2], 10); break; }
+      if (m) { charaId = m[1]; break; }
     }
 
-    if (!charaId) {
-      console.log(`[WARN] ${userName}: sinkoコメントアウトなし`);
-      await sendLine(`【要確認】${userName}：コメントアウトが見つかりません`);
+    // 判定3: sinko1が1件のみ → スキップ（初回メッセージ）
+    if (sinkoNums.length === 1 && sinkoNums[0] === 1) {
+      console.log(`[SKIP] ${userName}: sinko1のみ（初回メッセージ）`);
       continue;
     }
 
-    console.log(`[COMMENT] ${userName}: charaId=${charaId} sinko=${sinkoNum}`);
+    console.log(`[COMMENT] ${userName}: charaId=${charaId} sinkoNums=${JSON.stringify(sinkoNums)}`);
 
     // ─── CSVから次の返信文を取得 ─────────────────────────────────
+    // 判定4: 番号が全て同じ → span検索 / 増えている → 最大番号+1で検索
+    const allSameNum = sinkoNums.every(n => n === sinkoNums[0]);
     let replyData;
-    try {
-      replyData = getReplyFromCSV(charaId, sinkoNum);
-    } catch (e) {
-      await sendLine(`【エラー】CSV取得失敗 (${userName}): ${e.message}`);
-      continue;
+
+    if (allSameNum) {
+      // span検索モード: 最新鑑定士メッセージのbodyTextからspanワードを抽出
+      const bodyText = analysis.kanteishiBodyText || '';
+      const spanMatch = bodyText.match(/<span class="fortune-word-insert">([^<]+)<\/span>/);
+      if (!spanMatch) {
+        console.log(`[WARN] ${userName}: spanワードが見つかりません (bodyText長=${bodyText.length})`);
+        await sendLine(`【要確認】${userName}：spanワードが見つかりません`);
+        continue;
+      }
+      const spanWord = spanMatch[1];
+      console.log(`[COMMENT] ${userName}: span検索モード spanWord="${spanWord}"`);
+      try {
+        replyData = getReplyFromCSVBySpan(charaId, spanWord);
+      } catch (e) {
+        await sendLine(`【エラー】CSV取得失敗 (${userName}): ${e.message}`);
+        continue;
+      }
+    } else {
+      // sinko+1検索モード: 最大sinko番号の次の行を取得
+      const maxSinko = Math.max(...sinkoNums);
+      console.log(`[COMMENT] ${userName}: sinko+1検索モード maxSinko=${maxSinko}`);
+      try {
+        replyData = getReplyFromCSV(charaId, maxSinko);
+      } catch (e) {
+        await sendLine(`【エラー】CSV取得失敗 (${userName}): ${e.message}`);
+        continue;
+      }
     }
 
     if (!replyData) {
