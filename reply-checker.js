@@ -390,11 +390,13 @@ async function analyzeMessages(page) {
         msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, bodyText, comments });
       } else if (bg.includes('aaaaff') || bg.includes('ffaaaa')) {
         const row = el.closest('tr') || el;
-        msgs.push({ type: 'user', rowText: row.textContent || '' });
+        const timeTd = row.querySelector('td[style*="width:110px"]');
+        const timeText = timeTd ? timeTd.textContent.trim() : '';
+        msgs.push({ type: 'user', rowText: row.textContent || '', timeText });
       }
     }
 
-    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], spanCount: 0, userMsgCount: 0 };
+    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], spanCount: 0, userMsgCount: 0, latestUserTime: '' };
 
     // 【判定2】最新メッセージチェック（DOM最上位 = 最新）
     if (msgs.length === 0) {
@@ -425,6 +427,8 @@ async function analyzeMessages(page) {
     let spanCount = 0;
     while (spanRe.exec(bodyText) !== null) spanCount++;
 
+    const latestUserTime = beforeUser.length > 0 ? (beforeUser[0].timeText || '') : '';
+
     const successK = {
       kanteishiHtml: km.html,
       kanteishiTrHtml: km.trHtml,
@@ -432,6 +436,7 @@ async function analyzeMessages(page) {
       kanteishiComments: km.comments,
       spanCount,
       userMsgCount: beforeUser.length,
+      latestUserTime,
     };
 
     // 【判定3】既読チェック
@@ -455,8 +460,22 @@ async function analyzeMessages(page) {
   }
   console.log(`[DEBUG] 最新鑑定士コメント: ${JSON.stringify(result.kanteishiComments)}`);
   console.log(`[DEBUG] span個数: ${result.spanCount}, ユーザーメッセージ通数: ${result.userMsgCount}`);
+  console.log(`[DEBUG] 最新ユーザー受信時刻: "${result.latestUserTime}"`);
 
   return result;
+}
+
+// ─── 受信時刻パーサー ─────────────────────────────────────────────
+// "06月28日 03時27分" → Date オブジェクト（現在年を補完）
+
+function parseMessageTime(timeStr) {
+  const m = timeStr.match(/(\d+)月(\d+)日\s*(\d+)時(\d+)分/);
+  if (!m) return null;
+  const now = new Date();
+  const d = new Date(now.getFullYear(), parseInt(m[1], 10) - 1, parseInt(m[2], 10), parseInt(m[3], 10), parseInt(m[4], 10), 0, 0);
+  // 年をまたいだ場合の補正（例：12月のメッセージを1月に処理する）
+  if (d.getTime() > now.getTime()) d.setFullYear(d.getFullYear() - 1);
+  return d;
 }
 
 // ─── 返信処理メインループ ─────────────────────────────────────────
@@ -663,8 +682,40 @@ async function processUsers(page) {
           console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
           continue;
         }
+
+        // ─── タイマー判定 ────────────────────────────────────────
+        const receivedAt = parseMessageTime(analysis.latestUserTime || '');
+        const nowTs = new Date();
+        const TIMER_MIN = 15;
+        let useTimer = false;
+        let timerTs = null;
+        if (receivedAt) {
+          const elapsedMin = (nowTs.getTime() - receivedAt.getTime()) / 60000;
+          if (elapsedMin < TIMER_MIN) {
+            useTimer = true;
+            timerTs = new Date(receivedAt.getTime() + TIMER_MIN * 60000);
+            console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → タイマー設定 (送信予定: ${timerTs.toLocaleTimeString('ja-JP')})`);
+          } else {
+            console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 即時送信`);
+          }
+        } else {
+          console.log(`[TIMER] ${userName}: 受信時刻が取得できません → 即時送信`);
+        }
+
         // 本文：返信文 + 改行 + 次のコメントアウト
         await sendFrame.fill('textarea#mess_body', textToSend);
+
+        if (useTimer) {
+          // タイマーモードに切り替え
+          await sendFrame.click('input[name="timerSet"][value=""]');
+          // receivehun(Unixタイムスタンプ秒) をブラウザ側で実行
+          const tsSeconds = Math.floor(timerTs.getTime() / 1000);
+          await sendFrame.evaluate((ts) => {
+            if (typeof receivehun === 'function') receivehun(ts);
+          }, tsSeconds);
+          console.log(`[TIMER] ${userName}: タイムスタンプ=${tsSeconds} receivehun()実行済み`);
+        }
+
         await sendFrame.click('#chara_mail_send');
         await sendFrame.waitForLoadState('networkidle').catch(() => {});
         console.log(`[SEND] ${userName} 送信完了`);
