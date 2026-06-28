@@ -112,16 +112,12 @@ function waitForLineReply() {
 
 function parseCSV(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
-  // B列にHTML(<img src=""..."">)が含まれダブルクォートが""二重になっている場合でも
-  // relax_quotes: true  → フィールド末尾以外の " をリテラルとして扱う
-  // relax_column_count: true → 列数不一致でもエラーにしない
-  // skip_empty_lines: true   → 空行スキップ
   return parseCSVSync(content, {
-    relax_quotes:        true,   // フィールド途中の " をリテラルとして扱う（HTMLの""対応）
+    relax_quotes:        true,   // フィールド内の " をリテラルとして扱う（HTML属性の""対応）
     relax_column_count:  true,   // 列数不一致でもエラーにしない
-    skip_empty_lines:    true,   // 空行スキップ
-    quote:               '"',    // クォート文字を明示
-    escape:              '"',    // エスケープ文字（RFC4180: ""→"）
+    skip_empty_lines:    false,  // B列内の空行（改行）を保持する
+    quote:               '"',
+    escape:              '"',
   });
 }
 
