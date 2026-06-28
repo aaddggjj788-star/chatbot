@@ -569,13 +569,6 @@ async function processUsers(page) {
           console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
           continue;
         }
-        // 件名入力（未入力の場合は本文1行目が件名になる仕様のため空欄でも可）
-        const titleText = replyData.title || '';
-        const titleField = sendFrame.locator('#mess_title').first();
-        if (await titleField.count() > 0) {
-          await titleField.fill(titleText);
-          console.log(`[SEND] 件名入力: "${titleText}"`);
-        }
         // 本文：返信文 + 改行 + 次のコメントアウト
         await sendFrame.fill('textarea#mess_body', textToSend);
         await sendFrame.click('#chara_mail_send');
