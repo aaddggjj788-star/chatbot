@@ -771,6 +771,14 @@ function stopReplies() {
 async function checkReplies() {
   _shouldStop = false;
   console.log('=== reply-checker 起動 ===');
+
+  const now = new Date();
+  const hour = now.getHours();
+  if (hour >= 23 || hour < 9) {
+    console.log('[STOP] 返信停止時間帯（23:00〜9:00）');
+    return;
+  }
+
   if (DRY_RUN) console.log('[DRY RUN] モード有効');
   clearState();
 
