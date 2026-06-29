@@ -122,11 +122,41 @@ function parseCSV(filePath) {
   });
 }
 
+// コメント文字列を分解する
+// 単純形式: "12668mu1/sinko/2"    → { baseId:"12668", typeNum:"mu1", sub:null, type:"sinko", num:2 }
+// 複合形式: "12668mu2/zenhan/sinko/1" → { baseId:"12668", typeNum:"mu2", sub:"zenhan", type:"sinko", num:1 }
+function parseCommentStr(commentStr) {
+  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+)\/(sinko|his)\/?(\d+)$/);
+  if (m) return { baseId: m[1], typeNum: m[2], sub: null, type: m[3], num: parseInt(m[4], 10) };
+  m = commentStr.match(/^(\d+)((?:yu|mu)\d+)\/([a-z]+)\/(sinko|his)\/?(\d+)$/);
+  if (m) return { baseId: m[1], typeNum: m[2], sub: m[3], type: m[4], num: parseInt(m[5], 10) };
+  return null;
+}
+
+// コメント情報からJSONのphase設定を解決する
+// 優先順: typeNum+sub ("mu2zenhan") → typeNum+type ("mu2his") → typeNum ("mu1")
+function resolvePhaseCfg(parsed, config) {
+  if (!parsed || !config?.phases) return null;
+  const { typeNum, sub, type } = parsed;
+  if (sub && config.phases[typeNum + sub]) return { key: typeNum + sub, cfg: config.phases[typeNum + sub] };
+  if (config.phases[typeNum + type]) return { key: typeNum + type, cfg: config.phases[typeNum + type] };
+  if (config.phases[typeNum])         return { key: typeNum,         cfg: config.phases[typeNum] };
+  return null;
+}
+
 // charaIdをプレフィックスとしてCSVファイルを検索する
+// fileIdが指定された場合はそのファイルを優先する
 // sinkoを含むファイルを優先し、なければ数値が対象以下の最大ファイルにフォールバック
-function resolveCsvPath(charaId) {
+function resolveCsvPath(charaId, fileId) {
   let files;
   try { files = fs.readdirSync(CSV_DIR); } catch (_) { files = []; }
+
+  // fileId指定がある場合は優先使用
+  if (fileId) {
+    const fp = path.join(CSV_DIR, fileId + '.csv');
+    if (fs.existsSync(fp)) return { csvPath: fp, resolvedCharaId: fileId };
+    console.log(`[CSV] fileId "${fileId}.csv" が見つかりません → プレフィックス検索に切り替え`);
+  }
 
   // charaIdで始まるCSVを検索（sinkoを含むファイルを優先）
   function findByPrefix(prefix) {
@@ -212,9 +242,34 @@ function getReplyFromCSV(charaId, sinkoNum) {
   return { title, replyText, nextComment };
 }
 
+// searchTarget指定でCSV内の特定コメント行を検索する
+// useCurrentRow=true → ヒット行自身を返す / false → 次の行を返す（デフォルト）
+function getReplyFromCSVByTarget(charaId, searchTarget, useCurrentRow, fileId) {
+  const { csvPath } = resolveCsvPath(charaId, fileId);
+  if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
+  const rows = parseCSV(csvPath);
+  const title = rows[0] ? (rows[0][0] || '') : '';
+
+  const escaped = searchTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`<!--${escaped}-->`);
+  const idx = rows.findIndex(r => pattern.test((r[0] || '').trim()));
+  if (idx === -1) {
+    const sample = rows.slice(0, 10).map((r, i) => `  row[${i}]: "${r[0] || ''}"`).join('\n');
+    throw new Error(`searchTarget "${searchTarget}" がCSVに未発見\nCSV先頭10行:\n${sample}`);
+  }
+
+  const targetRow = useCurrentRow ? rows[idx] : rows[idx + 1];
+  if (!targetRow) return null;
+
+  const nextComment = (targetRow[0] || '').trim();
+  const replyText   = (targetRow[1] || '').trim().replace(/\\n/g, '\n');
+  console.log(`[CSV-TARGET] "${searchTarget}" useCurrentRow=${useCurrentRow} → idx=${useCurrentRow ? idx : idx + 1}`);
+  return { title, replyText, nextComment };
+}
+
 // spanワードでCSVを検索して次の行のB列を返す
-function getReplyFromCSVBySpan(charaId, spanWord) {
-  const { csvPath } = resolveCsvPath(charaId);
+function getReplyFromCSVBySpan(charaId, spanWord, fileId) {
+  const { csvPath } = resolveCsvPath(charaId, fileId);
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
   const rows = parseCSV(csvPath);
   console.log(`[CSV] span検索: "${spanWord}" (総行数: ${rows.length})`);
@@ -666,7 +721,7 @@ async function processUsers(page) {
       const historySinkoComments = historyComments.filter(c => /(?:sinko|his)\/?(\d+)/.test(c));
 
       for (const c of historySinkoComments) {
-        const m = c.match(/^([a-zA-Z0-9]+)\/(?:sinko|his)\/?(\d+)$/);
+        const m = c.match(/^(\d+(?:yu|mu)\d+)/);
         if (m) { charaId = m[1]; break; }
       }
 
@@ -695,8 +750,9 @@ async function processUsers(page) {
         .map(c => { const m = c.match(/(?:sinko|his)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
         .filter(n => n !== null);
 
+      // charaId を抽出（複合コメント形式にも対応）
       for (const c of sinkoComments) {
-        const m = c.match(/^([a-zA-Z0-9]+)\/(?:sinko|his)\/?(\d+)$/);
+        const m = c.match(/^(\d+(?:yu|mu)\d+)/);
         if (m) { charaId = m[1]; break; }
       }
 
@@ -708,35 +764,121 @@ async function processUsers(page) {
 
       console.log(`[COMMENT] ${userName}: charaId=${charaId} sinkoNums=${JSON.stringify(sinkoNums)}`);
 
-      // ─── CSVから次の返信文を取得 ─────────────────────────────────
-      // 番号が全て同じ → span検索 / 増えている → 最新番号+1で検索
-      const allSameNum = sinkoNums.every(n => n === sinkoNums[0]);
+      // ─── JSON設定の読み込み ──────────────────────────────────────
+      const maxSinkoNum = Math.max(...sinkoNums);
+      const latestComment = sinkoComments.find(c => {
+        const m = c.match(/(?:sinko|his)\/?(\d+)/);
+        return m && parseInt(m[1], 10) === maxSinkoNum;
+      });
+      const parsed     = latestComment ? parseCommentStr(latestComment) : null;
+      const baseCharaId = parsed?.baseId ?? (charaId?.match(/^(\d+)/)?.[1] ?? null);
+      const charaCfg   = baseCharaId ? loadCharaConfig(baseCharaId) : null;
+      const phaseResult = (parsed && charaCfg) ? resolvePhaseCfg(parsed, charaCfg) : null;
+      const phaseCfg   = phaseResult?.cfg ?? null;
+      const fileId     = phaseCfg?.fileId ?? null;
+      const actionKey  = parsed ? `${parsed.type}${parsed.num}` : null;
+      const actionCfg  = (phaseCfg && actionKey) ? (phaseCfg[actionKey] ?? null) : null;
 
-      if (allSameNum) {
-        // span検索モード: 最新鑑定士メッセージのbodyTextからspanワードを抽出
-        const bodyText = analysis.kanteishiBodyText || '';
-        const spanMatch = bodyText.match(/<span class="fortune-word-insert">([^<]+)<\/span>/);
-        if (!spanMatch) {
-          console.log(`[WARN] ${userName}: spanワードが見つかりません (bodyText長=${bodyText.length})`);
-          continue;
+      console.log(`[JSON] baseCharaId=${baseCharaId} phase=${phaseResult?.key} action=${actionKey} config=${JSON.stringify(actionCfg)}`);
+
+      // ─── JSON設定に基づく処理分岐 ────────────────────────────────
+      if (actionCfg) {
+        if (actionCfg.specialProcess) {
+          console.log(`[JSON] specialProcess: ${JSON.stringify(actionCfg.specialProcess)}`);
         }
-        const spanWord = spanMatch[1];
-        console.log(`[COMMENT] ${userName}: span検索モード spanWord="${spanWord}"`);
-        try {
-          replyData = getReplyFromCSVBySpan(charaId, spanWord);
-        } catch (e) {
-          console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
-          continue;
+
+        if (actionCfg.branch) {
+          // A/B分岐: LINEで選択してもらう
+          const branchMsg = [
+            `【分岐選択】${userName}`,
+            `A: ${actionCfg.branch.positive}`,
+            `B: ${actionCfg.branch.negative}`,
+            `「A」または「B」と返信してください`,
+          ].join('\n');
+          await sendLine(branchMsg);
+          let branchChoice;
+          try { branchChoice = await waitForLineReply(); } catch (e) { continue; }
+          const branchTarget = (branchChoice.trim().toUpperCase() === 'A')
+            ? actionCfg.branch.positive
+            : actionCfg.branch.negative;
+          console.log(`[JSON] 分岐: ${branchChoice} → ${branchTarget}`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, branchTarget, false, fileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+        } else if (actionCfg.timeBasedSearch) {
+          // 時間帯に応じてsearchTargetを選択
+          const now = new Date();
+          const curMin = now.getHours() * 60 + now.getMinutes();
+          let selected = null;
+          for (const [cKey, cVal] of Object.entries(actionCfg.timeBasedSearch)) {
+            const bm = cKey.match(/^before(\d{3,4})$/);
+            const am = cKey.match(/^after(\d{3,4})$/);
+            if (bm) {
+              const t = bm[1].padStart(4, '0');
+              const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+              if (curMin < tMin) { selected = cVal; break; }
+            } else if (am) {
+              const t = am[1].padStart(4, '0');
+              const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+              if (curMin >= tMin) { selected = cVal; break; }
+            }
+          }
+          if (!selected) {
+            console.log(`[JSON] timeBasedSearch: 一致する時間帯なし → スキップ`);
+            continue;
+          }
+          const useCurrentRow = selected.useCurrentRow === true;
+          console.log(`[JSON] timeBasedSearch → "${selected.searchTarget}" useCurrentRow=${useCurrentRow}`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, fileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+        } else if (actionCfg.searchTarget) {
+          const useCurrentRow = actionCfg.useCurrentRow === true;
+          console.log(`[JSON] searchTarget="${actionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, actionCfg.searchTarget, useCurrentRow, fileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
         }
-      } else {
-        // sinko+1検索モード: 最大sinko番号の次の行を取得
-        const maxSinko = Math.max(...sinkoNums);
-        console.log(`[COMMENT] ${userName}: sinko+1検索モード maxSinko=${maxSinko}`);
-        try {
-          replyData = getReplyFromCSV(charaId, maxSinko);
-        } catch (e) {
-          console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
-          continue;
+        // specialProcessのみなど、searchTarget系設定がない場合はデフォルト動作へ
+      }
+
+      // ─── デフォルト動作（JSON設定なし、またはsearchTarget系設定なし）──
+      if (!replyData) {
+        const allSameNum = sinkoNums.every(n => n === sinkoNums[0]);
+
+        if (allSameNum) {
+          // span検索モード: 最新鑑定士メッセージのbodyTextからspanワードを抽出
+          const bodyText = analysis.kanteishiBodyText || '';
+          const spanMatch = bodyText.match(/<span class="fortune-word-insert">([^<]+)<\/span>/);
+          if (!spanMatch) {
+            console.log(`[WARN] ${userName}: spanワードが見つかりません (bodyText長=${bodyText.length})`);
+            continue;
+          }
+          const spanWord = spanMatch[1];
+          console.log(`[COMMENT] ${userName}: span検索モード spanWord="${spanWord}"`);
+          try {
+            replyData = getReplyFromCSVBySpan(charaId, spanWord, fileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+        } else {
+          console.log(`[COMMENT] ${userName}: sinko+1検索モード maxSinko=${maxSinkoNum}`);
+          try {
+            replyData = getReplyFromCSV(charaId, maxSinkoNum);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
         }
       }
     }
