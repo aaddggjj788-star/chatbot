@@ -432,7 +432,7 @@ async function analyzeMessages(page) {
       }
     }
 
-    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], spanCount: 0, userMsgCount: 0, latestUserTime: '' };
+    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], allKanteishiComments: [], spanCount: 0, userMsgCount: 0, latestUserTime: '' };
 
     // 【判定2】最新メッセージチェック（DOM最上位 = 最新）
     if (msgs.length === 0) {
@@ -465,11 +465,13 @@ async function analyzeMessages(page) {
 
     const latestUserTime = beforeUser.length > 0 ? (beforeUser[0].timeText || '') : '';
 
+    const allKanteishiComments = msgs.filter(m => m.type === 'kanteishi').flatMap(m => m.comments);
     const successK = {
       kanteishiHtml: km.html,
       kanteishiTrHtml: km.trHtml,
       kanteishiBodyText: bodyText,
       kanteishiComments: km.comments,
+      allKanteishiComments,
       spanCount,
       userMsgCount: beforeUser.length,
       latestUserTime,
@@ -641,71 +643,101 @@ async function processUsers(page) {
     const allComments = analysis.kanteishiComments || [];
     console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
 
-    // /ho・/mtm・/do を含むコメントがある → スキップ
-    if (allComments.some(c => /\/ho\b|\/mtm\b|\/do\b/.test(c))) {
-      console.log(`[SKIP] ${userName}: /ho・/mtm・/do コメントあり`);
+    // /mtm・/do を含むコメントがある → スキップ
+    if (allComments.some(c => /\/mtm\b|\/do\b/.test(c))) {
+      console.log(`[SKIP] ${userName}: /mtm・/do コメントあり`);
       continue;
     }
 
-    // /sinko も /his も含まれない → スキップ
-    if (!allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
-      console.log(`[SKIP] ${userName}: /sinko・/hisコメントなし`);
+    const hasHo = allComments.some(c => /\/ho\b/.test(c));
+
+    // /sinko も /his も /ho も含まれない → スキップ
+    if (!hasHo && !allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
+      console.log(`[SKIP] ${userName}: /sinko・/his・/hoコメントなし`);
       continue;
     }
 
-    // sinko/his コメントを抽出
-    const sinkoComments = allComments.filter(c => /(?:sinko|his)\/?(\d+)/.test(c));
-
-    // sinko/his 番号を全件収集（sinko1・sinko/1・his1・his/1 すべて対応）
-    const sinkoNums = sinkoComments
-      .map(c => { const m = c.match(/(?:sinko|his)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
-      .filter(n => n !== null);
-
-    // charaId を抽出（"12672yu9/sinko/2" または "12668mu1/his/2" → キャラID部分）
     let charaId = null;
-    for (const c of sinkoComments) {
-      const m = c.match(/^([a-zA-Z0-9]+)\/(?:sinko|his)\/?(\d+)$/);
-      if (m) { charaId = m[1]; break; }
-    }
-
-    // sinkoが1件のみ かつ 番号が1 → スキップ
-    if (sinkoNums.length === 1 && sinkoNums[0] === 1) {
-      console.log(`[SKIP] ${userName}: sinko1のみ（初回メッセージ）`);
-      continue;
-    }
-
-    console.log(`[COMMENT] ${userName}: charaId=${charaId} sinkoNums=${JSON.stringify(sinkoNums)}`);
-
-    // ─── CSVから次の返信文を取得 ─────────────────────────────────
-    // 判定5（続き）: 番号が全て同じ → span検索 / 増えている → 最新番号+1で検索
-    const allSameNum = sinkoNums.every(n => n === sinkoNums[0]);
     let replyData;
 
-    if (allSameNum) {
-      // span検索モード: 最新鑑定士メッセージのbodyTextからspanワードを抽出
-      const bodyText = analysis.kanteishiBodyText || '';
-      const spanMatch = bodyText.match(/<span class="fortune-word-insert">([^<]+)<\/span>/);
-      if (!spanMatch) {
-        console.log(`[WARN] ${userName}: spanワードが見つかりません (bodyText長=${bodyText.length})`);
+    if (hasHo) {
+      // /ho の場合: 全メッセージ履歴から最新sinko/hisコメントを検索してsinko+1を送信
+      const historyComments = analysis.allKanteishiComments || [];
+      const historySinkoComments = historyComments.filter(c => /(?:sinko|his)\/?(\d+)/.test(c));
+
+      for (const c of historySinkoComments) {
+        const m = c.match(/^([a-zA-Z0-9]+)\/(?:sinko|his)\/?(\d+)$/);
+        if (m) { charaId = m[1]; break; }
+      }
+
+      if (!charaId) {
+        console.log(`[SKIP] ${userName}: /hoあり・履歴にsinko/hisコメントなし`);
         continue;
       }
-      const spanWord = spanMatch[1];
-      console.log(`[COMMENT] ${userName}: span検索モード spanWord="${spanWord}"`);
-      try {
-        replyData = getReplyFromCSVBySpan(charaId, spanWord);
-      } catch (e) {
-        console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
-        continue;
-      }
-    } else {
-      // sinko+1検索モード: 最大sinko番号の次の行を取得
-      const maxSinko = Math.max(...sinkoNums);
-      console.log(`[COMMENT] ${userName}: sinko+1検索モード maxSinko=${maxSinko}`);
+
+      const histSinkoNums = historySinkoComments
+        .map(c => { const m = c.match(/(?:sinko|his)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+        .filter(n => n !== null);
+      const maxSinko = Math.max(...histSinkoNums);
+
+      console.log(`[COMMENT] ${userName}: /hoモード charaId=${charaId} 履歴最大sinko=${maxSinko}`);
       try {
         replyData = getReplyFromCSV(charaId, maxSinko);
       } catch (e) {
         console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
         continue;
+      }
+    } else {
+      // 通常の sinko/his 処理
+      const sinkoComments = allComments.filter(c => /(?:sinko|his)\/?(\d+)/.test(c));
+
+      const sinkoNums = sinkoComments
+        .map(c => { const m = c.match(/(?:sinko|his)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+        .filter(n => n !== null);
+
+      for (const c of sinkoComments) {
+        const m = c.match(/^([a-zA-Z0-9]+)\/(?:sinko|his)\/?(\d+)$/);
+        if (m) { charaId = m[1]; break; }
+      }
+
+      // sinkoが1件のみ かつ 番号が1 → スキップ
+      if (sinkoNums.length === 1 && sinkoNums[0] === 1) {
+        console.log(`[SKIP] ${userName}: sinko1のみ（初回メッセージ）`);
+        continue;
+      }
+
+      console.log(`[COMMENT] ${userName}: charaId=${charaId} sinkoNums=${JSON.stringify(sinkoNums)}`);
+
+      // ─── CSVから次の返信文を取得 ─────────────────────────────────
+      // 番号が全て同じ → span検索 / 増えている → 最新番号+1で検索
+      const allSameNum = sinkoNums.every(n => n === sinkoNums[0]);
+
+      if (allSameNum) {
+        // span検索モード: 最新鑑定士メッセージのbodyTextからspanワードを抽出
+        const bodyText = analysis.kanteishiBodyText || '';
+        const spanMatch = bodyText.match(/<span class="fortune-word-insert">([^<]+)<\/span>/);
+        if (!spanMatch) {
+          console.log(`[WARN] ${userName}: spanワードが見つかりません (bodyText長=${bodyText.length})`);
+          continue;
+        }
+        const spanWord = spanMatch[1];
+        console.log(`[COMMENT] ${userName}: span検索モード spanWord="${spanWord}"`);
+        try {
+          replyData = getReplyFromCSVBySpan(charaId, spanWord);
+        } catch (e) {
+          console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+          continue;
+        }
+      } else {
+        // sinko+1検索モード: 最大sinko番号の次の行を取得
+        const maxSinko = Math.max(...sinkoNums);
+        console.log(`[COMMENT] ${userName}: sinko+1検索モード maxSinko=${maxSinko}`);
+        try {
+          replyData = getReplyFromCSV(charaId, maxSinko);
+        } catch (e) {
+          console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+          continue;
+        }
       }
     }
 
