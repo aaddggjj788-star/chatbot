@@ -127,13 +127,13 @@ function parseCSV(filePath) {
 function resolveCsvPath(charaId) {
   const m = charaId.match(/^(\d+)(yu|mu)(\d+)$/);
   if (!m) {
-    const name = charaId.replace(/^(\d+)(yu\d+)$/, '$1_$2') + '.csv';
+    const name = charaId + '.csv';
     return { csvPath: path.join(CSV_DIR, name), resolvedCharaId: charaId };
   }
   const [, baseId, type, numStr] = m;
   const targetNum = parseInt(numStr, 10);
 
-  const exactName = `${baseId}_${type}${targetNum}.csv`;
+  const exactName = `${baseId}${type}${targetNum}.csv`;
   const exactPath = path.join(CSV_DIR, exactName);
   if (fs.existsSync(exactPath)) {
     return { csvPath: exactPath, resolvedCharaId: charaId };
@@ -144,7 +144,7 @@ function resolveCsvPath(charaId) {
   try { files = fs.readdirSync(CSV_DIR); } catch (_) {
     return { csvPath: exactPath, resolvedCharaId: charaId };
   }
-  const re = new RegExp(`^${baseId}_${type}(\\d+)\\.csv$`);
+  const re = new RegExp(`^${baseId}${type}(\\d+)\\.csv$`);
   let bestNum = -1;
   let bestFile = null;
   for (const f of files) {
