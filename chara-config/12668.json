@@ -1,25 +1,162 @@
 {
   "charaId": "12668",
   "name": "天海",
+  "globalStopTime": { "start": "22:00", "end": "09:00" },
+  "spanMatchExclude": [
+    "12668mu1/sinko/4",
+    "12668mu1/sinko/5",
+    "12668mu2/his/3",
+    "12668mu3/his/2"
+  ],
   "phases": {
     "mu1": {
+      "fileId": "12668_mu1",
       "his2": {
-        "specialProcess": true,
-        "actions": [
-          "saveMemo1",
-          "saveNickname"
-        ],
+        "specialProcess": ["saveMemo1", "saveNickname"],
         "branch": {
-          "positive": "sinko/3/A",
-          "negative": "sinko/3/B"
+          "positive": "12668mu1/sinko/3/A",
+          "negative": "12668mu1/sinko/3/B"
         }
       },
-      "sinko3A": {
-        "searchTarget": "sinko/4"
-      },
-      "sinko3B": {
-        "searchTarget": "sinko/4"
+      "searchOverride": {
+        "12668mu1/sinko/3/A": { "searchTarget": "12668mu1/sinko/4" },
+        "12668mu1/sinko/3/B": { "searchTarget": "12668mu1/sinko/4" }
       }
+    },
+    "mu2zenhan": {
+      "fileId": "12668_mu2zenhan",
+      "activeUntil": "16:30",
+      "stopAfter": "16:30",
+      "ho1": { "searchTarget": "12668mu2/zenhan/sinko/1" },
+      "ho2": {
+        "specialProcess": ["saveMemo1", "saveNickname"],
+        "branch": {
+          "positive": "12668mu2/his/3/A",
+          "negative": "12668mu2/his/3/B"
+        }
+      },
+      "his2": {
+        "specialProcess": ["saveMemo1", "saveNickname"],
+        "branch": {
+          "positive": "12668mu2/his/3/A",
+          "negative": "12668mu2/his/3/B"
+        }
+      },
+      "his3": {
+        "timeBasedSearch": {
+          "before1630": { "searchTarget": "12668mu2/zenhan/his/1", "useCurrentRow": true },
+          "after1631": { "searchTarget": "12668mu2/zenhan/his/1", "useNextRow": true }
+        }
+      }
+    },
+    "mu2kouhan": {
+      "fileId": "12668_mu2kouhan",
+      "activeFrom": "17:30",
+      "kouhanHis": { "searchTarget": "12668mu2/kouhan/sinko/1" }
+    },
+    "mu2his": {
+      "fileId": "12668_mu2his",
+      "his2": {
+        "specialProcess": ["saveMemo1", "saveNickname"],
+        "branch": {
+          "positive": "12668mu2/his/3/A",
+          "negative": "12668mu2/his/3/B"
+        }
+      },
+      "his3": {
+        "timeBasedSearch": {
+          "before1630": { "searchTarget": "12668mu2/zenhan/his/1", "useCurrentRow": true },
+          "after1631": { "searchTarget": "12668mu2/zenhan/his/1", "useNextRow": true }
+        }
+      }
+    },
+    "mu3his": {
+      "fileId": "12668_mu3his",
+      "his1": {
+        "specialProcess": ["saveMemo1", "saveNickname"],
+        "nextTarget": "12668mu3/his/2"
+      }
+    },
+    "mu3sinko": {
+      "fileId": "12668_mu3sinko",
+      "stopAfter": "11:40",
+      "ho": { "searchTarget": "12668mu3/sinko/1" },
+      "noresHo": { "searchTarget": "12668mu3/sinko/1" }
+    },
+    "mu3hirusinko": {
+      "fileId": "12668_mu3hirusinko",
+      "stopAfter": "16:40",
+      "hiruHo1": { "searchTarget": "12668mu3/hiru/sinko/1" },
+      "hiruHo2": { "searchTarget": "12668mu3/hiru/sinko/1" }
+    },
+    "mu3yorusinko": {
+      "fileId": "12668_mu3yorusinko",
+      "yoruHo1": { "searchTarget": "12668mu3/yoru/sinko/1" },
+      "yoruHo2": { "searchTarget": "12668mu3/yoru/sinko/1" },
+      "yoruNoresHo": { "searchTarget": "12668mu3/yoru/sinko/1" }
+    },
+    "yu1sinko": {
+      "fileId": "12668_yu1sinko",
+      "sinkoHo": {
+        "requiredMessages": [
+          ["宝財幸全授", "ほうざいこうぜんじゅ"],
+          ["幸せへといざなう幸福符", "しあわせへといざなうこうふくふ"]
+        ],
+        "requiredCount": 2,
+        "searchTarget": "12668yu1/his/1"
+      },
+      "noresHo": {
+        "requiredMessages": [
+          ["宝財幸全授", "ほうざいこうぜんじゅ"],
+          ["幸せへといざなう幸福符", "しあわせへといざなうこうふくふ"]
+        ],
+        "requiredCount": 2,
+        "searchTarget": "12668yu1/his/1"
+      },
+      "stop1": {
+        "requiredMessages": [
+          ["宝財幸全授", "ほうざいこうぜんじゅ"],
+          ["幸せへといざなう幸福符", "しあわせへといざなうこうふくふ"]
+        ],
+        "requiredCount": 2,
+        "searchTarget": "12668yu1/his/1"
+      },
+      "stop2": {
+        "requiredMessages": [
+          ["幸せへといざなう幸福符", "しあわせへといざなうこうふくふ"]
+        ],
+        "requiredCount": 1,
+        "searchTarget": "12668yu1/his/1"
+      },
+      "yu2His23Ho": { "searchTarget": "12668yu1/sinko/1" },
+      "yu2HisHo": { "searchFromHistory": "12668yu1/his", "useNextRow": true },
+      "yu2Ho1": { "searchFromHistory": "12668yu1/sinko/", "useNextRow": true }
+    },
+    "yu3sinko": {
+      "fileId": "12668_yu3sinko",
+      "ho": { "searchTarget": "12668yu3/sinko/1" }
+    },
+    "yu4sinko": {
+      "fileId": "12668_yu4sinko",
+      "ho": { "searchTarget": "12668yu4/sinko/1" },
+      "muSinkoHo": { "searchTarget": "12668yu4/mu/sinko/1" },
+      "muStopHo": { "searchTarget": "12668yu4/mu/sinko/1" }
+    },
+    "yu5sinko": {
+      "fileId1": "12668_yu5sinko1",
+      "fileId2": "12668_yu5sinko2",
+      "timeSlots": {
+        "slot1": { "until": "19:00", "fileId": "12668_yu5sinko1" },
+        "gap": { "from": "19:01", "until": "20:29", "active": false },
+        "slot2": { "from": "20:30", "fileId": "12668_yu5sinko2" }
+      },
+      "ho1": { "searchTarget": "sinko/1" },
+      "ho2": { "searchTarget": "sinko/1" }
+    },
+    "yu6sinko": {
+      "fileId": "12668_yu6sinko",
+      "minPhaseNumber": 6,
+      "ho": { "useHistorySearch": true }
     }
   }
 }
