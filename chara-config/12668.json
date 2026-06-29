@@ -1,0 +1,25 @@
+{
+  "charaId": "12668",
+  "name": "天海",
+  "phases": {
+    "mu1": {
+      "his2": {
+        "specialProcess": true,
+        "actions": [
+          "saveMemo1",
+          "saveNickname"
+        ],
+        "branch": {
+          "positive": "sinko/3/A",
+          "negative": "sinko/3/B"
+        }
+      },
+      "sinko3A": {
+        "searchTarget": "sinko/4"
+      },
+      "sinko3B": {
+        "searchTarget": "sinko/4"
+      }
+    }
+  }
+}
