@@ -122,43 +122,46 @@ function parseCSV(filePath) {
   });
 }
 
-// "12672yu9" → { csvPath, resolvedCharaId }
-// 完全一致ファイルがなければ同じbaseId+種別で数値が対象以下の最大ファイルを返す
+// charaIdをプレフィックスとしてCSVファイルを検索する
+// sinkoを含むファイルを優先し、なければ数値が対象以下の最大ファイルにフォールバック
 function resolveCsvPath(charaId) {
-  const m = charaId.match(/^(\d+)(yu|mu)(\d+)$/);
-  if (!m) {
-    const name = charaId + '.csv';
-    return { csvPath: path.join(CSV_DIR, name), resolvedCharaId: charaId };
-  }
-  const [, baseId, type, numStr] = m;
-  const targetNum = parseInt(numStr, 10);
-
-  const exactName = `${baseId}${type}${targetNum}.csv`;
-  const exactPath = path.join(CSV_DIR, exactName);
-  if (fs.existsSync(exactPath)) {
-    return { csvPath: exactPath, resolvedCharaId: charaId };
-  }
-
-  // 同じbaseId+種別のファイルを走査してフォールバック
   let files;
-  try { files = fs.readdirSync(CSV_DIR); } catch (_) {
-    return { csvPath: exactPath, resolvedCharaId: charaId };
+  try { files = fs.readdirSync(CSV_DIR); } catch (_) { files = []; }
+
+  // charaIdで始まるCSVを検索（sinkoを含むファイルを優先）
+  function findByPrefix(prefix) {
+    const candidates = files.filter(f => f.startsWith(prefix) && f.endsWith('.csv'));
+    if (candidates.length === 0) return null;
+    return candidates.find(f => f.includes('sinko')) || candidates[0];
   }
-  const re = new RegExp(`^${baseId}${type}(\\d+)\\.csv$`);
-  let bestNum = -1;
-  let bestFile = null;
-  for (const f of files) {
-    const fm = f.match(re);
-    if (!fm) continue;
-    const n = parseInt(fm[1], 10);
-    if (n <= targetNum && n > bestNum) { bestNum = n; bestFile = f; }
+
+  const exactMatch = findByPrefix(charaId);
+  if (exactMatch) {
+    return { csvPath: path.join(CSV_DIR, exactMatch), resolvedCharaId: charaId };
   }
-  if (bestFile) {
-    const resolvedCharaId = `${baseId}${type}${bestNum}`;
-    console.log(`[CSV] ${exactName} が見つからないため ${bestFile} を使用 (charaId: ${resolvedCharaId})`);
-    return { csvPath: path.join(CSV_DIR, bestFile), resolvedCharaId };
+
+  // 数値サフィックスがある場合は小さい数値でフォールバック
+  const m = charaId.match(/^(\d+)(yu|mu)(\d+)$/);
+  if (m) {
+    const [, baseId, type, numStr] = m;
+    const targetNum = parseInt(numStr, 10);
+    let bestNum = -1;
+    let bestFile = null;
+    for (const f of files) {
+      if (!f.endsWith('.csv')) continue;
+      const fm = f.match(new RegExp(`^${baseId}${type}(\\d+)`));
+      if (!fm) continue;
+      const n = parseInt(fm[1], 10);
+      if (n <= targetNum && n > bestNum) { bestNum = n; bestFile = f; }
+    }
+    if (bestFile) {
+      const resolvedCharaId = `${baseId}${type}${bestNum}`;
+      console.log(`[CSV] ${charaId} のファイルが見つからないため ${bestFile} を使用 (charaId: ${resolvedCharaId})`);
+      return { csvPath: path.join(CSV_DIR, bestFile), resolvedCharaId };
+    }
   }
-  return { csvPath: exactPath, resolvedCharaId: charaId };
+
+  return { csvPath: path.join(CSV_DIR, charaId + '.csv'), resolvedCharaId: charaId };
 }
 
 function getReplyFromCSV(charaId, sinkoNum) {
@@ -172,18 +175,16 @@ function getReplyFromCSV(charaId, sinkoNum) {
   const title = rows[0] ? (rows[0][0] || '') : '';
   console.log(`[CSV] 1行目A列(件名): "${title}"`);
 
-  // sinko/N の行を特定する
-  // HTMLコメントは sinko/2 形式、CSVは sinko2 形式の場合があるため
-  // 正規表現で sinko\/?数字 として両形式に対応する
+  // sinko/N または his/N の行を特定する（sinko/2・sinko2 両形式に対応）
   const sinkoPattern = new RegExp(
-    `<!--${resolvedCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/sinko\\/?${sinkoNum}-->`
+    `<!--${resolvedCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:sinko|his)\\/?${sinkoNum}-->`
   );
   console.log(`[CSV] 検索パターン: ${sinkoPattern}`);
   const idx = rows.findIndex(r => sinkoPattern.test((r[0] || '').trim()));
   if (idx === -1) {
     // デバッグ: 先頭10行のA列を出力して何が入っているか確認
     const sample = rows.slice(0, 10).map((r, i) => `  row[${i}]: "${r[0] || ''}"`).join('\n');
-    throw new Error(`コメント sinko${sinkoNum} がCSVに未発見\nCSV先頭10行:\n${sample}`);
+    throw new Error(`コメント sinko/his ${sinkoNum} がCSVに未発見\nCSV先頭10行:\n${sample}`);
   }
 
   // ヒットした行の内容をログ出力
@@ -640,30 +641,30 @@ async function processUsers(page) {
     const allComments = analysis.kanteishiComments || [];
     console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
 
-    // /ho または /mtm を含むコメントがある → スキップ
-    if (allComments.some(c => /\/ho\b|\/mtm\b/.test(c))) {
-      console.log(`[SKIP] ${userName}: /ho または /mtm コメントあり`);
+    // /ho・/mtm・/do を含むコメントがある → スキップ
+    if (allComments.some(c => /\/ho\b|\/mtm\b|\/do\b/.test(c))) {
+      console.log(`[SKIP] ${userName}: /ho・/mtm・/do コメントあり`);
       continue;
     }
 
-    // /sinko が含まれない → スキップ
-    if (!allComments.some(c => c.includes('/sinko'))) {
-      console.log(`[SKIP] ${userName}: /sinkoコメントなし`);
+    // /sinko も /his も含まれない → スキップ
+    if (!allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
+      console.log(`[SKIP] ${userName}: /sinko・/hisコメントなし`);
       continue;
     }
 
-    // sinkoコメントのみ抽出
-    const sinkoComments = allComments.filter(c => /sinko\/?(\d+)/.test(c));
+    // sinko/his コメントを抽出
+    const sinkoComments = allComments.filter(c => /(?:sinko|his)\/?(\d+)/.test(c));
 
-    // sinko番号を全件収集（sinko1 も sinko/1 も両対応）
+    // sinko/his 番号を全件収集（sinko1・sinko/1・his1・his/1 すべて対応）
     const sinkoNums = sinkoComments
-      .map(c => { const m = c.match(/sinko\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+      .map(c => { const m = c.match(/(?:sinko|his)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
       .filter(n => n !== null);
 
-    // charaId を抽出（"12672yu9/sinko2" → "12672yu9"）
+    // charaId を抽出（"12672yu9/sinko/2" または "12668mu1/his/2" → キャラID部分）
     let charaId = null;
     for (const c of sinkoComments) {
-      const m = c.match(/^([a-zA-Z0-9]+)\/sinko\/?(\d+)$/);
+      const m = c.match(/^([a-zA-Z0-9]+)\/(?:sinko|his)\/?(\d+)$/);
       if (m) { charaId = m[1]; break; }
     }
 
