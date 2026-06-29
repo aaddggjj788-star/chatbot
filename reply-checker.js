@@ -487,7 +487,7 @@ async function analyzeMessages(page) {
       }
     }
 
-    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], allKanteishiComments: [], spanCount: 0, userMsgCount: 0, latestUserTime: '' };
+    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], allKanteishiComments: [], spanCount: 0, userMsgCount: 0, latestUserTime: '', latestUserTexts: [] };
 
     // 【判定2】最新メッセージチェック（DOM最上位 = 最新）
     if (msgs.length === 0) {
@@ -521,6 +521,7 @@ async function analyzeMessages(page) {
     const latestUserTime = beforeUser.length > 0 ? (beforeUser[0].timeText || '') : '';
 
     const allKanteishiComments = msgs.filter(m => m.type === 'kanteishi').flatMap(m => m.comments);
+    const latestUserTexts = beforeUser.map(m => m.rowText || '');
     const successK = {
       kanteishiHtml: km.html,
       kanteishiTrHtml: km.trHtml,
@@ -530,6 +531,7 @@ async function analyzeMessages(page) {
       spanCount,
       userMsgCount: beforeUser.length,
       latestUserTime,
+      latestUserTexts,
     };
 
     // 【判定3】既読チェック
@@ -587,6 +589,25 @@ function isInStopTime(charaId) {
   return startMin > endMin
     ? cur >= startMin || cur < endMin   // 深夜またぎ（例: 23:00〜9:00）
     : cur >= startMin && cur < endMin;  // 同日内（例: 9:00〜17:00）
+}
+
+// ─── A/B分岐自動判定 ─────────────────────────────────────────────
+// ユーザーメッセージ群を結合してキーワードで判定
+// 否定的キーワードが含まれる → "B"、それ以外 → "A"
+function detectBranchChoice(userTexts) {
+  const combined = userTexts.join('');
+  const negativeKeywords = [
+    '心当たりがない', 'わからない', '特にない',
+    '思えない', '感じない', 'ないです', 'ないかも', 'ない',
+  ];
+  for (const kw of negativeKeywords) {
+    if (combined.includes(kw)) {
+      console.log(`[BRANCH] 否定キーワード "${kw}" 検出 → B`);
+      return 'B';
+    }
+  }
+  console.log('[BRANCH] 否定キーワードなし → A');
+  return 'A';
 }
 
 // ─── 受信時刻パーサー ─────────────────────────────────────────────
@@ -788,20 +809,13 @@ async function processUsers(page) {
         }
 
         if (actionCfg.branch) {
-          // A/B分岐: LINEで選択してもらう
-          const branchMsg = [
-            `【分岐選択】${userName}`,
-            `A: ${actionCfg.branch.positive}`,
-            `B: ${actionCfg.branch.negative}`,
-            `「A」または「B」と返信してください`,
-          ].join('\n');
-          await sendLine(branchMsg);
-          let branchChoice;
-          try { branchChoice = await waitForLineReply(); } catch (e) { continue; }
-          const branchTarget = (branchChoice.trim().toUpperCase() === 'A')
+          // A/B分岐: ユーザーメッセージのキーワードで自動判定
+          const userTexts = analysis.latestUserTexts || [];
+          const branchChoice = detectBranchChoice(userTexts);
+          const branchTarget = (branchChoice === 'A')
             ? actionCfg.branch.positive
             : actionCfg.branch.negative;
-          console.log(`[JSON] 分岐: ${branchChoice} → ${branchTarget}`);
+          console.log(`[JSON] 分岐自動判定: ${branchChoice} → ${branchTarget}`);
           try {
             replyData = getReplyFromCSVByTarget(charaId, branchTarget, false, fileId);
           } catch (e) {
