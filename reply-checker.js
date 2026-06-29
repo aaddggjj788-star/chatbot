@@ -124,12 +124,20 @@ function parseCSV(filePath) {
 
 // コメント文字列を分解する
 // 単純形式: "12668mu1/sinko/2"    → { baseId:"12668", typeNum:"mu1", sub:null, type:"sinko", num:2 }
+//           "12668mu1/his/2"     → { ..., type:"his", num:2 }
+//           "12668mu1/hisu/2"    → { ..., type:"his", num:2 }（his*はhisに正規化）
 // 複合形式: "12668mu2/zenhan/sinko/1" → { baseId:"12668", typeNum:"mu2", sub:"zenhan", type:"sinko", num:1 }
 function parseCommentStr(commentStr) {
-  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+)\/(sinko|his)\/?(\d+)$/);
-  if (m) return { baseId: m[1], typeNum: m[2], sub: null, type: m[3], num: parseInt(m[4], 10) };
-  m = commentStr.match(/^(\d+)((?:yu|mu)\d+)\/([a-z]+)\/(sinko|his)\/?(\d+)$/);
-  if (m) return { baseId: m[1], typeNum: m[2], sub: m[3], type: m[4], num: parseInt(m[5], 10) };
+  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+)\/(sinko|his\w*)\/?(\d+)$/);
+  if (m) {
+    const type = m[3].startsWith('his') ? 'his' : m[3];
+    return { baseId: m[1], typeNum: m[2], sub: null, type, num: parseInt(m[4], 10) };
+  }
+  m = commentStr.match(/^(\d+)((?:yu|mu)\d+)\/([a-z]+)\/(sinko|his\w*)\/?(\d+)$/);
+  if (m) {
+    const type = m[4].startsWith('his') ? 'his' : m[4];
+    return { baseId: m[1], typeNum: m[2], sub: m[3], type, num: parseInt(m[5], 10) };
+  }
   return null;
 }
 
@@ -741,7 +749,7 @@ async function processUsers(page) {
     if (hasHo) {
       // /ho の場合: 全メッセージ履歴から最新sinko/hisコメントを検索してsinko+1を送信
       const historyComments = analysis.allKanteishiComments || [];
-      const historySinkoComments = historyComments.filter(c => /(?:sinko|his)\/?(\d+)/.test(c));
+      const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
 
       for (const c of historySinkoComments) {
         const m = c.match(/^(\d+(?:yu|mu)\d+)/);
@@ -754,7 +762,7 @@ async function processUsers(page) {
       }
 
       const histSinkoNums = historySinkoComments
-        .map(c => { const m = c.match(/(?:sinko|his)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+        .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
         .filter(n => n !== null);
       const maxSinko = Math.max(...histSinkoNums);
 
@@ -766,11 +774,11 @@ async function processUsers(page) {
         continue;
       }
     } else {
-      // 通常の sinko/his 処理
-      const sinkoComments = allComments.filter(c => /(?:sinko|his)\/?(\d+)/.test(c));
+      // 通常の sinko/his 処理（hisu等のhis変形も含む）
+      const sinkoComments = allComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
 
       const sinkoNums = sinkoComments
-        .map(c => { const m = c.match(/(?:sinko|his)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+        .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
         .filter(n => n !== null);
 
       // charaId を抽出（複合コメント形式にも対応）
@@ -779,8 +787,9 @@ async function processUsers(page) {
         if (m) { charaId = m[1]; break; }
       }
 
-      // sinkoが1件のみ かつ 番号が1 → スキップ
-      if (sinkoNums.length === 1 && sinkoNums[0] === 1) {
+      // sinkoが1件のみ かつ 番号が1 → スキップ（hisコメントは除外）
+      const hasHisComment = sinkoComments.some(c => /\/his\w*/.test(c));
+      if (!hasHisComment && sinkoNums.length === 1 && sinkoNums[0] === 1) {
         console.log(`[SKIP] ${userName}: sinko1のみ（初回メッセージ）`);
         continue;
       }
@@ -790,7 +799,7 @@ async function processUsers(page) {
       // ─── JSON設定の読み込み ──────────────────────────────────────
       const maxSinkoNum = Math.max(...sinkoNums);
       const latestComment = sinkoComments.find(c => {
-        const m = c.match(/(?:sinko|his)\/?(\d+)/);
+        const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
         return m && parseInt(m[1], 10) === maxSinkoNum;
       });
       const parsed     = latestComment ? parseCommentStr(latestComment) : null;
@@ -863,13 +872,22 @@ async function processUsers(page) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
           }
+        } else if (actionCfg.nextTarget) {
+          console.log(`[JSON] nextTarget="${actionCfg.nextTarget}"`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, actionCfg.nextTarget, false, fileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
         }
         // specialProcessのみなど、searchTarget系設定がない場合はデフォルト動作へ
       }
 
       // ─── デフォルト動作（JSON設定なし、またはsearchTarget系設定なし）──
       if (!replyData) {
-        const allSameNum = sinkoNums.every(n => n === sinkoNums[0]);
+        // 複数コメントが全て同じ番号の場合のみspan検索（1件のみはsinko+1）
+        const allSameNum = sinkoNums.length > 1 && sinkoNums.every(n => n === sinkoNums[0]);
 
         if (allSameNum) {
           // span検索モード: 最新鑑定士メッセージのbodyTextからspanワードを抽出
