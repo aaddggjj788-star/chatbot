@@ -75,6 +75,22 @@
       "his1": {
         "specialProcess": ["saveMemo1", "saveNickname"],
         "nextTarget": "12668mu3/his/2"
+      },
+      "his4": {
+        "timeBasedSearch": {
+          "before1130": { "searchTarget": "12668mu3/sinko/1", "useCurrentRow": true },
+          "after1131": { "searchTarget": "12668mu3/his/5", "useCurrentRow": true }
+        }
+      },
+      "his5": {
+        "timeBasedSearch": {
+          "before1630": { "searchTarget": "12668mu3/hiru/sinko/1", "useCurrentRow": true },
+          "after1631": { "searchTarget": "12668mu3/his/6", "useCurrentRow": true }
+        }
+      },
+      "his6": {
+        "searchTarget": "12668mu3/yoru/sinko/1",
+        "useCurrentRow": true
       }
     },
     "mu3sinko": {
