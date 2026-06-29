@@ -34,6 +34,7 @@ const BASE_URL    = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9
 // 親フレーム: mg_ope.php  左: iframe[name="ope_menu"]  右: iframe[name="ope_main"]
 const LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const CSV_DIR = process.env.REPLY_CSV_DIR || path.join(__dirname, 'reply-csv');
+const CHARA_CONFIG_DIR = path.join(__dirname, 'chara-config');
 const DRY_RUN = process.env.DRY_RUN === 'true';
 
 const STATE_FILE = '/tmp/rune-reply-state.json';
@@ -499,6 +500,37 @@ async function analyzeMessages(page) {
   return result;
 }
 
+// ─── キャラ設定読み込み ───────────────────────────────────────────
+
+function loadCharaConfig(charaId) {
+  const configPath = path.join(CHARA_CONFIG_DIR, `${charaId}.json`);
+  try {
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+// start===end → 常時稼働。start>end → 深夜またぎ。start<end → 同日内停止。
+function isInStopTime(charaId) {
+  const config = loadCharaConfig(charaId);
+  let startMin, endMin;
+  if (config && config.globalStopTime) {
+    const parse = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    startMin = parse(config.globalStopTime.start);
+    endMin   = parse(config.globalStopTime.end);
+  } else {
+    startMin = 23 * 60; // デフォルト 23:00
+    endMin   =  9 * 60; // デフォルト 09:00
+  }
+  if (startMin === endMin) return false; // 常時稼働
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  return startMin > endMin
+    ? cur >= startMin || cur < endMin   // 深夜またぎ（例: 23:00〜9:00）
+    : cur >= startMin && cur < endMin;  // 同日内（例: 9:00〜17:00）
+}
+
 // ─── 受信時刻パーサー ─────────────────────────────────────────────
 // "06月28日 03時27分" → Date オブジェクト（現在年を補完）
 
@@ -530,6 +562,13 @@ async function processUsers(page) {
       console.log('[STOP] 停止要求により中断');
       break;
     }
+
+    // ─── キャラ別停止時間チェック ──────────────────────────────────
+    if (isInStopTime(kid)) {
+      console.log(`[SKIP] ${userName}: 停止時間帯のためスキップ (k_id=${kid})`);
+      continue;
+    }
+
     console.log(`[USER] 確認中: ${userName} (k_id=${kid}, u_id=${uid}, stringID=${stringID})`);
 
     // ─── フレーム取得 ────────────────────────────────────────────
@@ -771,13 +810,6 @@ function stopReplies() {
 async function checkReplies() {
   _shouldStop = false;
   console.log('=== reply-checker 起動 ===');
-
-  const now = new Date();
-  const hour = now.getHours();
-  if (hour >= 23 || hour < 9) {
-    console.log('[STOP] 返信停止時間帯（23:00〜9:00）');
-    return;
-  }
 
   if (DRY_RUN) console.log('[DRY RUN] モード有効');
   clearState();
