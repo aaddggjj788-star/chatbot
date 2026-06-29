@@ -593,9 +593,10 @@ function isInStopTime(charaId) {
 
 // ─── A/B分岐自動判定 ─────────────────────────────────────────────
 // ユーザーメッセージ群を結合してキーワードで判定
-// 否定的キーワードが含まれる → "B"、それ以外 → "A"
+// 否定的キーワードが一つでもある → "B"、否定キーワードがなければ → "A"
 function detectBranchChoice(userTexts) {
   const combined = userTexts.join('');
+  // 否定キーワード（長い→短い順に並べて誤検知を防ぐ）
   const negativeKeywords = [
     '心当たりがない', 'わからない', '特にない',
     '思えない', '感じない', 'ないです', 'ないかも', 'ない',
@@ -606,6 +607,7 @@ function detectBranchChoice(userTexts) {
       return 'B';
     }
   }
+  // 否定キーワードなし → A（肯定的: ある/あった/思える/感じる/はい/そう/思う 等）
   console.log('[BRANCH] 否定キーワードなし → A');
   return 'A';
 }
@@ -932,7 +934,7 @@ async function processUsers(page) {
     // ─── 送信 or スキップ ────────────────────────────────────────
     if (reply === '送信') {
       // 返信文（sinko/N+1 のB列）+ 次のコメントアウト（sinko/N+1 のA列）を末尾に追記
-      const textToSend = replyData.replyText + '\n' + replyData.nextComment;
+      const textToSend = replyData.replyText.replace(/\\n/g, '\n') + '\n' + replyData.nextComment;
       console.log(`[SEND-TEXT] 送信内容: "${textToSend.slice(0, 80)}..."`);
       if (DRY_RUN) {
         console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
