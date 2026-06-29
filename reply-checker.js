@@ -121,13 +121,47 @@ function parseCSV(filePath) {
   });
 }
 
-// "12672yu9" → "12672_yu9.csv"
-function charaIdToCsvName(charaId) {
-  return charaId.replace(/^(\d+)(yu\d+)$/, '$1_$2') + '.csv';
+// "12672yu9" → { csvPath, resolvedCharaId }
+// 完全一致ファイルがなければ同じbaseId+種別で数値が対象以下の最大ファイルを返す
+function resolveCsvPath(charaId) {
+  const m = charaId.match(/^(\d+)(yu|mu)(\d+)$/);
+  if (!m) {
+    const name = charaId.replace(/^(\d+)(yu\d+)$/, '$1_$2') + '.csv';
+    return { csvPath: path.join(CSV_DIR, name), resolvedCharaId: charaId };
+  }
+  const [, baseId, type, numStr] = m;
+  const targetNum = parseInt(numStr, 10);
+
+  const exactName = `${baseId}_${type}${targetNum}.csv`;
+  const exactPath = path.join(CSV_DIR, exactName);
+  if (fs.existsSync(exactPath)) {
+    return { csvPath: exactPath, resolvedCharaId: charaId };
+  }
+
+  // 同じbaseId+種別のファイルを走査してフォールバック
+  let files;
+  try { files = fs.readdirSync(CSV_DIR); } catch (_) {
+    return { csvPath: exactPath, resolvedCharaId: charaId };
+  }
+  const re = new RegExp(`^${baseId}_${type}(\\d+)\\.csv$`);
+  let bestNum = -1;
+  let bestFile = null;
+  for (const f of files) {
+    const fm = f.match(re);
+    if (!fm) continue;
+    const n = parseInt(fm[1], 10);
+    if (n <= targetNum && n > bestNum) { bestNum = n; bestFile = f; }
+  }
+  if (bestFile) {
+    const resolvedCharaId = `${baseId}${type}${bestNum}`;
+    console.log(`[CSV] ${exactName} が見つからないため ${bestFile} を使用 (charaId: ${resolvedCharaId})`);
+    return { csvPath: path.join(CSV_DIR, bestFile), resolvedCharaId };
+  }
+  return { csvPath: exactPath, resolvedCharaId: charaId };
 }
 
 function getReplyFromCSV(charaId, sinkoNum) {
-  const csvPath = path.join(CSV_DIR, charaIdToCsvName(charaId));
+  const { csvPath, resolvedCharaId } = resolveCsvPath(charaId);
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
 
   const rows = parseCSV(csvPath);
@@ -141,7 +175,7 @@ function getReplyFromCSV(charaId, sinkoNum) {
   // HTMLコメントは sinko/2 形式、CSVは sinko2 形式の場合があるため
   // 正規表現で sinko\/?数字 として両形式に対応する
   const sinkoPattern = new RegExp(
-    `<!--${charaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/sinko\\/?${sinkoNum}-->`
+    `<!--${resolvedCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/sinko\\/?${sinkoNum}-->`
   );
   console.log(`[CSV] 検索パターン: ${sinkoPattern}`);
   const idx = rows.findIndex(r => sinkoPattern.test((r[0] || '').trim()));
@@ -178,7 +212,7 @@ function getReplyFromCSV(charaId, sinkoNum) {
 
 // spanワードでCSVを検索して次の行のB列を返す
 function getReplyFromCSVBySpan(charaId, spanWord) {
-  const csvPath = path.join(CSV_DIR, charaIdToCsvName(charaId));
+  const { csvPath } = resolveCsvPath(charaId);
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
   const rows = parseCSV(csvPath);
   console.log(`[CSV] span検索: "${spanWord}" (総行数: ${rows.length})`);
