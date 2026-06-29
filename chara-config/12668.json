@@ -1,7 +1,7 @@
 {
   "charaId": "12668",
   "name": "天海",
-  "globalStopTime": { "start": "22:00", "end": "09:00" },
+  "globalStopTime": { "start": "00:00", "end": "00:00" },
   "spanMatchExclude": [
     "12668mu1/sinko/4",
     "12668mu1/sinko/5",
