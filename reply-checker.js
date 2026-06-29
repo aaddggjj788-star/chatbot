@@ -631,7 +631,7 @@ async function processUsers(page) {
     // ─── 判定4: span個数とユーザーメッセージ通数の照合 ──────────
     const { spanCount, userMsgCount } = analysis;
     console.log(`[SPAN-CHECK] ${userName}: ユーザーメッセージ=${userMsgCount}通, span個数=${spanCount}`);
-    if (userMsgCount !== spanCount) {
+    if (spanCount > 0 && userMsgCount !== spanCount) {
       console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount})とspan個数(${spanCount})が不一致`);
       continue;
     }
