@@ -152,6 +152,26 @@ function resolvePhaseCfg(parsed, config) {
   return null;
 }
 
+// hoコメントのtypeNumからphase設定を解決する
+// 完全一致 → typeNumを接頭辞とするphase検索 (例: "yu3" → "yu3sinko")
+// 複数マッチ時はhoTypeキーを持つphaseを優先
+function resolveHoPhase(charaCfg, typeNum, hoType) {
+  const phases = charaCfg?.phases || {};
+  if (phases[typeNum]) return { key: typeNum, cfg: phases[typeNum] };
+
+  const prefixMatches = Object.entries(phases).filter(([k]) => k.startsWith(typeNum));
+  if (prefixMatches.length === 0) return null;
+  if (prefixMatches.length === 1) return { key: prefixMatches[0][0], cfg: prefixMatches[0][1] };
+
+  // 複数マッチ → hoTypeキー（完全 or 数値サフィックス除去）を持つphaseを優先
+  const baseKey = hoType ? hoType.replace(/\d+$/, '') : null;
+  const withKey = prefixMatches.find(([, p]) =>
+    (hoType && p[hoType] !== undefined) || (baseKey && baseKey !== hoType && p[baseKey] !== undefined)
+  );
+  if (withKey) return { key: withKey[0], cfg: withKey[1] };
+  return { key: prefixMatches[0][0], cfg: prefixMatches[0][1] };
+}
+
 // charaIdをプレフィックスとしてCSVファイルを検索する
 // fileIdが指定された場合はそのファイルを優先する
 // sinkoを含むファイルを優先し、なければ数値が対象以下の最大ファイルにフォールバック
@@ -916,7 +936,9 @@ async function processUsers(page) {
       continue;
     }
 
-    const hasHo = allComments.some(c => /\/ho\b/.test(c));
+    // ho系コメントの検出（数値サフィックス・接頭辞付きも含む: ho1, sinkoHo, noresHo, hiruHo1等）
+    const hoComments = allComments.filter(c => /\/[a-zA-Z]*[Hh]o\d*$/.test(c));
+    const hasHo = hoComments.length > 0;
 
     // /sinko も /his も /ho も含まれない → スキップ
     if (!hasHo && !allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
@@ -929,35 +951,150 @@ async function processUsers(page) {
     let latestComment = null;
 
     if (hasHo) {
-      // /ho の場合: 全メッセージ履歴から最新sinko/hisコメントを検索してsinko+1を送信
-      const historyComments = analysis.allKanteishiComments || [];
-      const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+      const hoComment = hoComments[0];
+      latestComment = hoComment;
 
-      for (const c of historySinkoComments) {
-        const m = c.match(/^(\d+(?:yu|mu)\d+)/);
-        if (m) { charaId = m[1]; break; }
+      // hoコメントから baseId・typeNum・hoType を抽出
+      // 例: "12668mu3sinko/ho"   → baseId=12668, typeNum=mu3sinko, hoType=ho
+      // 例: "12668yu3/ho"        → baseId=12668, typeNum=yu3,      hoType=ho
+      // 例: "12668mu2zenhan/ho1" → baseId=12668, typeNum=mu2zenhan, hoType=ho1
+      const hoMatch = hoComment.match(/^(\d+)((?:yu|mu)\d+\w*)\/(\w+)$/);
+
+      let hoBaseId = null;
+      let hoTypeNum = null;
+      let hoType = null;
+      if (hoMatch) {
+        hoBaseId  = hoMatch[1];
+        hoTypeNum = hoMatch[2];
+        hoType    = hoMatch[3];
+        charaId   = hoBaseId + hoTypeNum;
       }
 
-      if (!charaId) {
-        console.log(`[SKIP] ${userName}: /hoあり・履歴にsinko/hisコメントなし`);
-        continue;
+      // JSON設定の読み込みとphase解決
+      const hoCharaCfg   = hoBaseId ? loadCharaConfig(hoBaseId) : null;
+      const hoPhaseResult = (hoCharaCfg && hoTypeNum) ? resolveHoPhase(hoCharaCfg, hoTypeNum, hoType) : null;
+      const hoPhaseCfg   = hoPhaseResult?.cfg ?? null;
+      const hoFileId     = hoPhaseCfg?.fileId ?? null;
+
+      // actionCfg決定: 完全一致優先 → 数値サフィックス除去で前方一致
+      let hoActionCfg = null;
+      if (hoPhaseCfg && hoType) {
+        hoActionCfg = hoPhaseCfg[hoType] ?? null;
+        if (!hoActionCfg) {
+          const baseKey = hoType.replace(/\d+$/, '');
+          if (baseKey !== hoType && hoPhaseCfg[baseKey]) {
+            hoActionCfg = hoPhaseCfg[baseKey];
+            console.log(`[JSON] hoType="${hoType}" 完全一致なし → baseKey="${baseKey}" で前方一致`);
+          }
+        }
       }
 
-      const histSinkoNums = historySinkoComments
-        .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
-        .filter(n => n !== null);
-      const maxSinko = Math.max(...histSinkoNums);
-      latestComment = historySinkoComments.find(c => {
-        const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
-        return m && parseInt(m[1], 10) === maxSinko;
-      }) || null;
+      console.log(`[COMMENT] ${userName}: /hoモード comment="${hoComment}" hoType="${hoType}" phase=${hoPhaseResult?.key} actionCfg=${JSON.stringify(hoActionCfg)}`);
 
-      console.log(`[COMMENT] ${userName}: /hoモード charaId=${charaId} 履歴最大sinko=${maxSinko}`);
-      try {
-        replyData = getReplyFromCSV(charaId, maxSinko);
-      } catch (e) {
-        console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
-        continue;
+      // ─── JSON設定に基づく処理分岐 ────────────────────────────────
+      if (hoActionCfg) {
+        if (hoActionCfg.specialProcess) {
+          console.log(`[JSON] ho specialProcess: ${JSON.stringify(hoActionCfg.specialProcess)}`);
+          await executeSpecialProcess(hoActionCfg.specialProcess, page, uid, analysis, DRY_RUN);
+        }
+
+        if (hoActionCfg.branch) {
+          const userTexts = analysis.latestUserTexts || [];
+          const branchChoice = detectBranchChoice(userTexts);
+          const branchTarget = branchChoice === 'A' ? hoActionCfg.branch.positive : hoActionCfg.branch.negative;
+          console.log(`[JSON] ho分岐自動判定: ${branchChoice} → ${branchTarget}`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, branchTarget, true, hoFileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+        } else if (hoActionCfg.timeBasedSearch) {
+          const now = new Date();
+          const curMin = now.getHours() * 60 + now.getMinutes();
+          let selected = null;
+          for (const [cKey, cVal] of Object.entries(hoActionCfg.timeBasedSearch)) {
+            const bm = cKey.match(/^before(\d{3,4})$/);
+            const am = cKey.match(/^after(\d{3,4})$/);
+            if (bm) {
+              const t = bm[1].padStart(4, '0');
+              const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+              if (curMin < tMin) { selected = cVal; break; }
+            } else if (am) {
+              const t = am[1].padStart(4, '0');
+              const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+              if (curMin >= tMin) { selected = cVal; break; }
+            }
+          }
+          if (!selected) {
+            console.log(`[JSON] ho timeBasedSearch: 一致する時間帯なし → スキップ`);
+            continue;
+          }
+          const useCurrentRow = selected.useCurrentRow === true;
+          console.log(`[JSON] ho timeBasedSearch → "${selected.searchTarget}" useCurrentRow=${useCurrentRow}`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, hoFileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+        } else if (hoActionCfg.searchTarget) {
+          const useCurrentRow = hoActionCfg.useCurrentRow === true;
+          console.log(`[JSON] ho searchTarget="${hoActionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.searchTarget, useCurrentRow, hoFileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+        } else if (hoActionCfg.nextTarget) {
+          console.log(`[JSON] ho nextTarget="${hoActionCfg.nextTarget}"`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.nextTarget, true, hoFileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+        }
+        // useHistorySearch: true 等はフォールバックに委ねる
+      }
+
+      // ─── フォールバック: JSON設定なし or searchTarget系なし ──────
+      // 全履歴からsinko/hisコメントを検索してsinko+1を送信
+      if (!replyData) {
+        const historyComments = analysis.allKanteishiComments || [];
+        const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+
+        if (!charaId) {
+          for (const c of historySinkoComments) {
+            const m = c.match(/^(\d+(?:yu|mu)\d+)/);
+            if (m) { charaId = m[1]; break; }
+          }
+        }
+
+        if (!charaId || historySinkoComments.length === 0) {
+          console.log(`[SKIP] ${userName}: /hoあり・履歴にsinko/hisコメントなし・JSON設定もなし`);
+          continue;
+        }
+
+        const histSinkoNums = historySinkoComments
+          .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+          .filter(n => n !== null);
+        const maxSinko = Math.max(...histSinkoNums);
+        if (!latestComment || latestComment === hoComment) {
+          latestComment = historySinkoComments.find(c => {
+            const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+            return m && parseInt(m[1], 10) === maxSinko;
+          }) || hoComment;
+        }
+
+        console.log(`[COMMENT] ${userName}: /hoフォールバック sinko+1 charaId=${charaId} maxSinko=${maxSinko}`);
+        try {
+          replyData = getReplyFromCSV(charaId, maxSinko);
+        } catch (e) {
+          console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+          continue;
+        }
       }
     } else {
       // 通常の sinko/his 処理（hisu等のhis変形も含む）
