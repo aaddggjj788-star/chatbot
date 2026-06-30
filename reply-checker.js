@@ -904,6 +904,31 @@ async function processUsers(page) {
         // specialProcessのみなど、searchTarget系設定がない場合はデフォルト動作へ
       }
 
+      // ─── searchOverride チェック ─────────────────────────────────
+      // sinko/3/A 等で parseCommentStr=null → phaseCfg=null でも解決できるよう
+      // charaId から typeNum を抽出してフォールバック解決する
+      if (!replyData && latestComment && charaCfg) {
+        const ovPhase = phaseCfg ?? (() => {
+          const tn = charaId?.match(/(?:yu|mu)\d+/)?.[0];
+          return tn ? (charaCfg.phases?.[tn] ?? null) : null;
+        })();
+        const ovFileId = fileId ?? ovPhase?.fileId ?? null;
+
+        if (ovPhase?.searchOverride) {
+          const overrideCfg = ovPhase.searchOverride[latestComment];
+          if (overrideCfg?.searchTarget) {
+            const useCurrentRow = overrideCfg.useCurrentRow === true;
+            console.log(`[JSON] searchOverride: "${latestComment}" → searchTarget="${overrideCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
+            try {
+              replyData = getReplyFromCSVByTarget(charaId, overrideCfg.searchTarget, useCurrentRow, ovFileId);
+            } catch (e) {
+              console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+              continue;
+            }
+          }
+        }
+      }
+
       // ─── デフォルト動作（JSON設定なし、またはsearchTarget系設定なし）──
       if (!replyData) {
         // 複数コメントが全て同じ番号の場合のみspan検索（1件のみはsinko+1）
