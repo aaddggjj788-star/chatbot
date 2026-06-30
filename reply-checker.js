@@ -792,6 +792,7 @@ async function saveMemo1(frame, userTexts, dryRun) {
 
 // saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存
 async function saveNickname(frame, userTexts, dryRun) {
+  console.log('[DEBUG] saveNickname対象テキスト:', userTexts);
   const result = extractNickname(userTexts);
 
   if (result.needsConfirmation) {
@@ -854,32 +855,33 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bod
 }
 
 // ope_mainフレームの div.bodyNaibu からユーザーメッセージ本文のみ取得する
-// ユーザー行（背景色 aaaaff/ffaaaa）に限定し、鑑定士行（90ee90）を除外する
-// <br> は改行として扱い、他のHTMLタグは除去して返す
+// 全 div.bodyNaibu から鑑定士行（90ee90 背景）に属するものを除外してユーザー分のみ返す
+// DOM順（上=最新）で返す。<br> は改行として扱い、他のHTMLタグは除去する
 async function getBodyNaibuTexts(frame) {
   try {
-    return await frame.evaluate(() => {
+    const { texts, totalCount, userCount } = await frame.evaluate(() => {
       function normStyle(el) {
         return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
       }
-      const processedRows = new Set();
-      const texts = [];
-      for (const el of document.querySelectorAll('tr, td, div')) {
-        const bg = normStyle(el);
-        if (!bg.includes('aaaaff') && !bg.includes('ffaaaa')) continue;
-        const row = el.closest('tr') || el;
-        if (processedRows.has(row)) continue;
-        processedRows.add(row);
-        row.querySelectorAll('div.bodyNaibu').forEach(bodyEl => {
-          const text = bodyEl.innerHTML
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<[^>]+>/g, '')
-            .trim();
-          if (text) texts.push(text);
-        });
+      function isKanteishiAncestor(el) {
+        let node = el.parentElement;
+        while (node) {
+          const bg = normStyle(node);
+          if (bg.includes('90ee90') || bg.includes('144,238,144')) return true;
+          node = node.parentElement;
+        }
+        return false;
       }
-      return texts;
+      const all = Array.from(document.querySelectorAll('div.bodyNaibu'));
+      const userOnly = all.filter(el => !isKanteishiAncestor(el));
+      const texts = userOnly
+        .map(el => el.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim())
+        .filter(t => t.length > 0);
+      return { texts, totalCount: all.length, userCount: userOnly.length };
     });
+    console.log(`[DEBUG] getBodyNaibuTexts: 全bodyNaibu=${totalCount}件 / ユーザー行=${userCount}件 / テキスト=${texts.length}件`);
+    if (texts.length > 0) console.log('[DEBUG] getBodyNaibuTexts 先頭:', texts[0].slice(0, 120));
+    return texts;
   } catch (e) {
     console.error('[ERROR] getBodyNaibuTexts:', e.message);
     return [];
