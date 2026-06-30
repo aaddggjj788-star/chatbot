@@ -656,26 +656,72 @@ function parseMessageTime(timeStr) {
 // ─── specialProcess ヘルパー ──────────────────────────────────────
 
 // ユーザーメッセージからニックネームを抽出する
+// 戻り値: { nickname: string|null, needsConfirmation: boolean, hint?: string }
 function extractNickname(userTexts) {
   const combined = userTexts.join('\n');
 
-  // 「○○さん」パターン（文頭・助詞の後など）
+  // === 1. フルネーム（スペース区切り）検出 ===
+  // 優先度高：「私の名前は○○ ○○」「名前は○○ ○○」形式
+  let surnameCandidate = null;
+  let givenNameCandidate = null;
+
+  const fnContext = combined.match(
+    /(?:私(?:の)?(?:名前|なまえ)?は|名前は|なまえは)([^\x00-\x7F\s]{1,5})[\s　]([^\x00-\x7F\s]{1,5})/u
+  );
+  if (fnContext) {
+    surnameCandidate = fnContext[1].trim();
+    givenNameCandidate = fnContext[2].trim();
+  }
+
+  // 文頭「○○ ○○です/と申します/といいます」形式
+  if (!surnameCandidate) {
+    const fnPlain = combined.match(
+      /^([^\x00-\x7F\s]{1,5})[\s　]([^\x00-\x7F\s]{1,5})(?:です|と申|といい|と言)/mu
+    );
+    if (fnPlain) {
+      surnameCandidate = fnPlain[1].trim();
+      givenNameCandidate = fnPlain[2].trim();
+    }
+  }
+
+  if (surnameCandidate && givenNameCandidate) {
+    // ひらがな・カタカナのみ → 女性と推定 → 名前（下の名前）
+    if (/^[ぁ-んァ-ン]+$/u.test(givenNameCandidate)) {
+      return { nickname: givenNameCandidate, needsConfirmation: false };
+    }
+    // 女性名末尾パターン → 名前（下の名前）
+    if (/[子美香奈菜花愛恵理絵江代世里乃葉紀帆優萌結咲彩陽澄千百]$/u.test(givenNameCandidate)) {
+      return { nickname: givenNameCandidate, needsConfirmation: false };
+    }
+    // 男性名末尾パターン → 姓
+    if (/[郎太介助男雄史人哉樹志司也馬斗平輔祐]$/u.test(givenNameCandidate)) {
+      return { nickname: surnameCandidate, needsConfirmation: false };
+    }
+    // 判定不能 → LINE確認が必要
+    return {
+      nickname: null,
+      needsConfirmation: true,
+      hint: `フルネーム「${surnameCandidate} ${givenNameCandidate}」の性別を判定できません。姓・名のどちらをニックネームに使用するか手動で設定してください。`,
+    };
+  }
+
+  // === 2. 「○○さん」パターン ===
   const sanMatch = combined.match(/(?:^|[\s、。\n「」])([^\s、。\n「」（）]{1,8})さん/u);
-  if (sanMatch) return sanMatch[1];
+  if (sanMatch) return { nickname: sanMatch[1], needsConfirmation: false };
 
-  // 「○○と申します」「○○といいます」パターン
+  // === 3. 「○○と申します」「○○といいます」パターン ===
   const moushiMatch = combined.match(/([^\s、。\n「」]{1,10})(?:と申します|と言います|といいます)/u);
-  if (moushiMatch) return moushiMatch[1];
+  if (moushiMatch) return { nickname: moushiMatch[1], needsConfirmation: false };
 
-  // 「名前は○○」「ニックネームは○○」パターン
+  // === 4. 「名前は○○」「ニックネームは○○」パターン ===
   const nameMatch = combined.match(/(?:名前|ニックネーム|なまえ)は[「『]?([^\s、。\n「」』]{1,10})/u);
-  if (nameMatch) return nameMatch[1];
+  if (nameMatch) return { nickname: nameMatch[1], needsConfirmation: false };
 
-  // 「○○です」（行頭近く、短い）パターン
+  // === 5. 行頭「○○です」パターン ===
   const desuMatch = combined.match(/^([^\s、。\n「」]{1,6})です/mu);
-  if (desuMatch) return desuMatch[1];
+  if (desuMatch) return { nickname: desuMatch[1], needsConfirmation: false };
 
-  return null;
+  return { nickname: null, needsConfirmation: false };
 }
 
 // saveMemo1: 詳細ページの非公開メモ1に先頭追記して保存
@@ -708,7 +754,15 @@ async function saveMemo1(detailPage, userTexts, dryRun) {
 
 // saveNickname: ニックネームを抽出して詳細ページのあだ名欄に保存
 async function saveNickname(detailPage, userTexts, dryRun) {
-  const nickname = extractNickname(userTexts);
+  const result = extractNickname(userTexts);
+
+  if (result.needsConfirmation) {
+    console.log(`[SPECIAL] saveNickname: 性別判定不可 → LINE通知`);
+    await sendLine(`【要確認】saveNickname 性別判定不可\n${result.hint}`).catch(() => {});
+    return;
+  }
+
+  const { nickname } = result;
   if (!nickname) {
     console.log('[SPECIAL] saveNickname: ニックネームを抽出できず → スキップ');
     return;
