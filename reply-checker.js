@@ -659,23 +659,36 @@ function isInStopTime(charaId) {
 
 // ─── A/B分岐自動判定 ─────────────────────────────────────────────
 // ユーザーメッセージ群を結合してキーワードで判定
-// 否定的キーワードが一つでもある → "B"、否定キーワードがなければ → "A"
+// 肯定キーワードあり → A（最優先）
+// 肯定なし・否定あり → B
+// どちらもなし → B（デフォルト）
 function detectBranchChoice(userTexts) {
   const combined = userTexts.join('');
-  // 否定キーワード（長い→短い順に並べて誤検知を防ぐ）
-  const negativeKeywords = [
-    '心当たりがない', 'わからない', '特にない',
-    '思えない', '感じない', 'ないです', 'ないかも', 'ない',
+  // 肯定キーワード（長い→短い順: 複合表現を単語より先にマッチさせる）
+  const positiveKeywords = [
+    'あったと思う', 'あると思う', 'あります',
+    '思える', '感じる', 'あった',
+    'はい', 'そう', '思う', 'ある',
   ];
+  // 否定キーワード（bare「ない」は除外: 誤検知の原因のため具体的な表現のみ）
+  const negativeKeywords = [
+    '心当たりがない', 'ないと思う', 'わからない', '特にない',
+    'ないかも', 'ないです', '思えない', '感じない',
+  ];
+  for (const kw of positiveKeywords) {
+    if (combined.includes(kw)) {
+      console.log(`[BRANCH] 肯定キーワード "${kw}" 検出 → A`);
+      return 'A';
+    }
+  }
   for (const kw of negativeKeywords) {
     if (combined.includes(kw)) {
       console.log(`[BRANCH] 否定キーワード "${kw}" 検出 → B`);
       return 'B';
     }
   }
-  // 否定キーワードなし → A（肯定的: ある/あった/思える/感じる/はい/そう/思う 等）
-  console.log('[BRANCH] 否定キーワードなし → A');
-  return 'A';
+  console.log('[BRANCH] キーワードなし → B（デフォルト）');
+  return 'B';
 }
 
 // ─── 受信時刻パーサー ─────────────────────────────────────────────
