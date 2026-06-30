@@ -698,14 +698,14 @@ function parseMessageTime(timeStr) {
 //
 // 優先順位:
 //   0. 1行目が名前パターン（最優先）
-//   1. パターン4「○○さん」
+//   1. パターン4「○○さん/ちゃん」（前置き除去後）
 //   2. パターン3「名前は○○」/ パターン2「私は○○」/ パターン1「○○と言います/です」
 //   3. パターン5「日付/血液型行と隣接する単独行の日本語2-6文字」
 //
-// 候補確定後 → スペース区切りフルネームなら男女判定して苗字/名前を返す
-//   男性漢字(郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明)あり → 苗字
-//   女性漢字(子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵)あり → 名前
-//   判定不能 → 苗字（スペース区切り）/ そのまま（スペースなし）
+// 候補確定後 → resolveNickname で男女判定:
+//   スペース区切りフルネーム → 男性漢字あり:苗字 / 女性漢字あり:名前 / 不明:苗字
+//   漢字+かなスペースなし（桐林みよこ） → かな部分を名前（女性）として登録
+//   漢字のみスペースなし（佐々木小次郎） → 苗字2-3文字+名前2-3文字に分割して男女判定
 function extractNickname(userTexts) {
   const rawText = Array.isArray(userTexts) ? userTexts.join('\n') : (userTexts || '');
   if (!rawText.trim()) return { nickname: null, needsConfirmation: false };
@@ -715,27 +715,45 @@ function extractNickname(userTexts) {
   const MALE_KANJI   = '郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明';
   const FEMALE_KANJI = '子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵';
 
-  // 候補文字列をニックネームに解決（スペース区切りフルネームなら男女判定して苗字/名前）
+  // 候補文字列をニックネームに解決（フルネームを苗字/名前に分割して男女判定）
   function resolveNickname(candidate) {
     candidate = (candidate || '').trim();
     if (!candidate) return null;
-    const m = candidate.match(/^([^\s　]{1,6})[\s　]+([^\s　]{1,6})$/);
-    if (m) {
-      const [, surname, givenName] = m;
+
+    // スペース区切りフルネーム（例: 田中 花子、佐々木 小次郎）
+    const spaceMatch = candidate.match(/^([^\s　]{1,6})[\s　]+([^\s　]{1,6})$/);
+    if (spaceMatch) {
+      const [, surname, givenName] = spaceMatch;
       const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
       const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
       if (hasMale)   return surname;
       if (hasFemale) return givenName;
-      return surname; // 判定不能 → 苗字
+      return surname;
     }
-    return candidate; // スペースなし → そのまま
+
+    // 漢字+ひらがな/カタカナのスペースなしフルネーム（例: 桐林みよこ）
+    // ひらがな/カタカナの名前は女性名として名前（後半）を登録
+    const kanjiKanaMatch = candidate.match(/^([一-龥々]{1,3})([ぁ-んァ-ヶー]{2,4})$/);
+    if (kanjiKanaMatch) return kanjiKanaMatch[2];
+
+    // 漢字のみスペースなしフルネーム（例: 佐々木小次郎、田中太郎）
+    // 苗字2-3文字 + 名前2-3文字 で分割して男女判定
+    const kanjiOnlyMatch = candidate.match(/^([一-龥々]{2,3})([一-龥々]{2,3})$/);
+    if (kanjiOnlyMatch) {
+      const [, surname, givenName] = kanjiOnlyMatch;
+      const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
+      const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
+      if (hasMale)   return surname;
+      if (hasFemale) return givenName;
+      return surname;
+    }
+
+    return candidate; // スペースなし単独名/ニックネーム → そのまま
   }
 
   // 名前行かどうかを判定する
-  // 条件: 漢字/ひらがな/カタカナのみ2-6文字 かつ 除外ワードを含まない
-  // unicode escapeを使用してエンコーディング依存を回避
-  const NAME_LINE_RE = /^[一-龥ぁ-んァ-ヶー]{2,6}$/;
-  // 動詞・助動詞を含む行は名前ではなく文章の一部とみなして除外
+  // 条件: 漢字(々含む)/ひらがな/カタカナのみ2-6文字 かつ 除外ワードを含まない
+  const NAME_LINE_RE = /^[一-龥々ぁ-んァ-ヶー]{2,6}$/;
   const EXCLUDE_WORDS = ['ない', 'なかった', 'かった', 'あった', '思う', 'です', 'ます'];
   function isNameLine(line) {
     if (!NAME_LINE_RE.test(line)) return false;
@@ -751,41 +769,41 @@ function extractNickname(userTexts) {
     if (nick) return { nickname: nick, needsConfirmation: false };
   }
 
-  // 【優先度1】パターン4: 「○○さん」→ さん除去して登録
-  // 例：「もっさん」→「もっ」、「田中さん」→「田中」
-  const sanM = text.match(/([一-龥ぁ-んァ-ヶーa-zA-Z0-9]{1,10})さん/);
+  // 【優先度1】パターン4: 「○○さん」「○○ちゃん」
+  // 「私の事は/みんなからは」等の前置き表現を除去してからマッチ
+  const textForSan = text.replace(/私の?[事こと]は/g, '').replace(/みんなからは/g, '');
+  const sanM = textForSan.match(/([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,10})(?:さん|ちゃん)/);
   if (sanM) return { nickname: sanM[1].trim(), needsConfirmation: false };
 
   // 【優先度2】パターン3: 「名前は○○」（明示パターン）
-  const nameWaM = text.match(/名前は([一-龥ぁ-んァ-ヶー]{2,6})/);
+  const nameWaM = text.match(/名前は([一-龥々ぁ-んァ-ヶー]{2,6})/);
   if (nameWaM) {
     const nick = resolveNickname(nameWaM[1]);
     if (nick) return { nickname: nick, needsConfirmation: false };
   }
 
   // 【優先度2】パターン2: 「私は○○」（自己紹介パターン）
-  const watashiM = text.match(/私は([一-龥ぁ-んァ-ヶー]{2,6})/);
+  const watashiM = text.match(/私は([一-龥々ぁ-んァ-ヶー]{2,6})/);
   if (watashiM) {
     const nick = resolveNickname(watashiM[1]);
     if (nick) return { nickname: nick, needsConfirmation: false };
   }
 
   // 【優先度2】パターン1: 「○○と言います/と申します/です」（名乗りパターン）
-  const selfM = text.match(/([一-龥ぁ-んァ-ヶー]{2,6})(?:と言います|と申します|といいます|です)/);
+  const selfM = text.match(/([一-龥々ぁ-んァ-ヶー]{2,6})(?:と言います|と申します|といいます|です)/);
   if (selfM) {
     const nick = resolveNickname(selfM[1]);
     if (nick) return { nickname: nick, needsConfirmation: false };
   }
 
   // 【優先度3】パターン5: 日付/血液型行と隣接する名前候補行
-  // 「無かった」「あった」等の除外ワード含む行はスキップ
   const isDateLine    = s => /\d{1,4}[\/\-]\d{1,2}[\/\-]?\d{1,2}/.test(s);
   const isBloodLine   = s => /^(?:AB|[ABO])型?$/.test(s);
   const isContextLine = s => isDateLine(s) || isBloodLine(s);
 
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i];
-    if (!isNameLine(line)) continue; // 除外ワードチェック込み
+    if (!isNameLine(line)) continue;
     const prev = i > 0 ? rawLines[i - 1] : '';
     const next = i < rawLines.length - 1 ? rawLines[i + 1] : '';
     if (isContextLine(prev) || isContextLine(next)) {
