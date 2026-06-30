@@ -929,9 +929,15 @@ async function processUsers(page) {
     console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
 
     // /mtm・/do を含むコメントがある → スキップ
-    if (allComments.some(c => /\/mtm\b|\/do\b/.test(c))) {
-      console.log(`[SKIP] ${userName}: /mtm・/do コメントあり`);
-      continue;
+    // ただし /mtm かつ /his も含む（his/mtm形式）はスキップしない
+    const hasMtmOrDo = allComments.some(c => /\/mtm\b|\/do\b/.test(c));
+    if (hasMtmOrDo) {
+      const hasBothMtmAndHis = allComments.some(c => /\/mtm\b/.test(c) && /\/his/.test(c));
+      if (!hasBothMtmAndHis) {
+        console.log(`[SKIP] ${userName}: /mtm・/do コメントあり（/his なし）`);
+        continue;
+      }
+      console.log(`[INFO] ${userName}: /mtm と /his が共存 → スキップしない`);
     }
 
     // ho系コメントの検出（数値サフィックス・接頭辞付きも含む: ho1, sinkoHo, noresHo, hiruHo1等）

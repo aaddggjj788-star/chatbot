@@ -18,6 +18,13 @@
           "negative": "12668mu1/sinko/3/B"
         }
       },
+      "hisMtm": {
+        "specialProcess": ["saveMemo1", "saveNickname"],
+        "branch": {
+          "positive": "12668mu1/sinko/3/A",
+          "negative": "12668mu1/sinko/3/B"
+        }
+      },
       "searchOverride": {
         "12668mu1/sinko/3/A": { "searchTarget": "12668mu1/sinko/4", "useCurrentRow": true },
         "12668mu1/sinko/3/B": { "searchTarget": "12668mu1/sinko/4", "useCurrentRow": true }
