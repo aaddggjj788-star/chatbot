@@ -849,14 +849,32 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bod
   }
 }
 
-// ope_mainフレームの div.bodyNaibu から本文テキストを取得する
+// ope_mainフレームの div.bodyNaibu からユーザーメッセージ本文のみ取得する
+// ユーザー行（背景色 aaaaff/ffaaaa）に限定し、鑑定士行（90ee90）を除外する
 // <br> は改行として扱い、他のHTMLタグは除去して返す
 async function getBodyNaibuTexts(frame) {
   try {
     return await frame.evaluate(() => {
-      return Array.from(document.querySelectorAll('div.bodyNaibu'))
-        .map(el => el.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim())
-        .filter(t => t.length > 0);
+      function normStyle(el) {
+        return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
+      }
+      const processedRows = new Set();
+      const texts = [];
+      for (const el of document.querySelectorAll('tr, td, div')) {
+        const bg = normStyle(el);
+        if (!bg.includes('aaaaff') && !bg.includes('ffaaaa')) continue;
+        const row = el.closest('tr') || el;
+        if (processedRows.has(row)) continue;
+        processedRows.add(row);
+        row.querySelectorAll('div.bodyNaibu').forEach(bodyEl => {
+          const text = bodyEl.innerHTML
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .trim();
+          if (text) texts.push(text);
+        });
+      }
+      return texts;
     });
   } catch (e) {
     console.error('[ERROR] getBodyNaibuTexts:', e.message);
