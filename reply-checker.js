@@ -815,10 +815,13 @@ async function saveNickname(frame, userTexts, dryRun) {
 }
 
 // specialProcessリストを実行する（ope_mainフレーム内で直接操作）
-async function executeSpecialProcess(processes, page, uid, analysis, dryRun) {
+async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bodyNaibuTexts) {
   if (!processes || processes.length === 0) return;
 
-  const userTexts = analysis.latestUserTexts || [];
+  // div.bodyNaibu から取得したテキストを優先。なければ analysis のフォールバック
+  const userTexts = (bodyNaibuTexts && bodyNaibuTexts.length > 0)
+    ? bodyNaibuTexts
+    : (analysis.latestUserTexts || []);
   if (userTexts.length === 0) {
     console.log('[SPECIAL] ユーザーメッセージなし → specialProcess スキップ');
     return;
@@ -843,6 +846,21 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun) {
     }
   } catch (e) {
     console.error(`[SPECIAL ERROR] ${e.message}`);
+  }
+}
+
+// ope_mainフレームの div.bodyNaibu から本文テキストを取得する
+// <br> は改行として扱い、他のHTMLタグは除去して返す
+async function getBodyNaibuTexts(frame) {
+  try {
+    return await frame.evaluate(() => {
+      return Array.from(document.querySelectorAll('div.bodyNaibu'))
+        .map(el => el.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim())
+        .filter(t => t.length > 0);
+    });
+  } catch (e) {
+    console.error('[ERROR] getBodyNaibuTexts:', e.message);
+    return [];
   }
 }
 
@@ -930,6 +948,10 @@ async function processUsers(page) {
       continue;
     }
 
+    // div.bodyNaibu から本文テキストを取得（branch判定・specialProcess・requiredMessages用）
+    const bodyNaibuTexts = await getBodyNaibuTexts(mainFrame);
+    console.log(`[BODY] ${userName}: bodyNaibu ${bodyNaibuTexts.length}件取得`);
+
     // コメントを事前取得（判定4より前にrequiredMessages有無を確認するため）
     const allComments = analysis.kanteishiComments || [];
     console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
@@ -1002,7 +1024,7 @@ async function processUsers(page) {
 
         // requiredMessages判定
         if (actionCfg.requiredMessages) {
-          const combinedText = (analysis.latestUserTexts || []).join('');
+          const combinedText = (bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || [])).join('');
           let matchCount = 0;
           for (const alternatives of actionCfg.requiredMessages) {
             if (alternatives.some(kw => combinedText.includes(kw))) matchCount++;
@@ -1080,12 +1102,12 @@ async function processUsers(page) {
       if (hoActionCfg) {
         if (hoActionCfg.specialProcess) {
           console.log(`[JSON] ho specialProcess: ${JSON.stringify(hoActionCfg.specialProcess)}`);
-          await executeSpecialProcess(hoActionCfg.specialProcess, page, uid, analysis, DRY_RUN);
+          await executeSpecialProcess(hoActionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts);
         }
 
         if (hoActionCfg.branch) {
-          const userTexts = analysis.latestUserTexts || [];
-          const branchChoice = detectBranchChoice(userTexts);
+          const branchTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
+          const branchChoice = detectBranchChoice(branchTexts);
           const branchTarget = branchChoice === 'A' ? hoActionCfg.branch.positive : hoActionCfg.branch.negative;
           console.log(`[JSON] ho分岐自動判定: ${branchChoice} → ${branchTarget}`);
           try {
@@ -1225,13 +1247,13 @@ async function processUsers(page) {
       if (actionCfg) {
         if (actionCfg.specialProcess) {
           console.log(`[JSON] specialProcess: ${JSON.stringify(actionCfg.specialProcess)}`);
-          await executeSpecialProcess(actionCfg.specialProcess, page, uid, analysis, DRY_RUN);
+          await executeSpecialProcess(actionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts);
         }
 
         if (actionCfg.branch) {
-          // A/B分岐: ユーザーメッセージのキーワードで自動判定
-          const userTexts = analysis.latestUserTexts || [];
-          const branchChoice = detectBranchChoice(userTexts);
+          // A/B分岐: div.bodyNaibu 本文のキーワードで自動判定
+          const branchTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
+          const branchChoice = detectBranchChoice(branchTexts);
           const branchTarget = (branchChoice === 'A')
             ? actionCfg.branch.positive
             : actionCfg.branch.negative;
