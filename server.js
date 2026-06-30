@@ -276,16 +276,8 @@ async function handleEvent(event) {
     return lineReply(replyToken, '返信チェックを停止しました');
   }
 
-  if (text === '入金処理開始') {
-    startMailCheck();
-    return lineReply(replyToken, '入金処理を開始しました');
-  }
-  if (text === '入金処理停止') {
-    stopMailCheck();
-    return lineReply(replyToken, '入金処理を停止しました');
-  }
   if (text === 'ステータス') {
-    return lineReply(replyToken, isMailCheckRunning() ? '稼働中' : '停止中');
+    return lineReply(replyToken, isMailCheckRunning() ? '入金処理稼働中' : '入金処理停止中');
   }
 
   // 未対応メッセージはエコー返信
@@ -308,6 +300,8 @@ process.on('unhandledRejection', (reason) => {
 
 const server = app.listen(PORT, () => {
   console.log(`サーバー起動: http://localhost:${PORT}`);
+  startMailCheck();
+  console.log('[MAIL] 入金処理を自動開始しました');
 });
 server.on('error', (err) => {
   console.error('[SERVER] listenエラー:', err.message);
