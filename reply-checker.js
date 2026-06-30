@@ -141,6 +141,20 @@ function parseCommentStr(commentStr) {
   return null;
 }
 
+// 三段形式の特殊コメント解析（sinkoHo/noresHo/stop1等のrequiredMessages対象）
+// 例: "12668yu1/sinko/ho" → { actionKey:"sinkoHo", baseId:"12668", typeNum:"yu1", charaId:"12668yu1", comment }
+// 例: "12668yu1/stop/1"   → { actionKey:"stop1",   ... }
+// ※ sinko/his + 数値（通常のsinko/his番号コメント）は除外
+function parseSubActionComment(commentStr) {
+  const m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-zA-Z]+)\/(\w+)$/);
+  if (!m) return null;
+  const sub = m[3];
+  const part3 = m[4];
+  if (/^(?:sinko|his)/.test(sub) && /^\d+$/.test(part3)) return null; // 通常 sinko/his 番号は除外
+  const actionKey = part3 === 'ho' ? sub + 'Ho' : sub + part3;
+  return { baseId: m[1], typeNum: m[2], sub, part3, actionKey, charaId: m[1] + m[2], comment: commentStr };
+}
+
 // コメント情報からJSONのphase設定を解決する
 // 優先順: typeNum+sub ("mu2zenhan") → typeNum+type ("mu2his") → typeNum ("mu1")
 function resolvePhaseCfg(parsed, config) {
@@ -916,17 +930,27 @@ async function processUsers(page) {
       continue;
     }
 
+    // コメントを事前取得（判定4より前にrequiredMessages有無を確認するため）
+    const allComments = analysis.kanteishiComments || [];
+    console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
+
+    // 三段形式の特殊コメント検出（sinkoHo/noresHo/stop1等）
+    const subActionComments = allComments.map(parseSubActionComment).filter(Boolean);
+    const hasSubAction = subActionComments.length > 0;
+
     // ─── 判定4: span個数とユーザーメッセージ通数の照合 ──────────
+    // subActionコメントあり（requiredMessages独自判定を使う）→ span照合スキップ
     const { spanCount, userMsgCount } = analysis;
     console.log(`[SPAN-CHECK] ${userName}: ユーザーメッセージ=${userMsgCount}通, span個数=${spanCount}`);
-    if (spanCount > 0 && userMsgCount !== spanCount) {
+    if (!hasSubAction && spanCount > 0 && userMsgCount !== spanCount) {
       console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount})とspan個数(${spanCount})が不一致`);
       continue;
     }
+    if (hasSubAction && spanCount > 0 && userMsgCount !== spanCount) {
+      console.log(`[SPAN-CHECK] ${userName}: subActionあり → span照合スキップ`);
+    }
 
     // ─── 判定5: コメントアウト判定（最新鑑定士メッセージのみ）──
-    const allComments = analysis.kanteishiComments || [];
-    console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
 
     // /mtm・/do を含むコメントがある → スキップ
     // ただし /mtm かつ /his も含む（his/mtm形式）はスキップしない
@@ -944,9 +968,9 @@ async function processUsers(page) {
     const hoComments = allComments.filter(c => /\/[a-zA-Z]*[Hh]o\d*$/.test(c));
     const hasHo = hoComments.length > 0;
 
-    // /sinko も /his も /ho も含まれない → スキップ
-    if (!hasHo && !allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
-      console.log(`[SKIP] ${userName}: /sinko・/his・/hoコメントなし`);
+    // /sinko も /his も /ho も subAction も含まれない → スキップ
+    if (!hasSubAction && !hasHo && !allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
+      console.log(`[SKIP] ${userName}: /sinko・/his・/ho・subActionコメントなし`);
       continue;
     }
 
@@ -954,7 +978,64 @@ async function processUsers(page) {
     let replyData;
     let latestComment = null;
 
-    if (hasHo) {
+    if (hasSubAction) {
+      // ─── subAction処理（requiredMessages判定 + searchTarget）──────
+      let skipUser = false;
+      for (const parsed of subActionComments) {
+        const charaCfg = loadCharaConfig(parsed.baseId);
+        const phaseResult = (charaCfg && parsed.typeNum)
+          ? resolveHoPhase(charaCfg, parsed.typeNum, parsed.actionKey)
+          : null;
+        const phaseCfg  = phaseResult?.cfg ?? null;
+        const actionCfg = phaseCfg?.[parsed.actionKey] ?? null;
+
+        console.log(`[COMMENT] ${userName}: subAction comment="${parsed.comment}" actionKey="${parsed.actionKey}" phase=${phaseResult?.key} actionCfg=${JSON.stringify(actionCfg)}`);
+
+        if (!actionCfg) {
+          console.log(`[SKIP] ${userName}: subAction actionCfgなし (${parsed.actionKey})`);
+          skipUser = true;
+          break;
+        }
+
+        charaId      = parsed.charaId;
+        latestComment = parsed.comment;
+
+        // requiredMessages判定
+        if (actionCfg.requiredMessages) {
+          const combinedText = (analysis.latestUserTexts || []).join('');
+          let matchCount = 0;
+          for (const alternatives of actionCfg.requiredMessages) {
+            if (alternatives.some(kw => combinedText.includes(kw))) matchCount++;
+          }
+          const required = actionCfg.requiredCount || 0;
+          console.log(`[JSON] requiredMessages: ${matchCount}/${required} マッチ (${parsed.actionKey})`);
+          if (matchCount < required) {
+            console.log(`[SKIP] ${userName}: requiredMessages 未達 (${matchCount}/${required})`);
+            skipUser = true;
+            break;
+          }
+        }
+
+        if (actionCfg.searchTarget) {
+          const fileId       = phaseCfg.fileId ?? null;
+          const useCurrentRow = actionCfg.useCurrentRow === true;
+          console.log(`[JSON] subAction searchTarget="${actionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
+          try {
+            replyData = getReplyFromCSVByTarget(parsed.charaId, actionCfg.searchTarget, useCurrentRow, fileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            skipUser = true;
+          }
+        }
+
+        if (replyData) break;
+      }
+
+      if (skipUser || !replyData) {
+        if (!skipUser) console.log(`[SKIP] ${userName}: subAction replyData取得失敗`);
+        continue;
+      }
+    } else if (hasHo) {
       const hoComment = hoComments[0];
       latestComment = hoComment;
 
