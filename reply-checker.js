@@ -1095,14 +1095,30 @@ async function processUsers(page) {
           }
         }
 
+        const fileId = phaseCfg.fileId ?? null;
+        console.log(`[JSON] subAction charaId="${parsed.charaId}" fileId="${fileId}" actionKey="${parsed.actionKey}"`);
+
         if (actionCfg.searchTarget) {
-          const fileId       = phaseCfg.fileId ?? null;
           const useCurrentRow = actionCfg.useCurrentRow === true;
           console.log(`[JSON] subAction searchTarget="${actionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
           try {
             replyData = getReplyFromCSVByTarget(parsed.charaId, actionCfg.searchTarget, useCurrentRow, fileId);
           } catch (e) {
-            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            console.error(`[ERROR] subAction searchTarget CSV取得失敗 (${userName}): ${e.message} | charaId=${parsed.charaId} fileId=${fileId} target=${actionCfg.searchTarget}`);
+            skipUser = true;
+          }
+        }
+
+        // branch設定がある場合: A/B判定してCSV取得（searchTargetがない場合も対応）
+        if (!replyData && !skipUser && actionCfg.branch) {
+          const branchTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
+          const branchChoice = detectBranchChoice(branchTexts);
+          const branchTarget = branchChoice === 'A' ? actionCfg.branch.positive : actionCfg.branch.negative;
+          console.log(`[JSON] subAction branch自動判定: ${branchChoice} → ${branchTarget} (charaId=${parsed.charaId} fileId=${fileId})`);
+          try {
+            replyData = getReplyFromCSVByTarget(parsed.charaId, branchTarget, true, fileId);
+          } catch (e) {
+            console.error(`[ERROR] subAction branch CSV取得失敗 (${userName}): ${e.message} | charaId=${parsed.charaId} fileId=${fileId} target=${branchTarget}`);
             skipUser = true;
           }
         }
