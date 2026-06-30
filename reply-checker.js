@@ -707,8 +707,10 @@ function parseMessageTime(timeStr) {
 //   女性漢字(子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵)あり → 名前
 //   判定不能 → 苗字（スペース区切り）/ そのまま（スペースなし）
 function extractNickname(userTexts) {
-  const text = Array.isArray(userTexts) ? userTexts.join('\n') : (userTexts || '');
-  if (!text.trim()) return { nickname: null, needsConfirmation: false };
+  const rawText = Array.isArray(userTexts) ? userTexts.join('\n') : (userTexts || '');
+  if (!rawText.trim()) return { nickname: null, needsConfirmation: false };
+  // 各行先頭の「| 」「|」を除去してから処理（CRMのメッセージ引用マーカー対応）
+  const text = rawText.split('\n').map(l => l.replace(/^\|\s*/, '').trim()).join('\n');
 
   const MALE_KANJI   = '郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明';
   const FEMALE_KANJI = '子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵';
