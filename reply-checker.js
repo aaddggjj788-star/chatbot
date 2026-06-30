@@ -693,71 +693,49 @@ function parseMessageTime(timeStr) {
 
 // ─── specialProcess ヘルパー ──────────────────────────────────────
 
-// ユーザーメッセージからニックネームを抽出する
-// 戻り値: { nickname: string|null, needsConfirmation: boolean, hint?: string }
+// ユーザーメッセージ1行目から名前/ニックネームを抽出する
+// 戻り値: { nickname: string|null, needsConfirmation: false }
+// 優先度1: 「さん」付き → 除いて登録 / スペースなし単独名 → そのまま登録
+// 優先度2: スペース区切りフルネーム → 名前部分の漢字で男女判定
+//          男性漢字あり → 苗字登録 / 女性漢字あり → 名前登録
+// 優先度3: 判定不能 → 苗字登録
 function extractNickname(userTexts) {
-  const combined = userTexts.join('\n');
+  const text = Array.isArray(userTexts) ? userTexts.join('\n') : (userTexts || '');
+  // テキストの1行目（空行スキップ）のみを対象とする
+  const firstLine = text.split('\n').map(l => l.trim()).find(l => l.length > 0) || '';
+  if (!firstLine) return { nickname: null, needsConfirmation: false };
 
-  // === 1. フルネーム（スペース区切り）検出 ===
-  // 優先度高：「私の名前は○○ ○○」「名前は○○ ○○」形式
-  let surnameCandidate = null;
-  let givenNameCandidate = null;
+  // 男性名に使われる漢字（名前部分の末尾・内部で判定）
+  const MALE_KANJI = '郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明';
+  // 女性名に使われる漢字
+  const FEMALE_KANJI = '子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵';
 
-  const fnContext = combined.match(
-    /(?:私(?:の)?(?:名前|なまえ)?は|名前は|なまえは)([^\x00-\x7F\s]{1,5})[\s　]([^\x00-\x7F\s]{1,5})/u
-  );
-  if (fnContext) {
-    surnameCandidate = fnContext[1].trim();
-    givenNameCandidate = fnContext[2].trim();
+  // 【優先度1】「さん」が含まれる → 「さん」より前の部分を登録
+  // 例：「もっさん」→「もっ」、「田中さん」→「田中」
+  const sanIdx = firstLine.indexOf('さん');
+  if (sanIdx > 0) {
+    const nick = firstLine.slice(0, sanIdx).trim();
+    return { nickname: nick || null, needsConfirmation: false };
   }
 
-  // 文頭「○○ ○○です/と申します/といいます」形式
-  if (!surnameCandidate) {
-    const fnPlain = combined.match(
-      /^([^\x00-\x7F\s]{1,5})[\s　]([^\x00-\x7F\s]{1,5})(?:です|と申|といい|と言)/mu
-    );
-    if (fnPlain) {
-      surnameCandidate = fnPlain[1].trim();
-      givenNameCandidate = fnPlain[2].trim();
-    }
+  // スペース（全角・半角）区切りでフルネームを検出
+  const fullNameMatch = firstLine.match(/^([^\s　]{1,6})[\s　]+([^\s　]{1,6})$/);
+  if (fullNameMatch) {
+    const surname = fullNameMatch[1];
+    const givenName = fullNameMatch[2];
+    const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
+    const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
+    // 【優先度2】名前部分の漢字で判定
+    if (hasMale)   return { nickname: surname,   needsConfirmation: false }; // 男性名 → 苗字
+    if (hasFemale) return { nickname: givenName, needsConfirmation: false }; // 女性名 → 名前
+    // 【優先度3】判定不能 → 苗字を登録
+    return { nickname: surname, needsConfirmation: false };
   }
 
-  if (surnameCandidate && givenNameCandidate) {
-    // ひらがな・カタカナのみ → 女性と推定 → 名前（下の名前）
-    if (/^[ぁ-んァ-ン]+$/u.test(givenNameCandidate)) {
-      return { nickname: givenNameCandidate, needsConfirmation: false };
-    }
-    // 女性名末尾パターン → 名前（下の名前）
-    if (/[子美香奈菜花愛恵理絵江代世里乃葉紀帆優萌結咲彩陽澄千百]$/u.test(givenNameCandidate)) {
-      return { nickname: givenNameCandidate, needsConfirmation: false };
-    }
-    // 男性名末尾パターン → 姓
-    if (/[郎太介助男雄史人哉樹志司也馬斗平輔祐]$/u.test(givenNameCandidate)) {
-      return { nickname: surnameCandidate, needsConfirmation: false };
-    }
-    // 判定不能 → LINE確認が必要
-    return {
-      nickname: null,
-      needsConfirmation: true,
-      hint: `フルネーム「${surnameCandidate} ${givenNameCandidate}」の性別を判定できません。姓・名のどちらをニックネームに使用するか手動で設定してください。`,
-    };
+  // 【優先度1】スペースなし・日本語を含む単独名/ニックネーム → そのまま登録
+  if (/[^\x00-\x7F]/.test(firstLine) && firstLine.length <= 10) {
+    return { nickname: firstLine, needsConfirmation: false };
   }
-
-  // === 2. 「○○さん」パターン ===
-  const sanMatch = combined.match(/(?:^|[\s、。\n「」])([^\s、。\n「」（）]{1,8})さん/u);
-  if (sanMatch) return { nickname: sanMatch[1], needsConfirmation: false };
-
-  // === 3. 「○○と申します」「○○といいます」パターン ===
-  const moushiMatch = combined.match(/([^\s、。\n「」]{1,10})(?:と申します|と言います|といいます)/u);
-  if (moushiMatch) return { nickname: moushiMatch[1], needsConfirmation: false };
-
-  // === 4. 「名前は○○」「ニックネームは○○」パターン ===
-  const nameMatch = combined.match(/(?:名前|ニックネーム|なまえ)は[「『]?([^\s、。\n「」』]{1,10})/u);
-  if (nameMatch) return { nickname: nameMatch[1], needsConfirmation: false };
-
-  // === 5. 行頭「○○です」パターン ===
-  const desuMatch = combined.match(/^([^\s、。\n「」]{1,6})です/mu);
-  if (desuMatch) return { nickname: desuMatch[1], needsConfirmation: false };
 
   return { nickname: null, needsConfirmation: false };
 }
@@ -794,15 +772,8 @@ async function saveMemo1(frame, userText, dryRun) {
 // saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存（最新1件のみ）
 async function saveNickname(frame, userText, dryRun) {
   console.log('[DEBUG] saveNickname対象テキスト:', userText);
-  const result = extractNickname([userText]);
+  const { nickname } = extractNickname([userText]);
 
-  if (result.needsConfirmation) {
-    console.log(`[SPECIAL] saveNickname: 性別判定不可 → LINE通知`);
-    await sendLine(`【要確認】saveNickname 性別判定不可\n${result.hint}`).catch(() => {});
-    return;
-  }
-
-  const { nickname } = result;
   if (!nickname) {
     console.log('[SPECIAL] saveNickname: ニックネームを抽出できず → スキップ');
     return;
