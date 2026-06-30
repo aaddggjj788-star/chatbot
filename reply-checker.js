@@ -693,48 +693,82 @@ function parseMessageTime(timeStr) {
 
 // ─── specialProcess ヘルパー ──────────────────────────────────────
 
-// ユーザーメッセージ1行目から名前/ニックネームを抽出する
+// テキスト全体からニックネームを抽出する（名前は1行目とは限らないため全体検索）
 // 戻り値: { nickname: string|null, needsConfirmation: false }
-// 優先度1: 「さん」付き → 除いて登録 / スペースなし単独名 → そのまま登録
-// 優先度2: スペース区切りフルネーム → 名前部分の漢字で男女判定
-//          男性漢字あり → 苗字登録 / 女性漢字あり → 名前登録
-// 優先度3: 判定不能 → 苗字登録
+//
+// 優先度1: パターン4「○○さん」（最優先）
+// 優先度2: パターン1「○○と言います/です」/ パターン2「私は○○」/ パターン3「名前は○○」
+// 優先度3: パターン5「日付/血液型行と隣接する単独行の日本語2-6文字」
+//
+// 候補が見つかったら → スペース区切りフルネーム判定 + 男女判定を適用
+//   男性漢字(郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明)あり → 苗字を登録
+//   女性漢字(子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵)あり → 名前を登録
+//   判定不能 → 苗字を登録（スペース区切りの場合）/ そのまま登録（スペースなし）
 function extractNickname(userTexts) {
   const text = Array.isArray(userTexts) ? userTexts.join('\n') : (userTexts || '');
-  // テキストの1行目（空行スキップ）のみを対象とする
-  const firstLine = text.split('\n').map(l => l.trim()).find(l => l.length > 0) || '';
-  if (!firstLine) return { nickname: null, needsConfirmation: false };
+  if (!text.trim()) return { nickname: null, needsConfirmation: false };
 
-  // 男性名に使われる漢字（名前部分の末尾・内部で判定）
-  const MALE_KANJI = '郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明';
-  // 女性名に使われる漢字
+  const MALE_KANJI   = '郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明';
   const FEMALE_KANJI = '子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵';
 
-  // 【優先度1】「さん」が含まれる → 「さん」より前の部分を登録
+  // 候補文字列をニックネームに解決（スペース区切りフルネームなら男女判定して苗字/名前を返す）
+  function resolveNickname(candidate) {
+    candidate = (candidate || '').trim();
+    if (!candidate) return null;
+    const m = candidate.match(/^([^\s　]{1,6})[\s　]+([^\s　]{1,6})$/);
+    if (m) {
+      const [, surname, givenName] = m;
+      const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
+      const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
+      if (hasMale)   return surname;    // 男性名 → 苗字
+      if (hasFemale) return givenName;  // 女性名 → 名前
+      return surname;                   // 判定不能 → 苗字
+    }
+    return candidate; // スペースなし → そのまま
+  }
+
+  // 【優先度1 - 最優先】パターン4: 「○○さん」→ さん除去して登録
   // 例：「もっさん」→「もっ」、「田中さん」→「田中」
-  const sanIdx = firstLine.indexOf('さん');
-  if (sanIdx > 0) {
-    const nick = firstLine.slice(0, sanIdx).trim();
-    return { nickname: nick || null, needsConfirmation: false };
+  const sanM = text.match(/([一-龥ぁ-んァ-ヶーa-zA-Z0-9]{1,10})さん/);
+  if (sanM) return { nickname: sanM[1].trim(), needsConfirmation: false };
+
+  // 【優先度2】パターン3: 「名前は○○」（明示パターン - 最も確実）
+  const nameWaM = text.match(/名前は([一-龥ぁ-んァ-ヶー]{2,6})/);
+  if (nameWaM) {
+    const nick = resolveNickname(nameWaM[1]);
+    if (nick) return { nickname: nick, needsConfirmation: false };
   }
 
-  // スペース（全角・半角）区切りでフルネームを検出
-  const fullNameMatch = firstLine.match(/^([^\s　]{1,6})[\s　]+([^\s　]{1,6})$/);
-  if (fullNameMatch) {
-    const surname = fullNameMatch[1];
-    const givenName = fullNameMatch[2];
-    const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
-    const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
-    // 【優先度2】名前部分の漢字で判定
-    if (hasMale)   return { nickname: surname,   needsConfirmation: false }; // 男性名 → 苗字
-    if (hasFemale) return { nickname: givenName, needsConfirmation: false }; // 女性名 → 名前
-    // 【優先度3】判定不能 → 苗字を登録
-    return { nickname: surname, needsConfirmation: false };
+  // 【優先度2】パターン2: 「私は○○」（自己紹介パターン）
+  const watashiM = text.match(/私は([一-龥ぁ-んァ-ヶー]{2,6})/);
+  if (watashiM) {
+    const nick = resolveNickname(watashiM[1]);
+    if (nick) return { nickname: nick, needsConfirmation: false };
   }
 
-  // 【優先度1】スペースなし・日本語を含む単独名/ニックネーム → そのまま登録
-  if (/[^\x00-\x7F]/.test(firstLine) && firstLine.length <= 10) {
-    return { nickname: firstLine, needsConfirmation: false };
+  // 【優先度2】パターン1: 「○○と言います/と申します/です」（名乗りパターン）
+  const selfM = text.match(/([一-龥ぁ-んァ-ヶー]{2,6})(?:と言います|と申します|といいます|です)/);
+  if (selfM) {
+    const nick = resolveNickname(selfM[1]);
+    if (nick) return { nickname: nick, needsConfirmation: false };
+  }
+
+  // 【優先度3】パターン5: 日付/血液型行と隣接する単独行の日本語文字列（2-6文字）
+  const nameLineRe  = /^[一-龥ぁ-んァ-ヶー]{2,6}$/;
+  const isDateLine  = s => /\d{1,4}[\/\-]\d{1,2}[\/\-]?\d{0,2}/.test(s);
+  const isBloodLine = s => /^(?:AB|[ABO])型?$/.test(s);
+  const isContextLine = s => isDateLine(s) || isBloodLine(s);
+
+  const rawLines = text.split('\n').map(l => l.trim());
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    if (!nameLineRe.test(line)) continue;
+    const prev = i > 0 ? rawLines[i - 1] : '';
+    const next = i < rawLines.length - 1 ? rawLines[i + 1] : '';
+    if (isContextLine(prev) || isContextLine(next)) {
+      const nick = resolveNickname(line);
+      if (nick) return { nickname: nick, needsConfirmation: false };
+    }
   }
 
   return { nickname: null, needsConfirmation: false };
