@@ -693,17 +693,19 @@ function parseMessageTime(timeStr) {
 
 // ─── specialProcess ヘルパー ──────────────────────────────────────
 
-// テキスト全体からニックネームを抽出する（名前は1行目とは限らないため全体検索）
+// テキスト全体からニックネームを抽出する（名前の位置は不定のため全体検索）
 // 戻り値: { nickname: string|null, needsConfirmation: false }
 //
-// 優先度1: パターン4「○○さん」（最優先）
-// 優先度2: パターン1「○○と言います/です」/ パターン2「私は○○」/ パターン3「名前は○○」
-// 優先度3: パターン5「日付/血液型行と隣接する単独行の日本語2-6文字」
+// 優先順位:
+//   0. 1行目が名前パターン（最優先）
+//   1. パターン4「○○さん」
+//   2. パターン3「名前は○○」/ パターン2「私は○○」/ パターン1「○○と言います/です」
+//   3. パターン5「日付/血液型行と隣接する単独行の日本語2-6文字」
 //
-// 候補が見つかったら → スペース区切りフルネーム判定 + 男女判定を適用
-//   男性漢字(郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明)あり → 苗字を登録
-//   女性漢字(子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵)あり → 名前を登録
-//   判定不能 → 苗字を登録（スペース区切りの場合）/ そのまま登録（スペースなし）
+// 候補確定後 → スペース区切りフルネームなら男女判定して苗字/名前を返す
+//   男性漢字(郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明)あり → 苗字
+//   女性漢字(子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵)あり → 名前
+//   判定不能 → 苗字（スペース区切り）/ そのまま（スペースなし）
 function extractNickname(userTexts) {
   const text = Array.isArray(userTexts) ? userTexts.join('\n') : (userTexts || '');
   if (!text.trim()) return { nickname: null, needsConfirmation: false };
@@ -711,7 +713,7 @@ function extractNickname(userTexts) {
   const MALE_KANJI   = '郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明';
   const FEMALE_KANJI = '子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵';
 
-  // 候補文字列をニックネームに解決（スペース区切りフルネームなら男女判定して苗字/名前を返す）
+  // 候補文字列をニックネームに解決（スペース区切りフルネームなら男女判定して苗字/名前）
   function resolveNickname(candidate) {
     candidate = (candidate || '').trim();
     if (!candidate) return null;
@@ -720,19 +722,39 @@ function extractNickname(userTexts) {
       const [, surname, givenName] = m;
       const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
       const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
-      if (hasMale)   return surname;    // 男性名 → 苗字
-      if (hasFemale) return givenName;  // 女性名 → 名前
-      return surname;                   // 判定不能 → 苗字
+      if (hasMale)   return surname;
+      if (hasFemale) return givenName;
+      return surname; // 判定不能 → 苗字
     }
     return candidate; // スペースなし → そのまま
   }
 
-  // 【優先度1 - 最優先】パターン4: 「○○さん」→ さん除去して登録
+  // 名前行かどうかを判定する
+  // 条件: 漢字/ひらがな/カタカナのみ2-6文字 かつ 除外ワードを含まない
+  // unicode escapeを使用してエンコーディング依存を回避
+  const NAME_LINE_RE = /^[一-龥ぁ-んァ-ヶー]{2,6}$/;
+  // 動詞・助動詞を含む行は名前ではなく文章の一部とみなして除外
+  const EXCLUDE_WORDS = ['ない', 'なかった', 'かった', 'あった', '思う', 'です', 'ます'];
+  function isNameLine(line) {
+    if (!NAME_LINE_RE.test(line)) return false;
+    return !EXCLUDE_WORDS.some(w => line.includes(w));
+  }
+
+  const rawLines = text.split('\n').map(l => l.trim());
+
+  // 【最優先】1行目（空行スキップ）が名前パターンなら即採用
+  const firstLine = rawLines.find(l => l.length > 0) || '';
+  if (isNameLine(firstLine)) {
+    const nick = resolveNickname(firstLine);
+    if (nick) return { nickname: nick, needsConfirmation: false };
+  }
+
+  // 【優先度1】パターン4: 「○○さん」→ さん除去して登録
   // 例：「もっさん」→「もっ」、「田中さん」→「田中」
   const sanM = text.match(/([一-龥ぁ-んァ-ヶーa-zA-Z0-9]{1,10})さん/);
   if (sanM) return { nickname: sanM[1].trim(), needsConfirmation: false };
 
-  // 【優先度2】パターン3: 「名前は○○」（明示パターン - 最も確実）
+  // 【優先度2】パターン3: 「名前は○○」（明示パターン）
   const nameWaM = text.match(/名前は([一-龥ぁ-んァ-ヶー]{2,6})/);
   if (nameWaM) {
     const nick = resolveNickname(nameWaM[1]);
@@ -753,16 +775,15 @@ function extractNickname(userTexts) {
     if (nick) return { nickname: nick, needsConfirmation: false };
   }
 
-  // 【優先度3】パターン5: 日付/血液型行と隣接する単独行の日本語文字列（2-6文字）
-  const nameLineRe  = /^[一-龥ぁ-んァ-ヶー]{2,6}$/;
-  const isDateLine  = s => /\d{1,4}[\/\-]\d{1,2}[\/\-]?\d{0,2}/.test(s);
-  const isBloodLine = s => /^(?:AB|[ABO])型?$/.test(s);
+  // 【優先度3】パターン5: 日付/血液型行と隣接する名前候補行
+  // 「無かった」「あった」等の除外ワード含む行はスキップ
+  const isDateLine    = s => /\d{1,4}[\/\-]\d{1,2}[\/\-]?\d{1,2}/.test(s);
+  const isBloodLine   = s => /^(?:AB|[ABO])型?$/.test(s);
   const isContextLine = s => isDateLine(s) || isBloodLine(s);
 
-  const rawLines = text.split('\n').map(l => l.trim());
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i];
-    if (!nameLineRe.test(line)) continue;
+    if (!isNameLine(line)) continue; // 除外ワードチェック込み
     const prev = i > 0 ? rawLines[i - 1] : '';
     const next = i < rawLines.length - 1 ? rawLines[i + 1] : '';
     if (isContextLine(prev) || isContextLine(next)) {
