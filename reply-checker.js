@@ -258,20 +258,28 @@ function getReplyFromCSVByTarget(charaId, searchTarget, useCurrentRow, fileId) {
   const rows = parseCSV(csvPath);
   const title = rows[0] ? (rows[0][0] || '') : '';
 
+  // 特殊文字をエスケープしつつ、数字の直前スラッシュは省略形も許容（his/2 ↔ his2）
   const escaped = searchTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`<!--${escaped}-->`);
+  const flexEscaped = escaped.replace(/\/(\d)/g, '\\/?$1');
+  const pattern = new RegExp(`<!--${flexEscaped}-->`);
+
+  console.log(`[CSV-TARGET] 検索: "${searchTarget}" pattern=${pattern}`);
+
   const idx = rows.findIndex(r => pattern.test((r[0] || '').trim()));
   if (idx === -1) {
-    const sample = rows.slice(0, 10).map((r, i) => `  row[${i}]: "${r[0] || ''}"`).join('\n');
+    const sample = rows.slice(0, 10).map((r, i) => `  row[${i}]: "${(r[0] || '').trim().slice(0, 60)}"`).join('\n');
     throw new Error(`searchTarget "${searchTarget}" がCSVに未発見\nCSV先頭10行:\n${sample}`);
   }
 
-  const targetRow = useCurrentRow ? rows[idx] : rows[idx + 1];
+  console.log(`[CSV-TARGET] マッチ: row[${idx}] A="${(rows[idx][0] || '').trim().slice(0, 60)}"`);
+
+  const resultIdx = useCurrentRow ? idx : idx + 1;
+  const targetRow = rows[resultIdx];
   if (!targetRow) return null;
 
   const nextComment = (targetRow[0] || '').trim();
   const replyText   = (targetRow[1] || '').trim().replace(/\\n/g, '\n');
-  console.log(`[CSV-TARGET] "${searchTarget}" useCurrentRow=${useCurrentRow} → idx=${useCurrentRow ? idx : idx + 1}`);
+  console.log(`[CSV-TARGET] 取得: useCurrentRow=${useCurrentRow} → row[${resultIdx}] nextComment="${nextComment.slice(0, 40)}" replyText="${replyText.slice(0, 40)}"`);
   return { title, replyText, nextComment };
 }
 
@@ -875,7 +883,7 @@ async function processUsers(page) {
         } else if (actionCfg.nextTarget) {
           console.log(`[JSON] nextTarget="${actionCfg.nextTarget}"`);
           try {
-            replyData = getReplyFromCSVByTarget(charaId, actionCfg.nextTarget, false, fileId);
+            replyData = getReplyFromCSVByTarget(charaId, actionCfg.nextTarget, true, fileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
