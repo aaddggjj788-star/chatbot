@@ -662,13 +662,13 @@ function isInStopTime(charaId) {
 // 肯定キーワードあり → A（最優先）
 // 肯定なし・否定あり → B
 // どちらもなし → B（デフォルト）
-function detectBranchChoice(latestUserText) {
-  const text = latestUserText || '';
+function detectBranchChoice(userTexts) {
+  const text = (Array.isArray(userTexts) ? userTexts[0] : userTexts) || '';
   // 肯定キーワード（長い→短い順: 複合表現を単語より先にマッチさせる）
   const positiveKeywords = [
     'あったと思います', 'チャンスはあった', 'ばりばりあった',
-    'あったと思う', 'あったと感じ', 'あったかも',
-    'ありました', 'そう思う', 'はい',
+    'あったと思う', 'あると思う', 'あったと感じ',
+    'あったかも', 'ありました', '思えます',
   ];
   // 否定キーワード（長い→短い順）
   const negativeKeywords = [
@@ -1155,7 +1155,7 @@ async function processUsers(page) {
         if (!replyData && !skipUser && actionCfg.branch) {
           const latestText = bodyNaibuTexts.length > 0 ? bodyNaibuTexts[0] : (analysis.latestUserTexts?.[0] || '');
           console.log(`[BRANCH] 判定対象テキスト: "${latestText.slice(0, 60)}"`);
-          const branchChoice = detectBranchChoice(latestText);
+          const branchChoice = detectBranchChoice([latestText]);
           const branchTarget = branchChoice === 'A' ? actionCfg.branch.positive : actionCfg.branch.negative;
           console.log(`[JSON] subAction branch自動判定: ${branchChoice} → ${branchTarget} (charaId=${parsed.charaId} fileId=${fileId})`);
           try {
@@ -1224,7 +1224,7 @@ async function processUsers(page) {
         if (hoActionCfg.branch) {
           const latestText = bodyNaibuTexts.length > 0 ? bodyNaibuTexts[0] : (analysis.latestUserTexts?.[0] || '');
           console.log(`[BRANCH] 判定対象テキスト: "${latestText.slice(0, 60)}"`);
-          const branchChoice = detectBranchChoice(latestText);
+          const branchChoice = detectBranchChoice([latestText]);
           const branchTarget = branchChoice === 'A' ? hoActionCfg.branch.positive : hoActionCfg.branch.negative;
           console.log(`[JSON] ho分岐自動判定: ${branchChoice} → ${branchTarget}`);
           try {
@@ -1371,7 +1371,7 @@ async function processUsers(page) {
           // A/B分岐: 最新ユーザーメッセージ1件のみでキーワード判定
           const latestText = bodyNaibuTexts.length > 0 ? bodyNaibuTexts[0] : (analysis.latestUserTexts?.[0] || '');
           console.log(`[BRANCH] 判定対象テキスト: "${latestText.slice(0, 60)}"`);
-          const branchChoice = detectBranchChoice(latestText);
+          const branchChoice = detectBranchChoice([latestText]);
           const branchTarget = (branchChoice === 'A')
             ? actionCfg.branch.positive
             : actionCfg.branch.negative;
