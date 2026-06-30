@@ -141,9 +141,11 @@ function parseCommentStr(commentStr) {
   return null;
 }
 
-// 三段形式の特殊コメント解析（sinkoHo/noresHo/stop1等のrequiredMessages対象）
-// 例: "12668yu1/sinko/ho" → { actionKey:"sinkoHo", baseId:"12668", typeNum:"yu1", charaId:"12668yu1", comment }
-// 例: "12668yu1/stop/1"   → { actionKey:"stop1",   ... }
+// 三段形式の特殊コメント解析（sinkoHo/noresHo/stop1/hisuMtm等のrequiredMessages対象）
+// 例: "12668yu1/sinko/ho"  → { actionKey:"sinkoHo",  ... }
+// 例: "12668yu1/stop/1"    → { actionKey:"stop1",    ... }
+// 例: "12668mu1/hisu/mtm"  → { actionKey:"hisuMtm",  ... }
+// ※ part3が英字の場合は先頭大文字にしてキャメルケースで結合（数字はそのまま）
 // ※ sinko/his + 数値（通常のsinko/his番号コメント）は除外
 function parseSubActionComment(commentStr) {
   const m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-zA-Z]+)\/(\w+)$/);
@@ -151,7 +153,9 @@ function parseSubActionComment(commentStr) {
   const sub = m[3];
   const part3 = m[4];
   if (/^(?:sinko|his)/.test(sub) && /^\d+$/.test(part3)) return null; // 通常 sinko/his 番号は除外
-  const actionKey = part3 === 'ho' ? sub + 'Ho' : sub + part3;
+  // part3が英字なら先頭を大文字化してキャメルケースに結合（例: mtm→Mtm, ho→Ho）
+  const part3Key = /^\d+$/.test(part3) ? part3 : (part3.charAt(0).toUpperCase() + part3.slice(1));
+  const actionKey = sub + part3Key;
   return { baseId: m[1], typeNum: m[2], sub, part3, actionKey, charaId: m[1] + m[2], comment: commentStr };
 }
 

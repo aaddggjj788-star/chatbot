@@ -18,7 +18,7 @@
           "negative": "12668mu1/sinko/3/B"
         }
       },
-      "hisMtm": {
+      "hisuMtm": {
         "specialProcess": ["saveMemo1", "saveNickname"],
         "branch": {
           "positive": "12668mu1/sinko/3/A",
