@@ -973,6 +973,7 @@ async function processUsers(page) {
     const lineMsg = [
       '【返信確認】',
       `ユーザー：${userName}`,
+      `対象コメントアウト：${latestComment || '（不明）'}`,
       '返信文：',
       '---',
       displayReplyText,
