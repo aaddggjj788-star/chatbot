@@ -208,12 +208,12 @@ function splitAColumn(aContent) {
   const commentStart = s.lastIndexOf('<!--');
   if (commentStart >= 0) {
     return {
-      replyText: s.slice(0, commentStart).trim().replace(/\\n/g, '\n'),
+      replyText: s.slice(0, commentStart).trim().replace(/\\n/g, '\n').trim(),
       nextComment: s.slice(commentStart),
     };
   }
   return {
-    replyText: s.replace(/\\n/g, '\n'),
+    replyText: s.replace(/\\n/g, '\n').trim(),
     nextComment: '',
   };
 }
@@ -971,8 +971,8 @@ async function processUsers(page) {
 
     // ─── 送信 or スキップ ────────────────────────────────────────
     if (reply === '送信') {
-      // 返信文（sinko/N+1 のB列）+ 次のコメントアウト（sinko/N+1 のA列）を末尾に追記
-      const textToSend = replyData.replyText.replace(/\\n/g, '\n') + '\n' + replyData.nextComment;
+      // 返信文 + 次のコメントアウトを末尾に追記（先頭・末尾の余分な改行を除去）
+      const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
       console.log(`[SEND-TEXT] 送信内容: "${textToSend.slice(0, 80)}..."`);
       if (DRY_RUN) {
         console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
