@@ -772,8 +772,12 @@ function extractNickname(userTexts) {
   // 【優先度1】パターン4: 「○○さん」「○○ちゃん」
   // 「私の事は/みんなからは」等の前置き表現を除去してからマッチ
   const textForSan = text.replace(/私の?[事こと]は/g, '').replace(/みんなからは/g, '');
-  const sanM = textForSan.match(/([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,10})(?:さん|ちゃん)/);
+  // 「さん」は除去して前半のみ登録（もっさん→もっ）
+  const sanM = textForSan.match(/([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,10})さん/);
   if (sanM) return { nickname: sanM[1].trim(), needsConfirmation: false };
+  // 「ちゃん」はニックネームの一部としてそのまま登録（さっちゃん→さっちゃん）
+  const chanM = textForSan.match(/([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,10}ちゃん)/);
+  if (chanM) return { nickname: chanM[1].trim(), needsConfirmation: false };
 
   // 【優先度2】パターン3: 「名前は○○」（明示パターン）
   const nameWaM = text.match(/名前は([一-龥々ぁ-んァ-ヶー]{2,6})/);
@@ -1115,6 +1119,12 @@ async function processUsers(page) {
 
         const fileId = phaseCfg.fileId ?? null;
         console.log(`[JSON] subAction charaId="${parsed.charaId}" fileId="${fileId}" actionKey="${parsed.actionKey}"`);
+
+        // specialProcessがある場合はbranch/searchTargetの前に実行
+        if (actionCfg.specialProcess) {
+          console.log(`[JSON] subAction specialProcess: ${JSON.stringify(actionCfg.specialProcess)}`);
+          await executeSpecialProcess(actionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts);
+        }
 
         if (actionCfg.searchTarget) {
           const useCurrentRow = actionCfg.useCurrentRow === true;
