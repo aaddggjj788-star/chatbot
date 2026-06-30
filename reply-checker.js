@@ -202,6 +202,22 @@ function resolveCsvPath(charaId, fileId) {
   return { csvPath: path.join(CSV_DIR, charaId + '.csv'), resolvedCharaId: charaId };
 }
 
+// 1列CSV形式用: A列 "返信文...<!--comment-->" から本文とコメントを分離する
+function splitAColumn(aContent) {
+  const s = (aContent || '').trim();
+  const commentStart = s.lastIndexOf('<!--');
+  if (commentStart >= 0) {
+    return {
+      replyText: s.slice(0, commentStart).trim().replace(/\\n/g, '\n'),
+      nextComment: s.slice(commentStart),
+    };
+  }
+  return {
+    replyText: s.replace(/\\n/g, '\n'),
+    nextComment: '',
+  };
+}
+
 function getReplyFromCSV(charaId, sinkoNum) {
   const { csvPath, resolvedCharaId } = resolveCsvPath(charaId);
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
@@ -235,16 +251,14 @@ function getReplyFromCSV(charaId, sinkoNum) {
 
   console.log(`[CSV] 次行 idx=${idx + 1} 全列: ${JSON.stringify(nextRow)}`);
 
-  // A列(index 0): コメントアウト(例: <!--sinko3-->)  → 返信末尾に追記
-  // B列(index 1): 返信文                              → これを返信本文として使用
-  const nextComment = (nextRow[0] || '').trim();                    // A列
-  const replyText   = (nextRow[1] || '').trim().replace(/\\n/g, '\n'); // B列: \n→改行
+  // A列 = "返信文...<!--コメント-->" 形式: 本文とコメントマーカーを分離
+  const { replyText, nextComment } = splitAColumn(nextRow[0]);
 
-  console.log(`[CSV] A列(nextComment)="${nextComment}"`);
-  console.log(`[CSV] B列(replyText)="${replyText.slice(0, 80)}"`);
+  console.log(`[CSV] nextComment="${nextComment}"`);
+  console.log(`[CSV] replyText="${replyText.slice(0, 80)}"`);
 
   if (!replyText) {
-    console.log('[CSV] 警告: B列(返信文)が空です。CSVのB列に内容があるか確認してください。');
+    console.log('[CSV] 警告: 返信文が空です。CSVのA列を確認してください。');
   }
 
   return { title, replyText, nextComment };
@@ -277,9 +291,8 @@ function getReplyFromCSVByTarget(charaId, searchTarget, useCurrentRow, fileId) {
   const targetRow = rows[resultIdx];
   if (!targetRow) return null;
 
-  const nextComment = (targetRow[0] || '').trim();
-  const replyText   = (targetRow[1] || '').trim().replace(/\\n/g, '\n');
-  console.log(`[CSV-TARGET] 取得: useCurrentRow=${useCurrentRow} → row[${resultIdx}] nextComment="${nextComment.slice(0, 40)}" replyText="${replyText.slice(0, 40)}"`);
+  const { replyText, nextComment } = splitAColumn(targetRow[0]);
+  console.log(`[CSV-TARGET] 取得: useCurrentRow=${useCurrentRow} → row[${resultIdx}] nextComment="${nextComment}" replyText="${replyText.slice(0, 40)}"`);
   return { title, replyText, nextComment };
 }
 
@@ -299,9 +312,8 @@ function getReplyFromCSVBySpan(charaId, spanWord, fileId) {
   const nextRow = rows[idx + 1];
   if (!nextRow) return null;
 
-  const nextComment = (nextRow[0] || '').trim();
-  const replyText   = (nextRow[1] || '').trim().replace(/\\n/g, '\n');
-  console.log(`[CSV] 次行 idx=${idx + 1}: A列="${nextComment}" B列="${replyText.slice(0, 50)}"`);
+  const { replyText, nextComment } = splitAColumn(nextRow[0]);
+  console.log(`[CSV] 次行 idx=${idx + 1}: nextComment="${nextComment}" replyText="${replyText.slice(0, 50)}"`);
 
   return { replyText, nextComment };
 }
