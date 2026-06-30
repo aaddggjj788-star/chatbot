@@ -762,13 +762,14 @@ function extractNickname(userTexts) {
   return { nickname: null, needsConfirmation: false };
 }
 
-// saveMemo1: ope_mainフレーム内の非公開メモ1に先頭追記して保存
-async function saveMemo1(frame, userTexts, dryRun) {
-  const newContent = userTexts.filter(t => t.trim()).join('\n---\n');
+// saveMemo1: ope_mainフレーム内の非公開メモ1に先頭追記して保存（最新1件のみ）
+async function saveMemo1(frame, userText, dryRun) {
+  const newContent = userText.trim();
   if (!newContent) {
     console.log('[SPECIAL] saveMemo1: ユーザーメッセージなし → スキップ');
     return;
   }
+  console.log('[DEBUG] saveMemo1対象テキスト:', newContent);
 
   let existingMemo = '';
   try {
@@ -790,10 +791,10 @@ async function saveMemo1(frame, userTexts, dryRun) {
   console.log('[SPECIAL] saveMemo1: 保存完了');
 }
 
-// saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存
-async function saveNickname(frame, userTexts, dryRun) {
-  console.log('[DEBUG] saveNickname対象テキスト:', userTexts);
-  const result = extractNickname(userTexts);
+// saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存（最新1件のみ）
+async function saveNickname(frame, userText, dryRun) {
+  console.log('[DEBUG] saveNickname対象テキスト:', userText);
+  const result = extractNickname([userText]);
 
   if (result.needsConfirmation) {
     console.log(`[SPECIAL] saveNickname: 性別判定不可 → LINE通知`);
@@ -824,13 +825,17 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bod
   if (!processes || processes.length === 0) return;
 
   // div.bodyNaibu から取得したテキストを優先。なければ analysis のフォールバック
-  const userTexts = (bodyNaibuTexts && bodyNaibuTexts.length > 0)
+  const allUserTexts = (bodyNaibuTexts && bodyNaibuTexts.length > 0)
     ? bodyNaibuTexts
     : (analysis.latestUserTexts || []);
-  if (userTexts.length === 0) {
+  if (allUserTexts.length === 0) {
     console.log('[SPECIAL] ユーザーメッセージなし → specialProcess スキップ');
     return;
   }
+
+  // saveMemo1/saveNickname は最新（一番上）の1件のみを対象にする
+  const latestUserText = allUserTexts[0];
+  console.log(`[SPECIAL] 最新ユーザーテキスト(1件): "${latestUserText.slice(0, 80)}"`);
 
   const mainFrame = page.frame({ name: 'ope_main' });
   if (!mainFrame) {
@@ -842,9 +847,9 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bod
   try {
     for (const proc of processes) {
       if (proc === 'saveMemo1') {
-        await saveMemo1(mainFrame, userTexts, dryRun);
+        await saveMemo1(mainFrame, latestUserText, dryRun);
       } else if (proc === 'saveNickname') {
-        await saveNickname(mainFrame, userTexts, dryRun);
+        await saveNickname(mainFrame, latestUserText, dryRun);
       } else {
         console.log(`[SPECIAL] 未実装のprocess: "${proc}"`);
       }
