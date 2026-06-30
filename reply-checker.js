@@ -765,6 +765,7 @@ async function processUsers(page) {
 
     let charaId = null;
     let replyData;
+    let latestComment = null;
 
     if (hasHo) {
       // /ho の場合: 全メッセージ履歴から最新sinko/hisコメントを検索してsinko+1を送信
@@ -785,6 +786,10 @@ async function processUsers(page) {
         .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
         .filter(n => n !== null);
       const maxSinko = Math.max(...histSinkoNums);
+      latestComment = historySinkoComments.find(c => {
+        const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+        return m && parseInt(m[1], 10) === maxSinko;
+      }) || null;
 
       console.log(`[COMMENT] ${userName}: /hoモード charaId=${charaId} 履歴最大sinko=${maxSinko}`);
       try {
@@ -818,7 +823,7 @@ async function processUsers(page) {
 
       // ─── JSON設定の読み込み ──────────────────────────────────────
       const maxSinkoNum = Math.max(...sinkoNums);
-      const latestComment = sinkoComments.find(c => {
+      latestComment = sinkoComments.find(c => {
         const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
         return m && parseInt(m[1], 10) === maxSinkoNum;
       });
