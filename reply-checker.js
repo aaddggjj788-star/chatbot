@@ -653,6 +653,113 @@ function parseMessageTime(timeStr) {
   return d;
 }
 
+// ─── specialProcess ヘルパー ──────────────────────────────────────
+
+// ユーザーメッセージからニックネームを抽出する
+function extractNickname(userTexts) {
+  const combined = userTexts.join('\n');
+
+  // 「○○さん」パターン（文頭・助詞の後など）
+  const sanMatch = combined.match(/(?:^|[\s、。\n「」])([^\s、。\n「」（）]{1,8})さん/u);
+  if (sanMatch) return sanMatch[1];
+
+  // 「○○と申します」「○○といいます」パターン
+  const moushiMatch = combined.match(/([^\s、。\n「」]{1,10})(?:と申します|と言います|といいます)/u);
+  if (moushiMatch) return moushiMatch[1];
+
+  // 「名前は○○」「ニックネームは○○」パターン
+  const nameMatch = combined.match(/(?:名前|ニックネーム|なまえ)は[「『]?([^\s、。\n「」』]{1,10})/u);
+  if (nameMatch) return nameMatch[1];
+
+  // 「○○です」（行頭近く、短い）パターン
+  const desuMatch = combined.match(/^([^\s、。\n「」]{1,6})です/mu);
+  if (desuMatch) return desuMatch[1];
+
+  return null;
+}
+
+// saveMemo1: 詳細ページの非公開メモ1に先頭追記して保存
+async function saveMemo1(detailPage, userTexts, dryRun) {
+  const newContent = userTexts.filter(t => t.trim()).join('\n---\n');
+  if (!newContent) {
+    console.log('[SPECIAL] saveMemo1: ユーザーメッセージなし → スキップ');
+    return;
+  }
+
+  let existingMemo = '';
+  try {
+    existingMemo = await detailPage.inputValue('textarea[name="user_memo1"]');
+  } catch (_) {}
+
+  const combined = existingMemo.trim()
+    ? newContent + '\n\n' + existingMemo.trim()
+    : newContent;
+
+  if (dryRun) {
+    console.log(`[DRY RUN] saveMemo1 先頭追記:\n${combined.slice(0, 200)}`);
+    return;
+  }
+
+  await detailPage.fill('textarea[name="user_memo1"]', combined);
+  await detailPage.click('input[name="memo_henko"]#user_memo_submit');
+  await detailPage.waitForLoadState('networkidle').catch(() => {});
+  console.log('[SPECIAL] saveMemo1: 保存完了');
+}
+
+// saveNickname: ニックネームを抽出して詳細ページのあだ名欄に保存
+async function saveNickname(detailPage, userTexts, dryRun) {
+  const nickname = extractNickname(userTexts);
+  if (!nickname) {
+    console.log('[SPECIAL] saveNickname: ニックネームを抽出できず → スキップ');
+    return;
+  }
+  console.log(`[SPECIAL] saveNickname: 抽出ニックネーム="${nickname}"`);
+
+  if (dryRun) {
+    console.log(`[DRY RUN] saveNickname: "${nickname}" 入力をスキップ`);
+    return;
+  }
+
+  await detailPage.fill('input[name="nickname"]', nickname);
+  await detailPage.click('input[name="memo_henko"]#appointment_memo');
+  await detailPage.waitForLoadState('networkidle').catch(() => {});
+  console.log(`[SPECIAL] saveNickname: "${nickname}" 保存完了`);
+}
+
+// specialProcessリストを実行する（詳細ページを別タブで開いて処理）
+async function executeSpecialProcess(processes, page, uid, analysis, dryRun) {
+  if (!processes || processes.length === 0) return;
+
+  const userTexts = analysis.latestUserTexts || [];
+  if (userTexts.length === 0) {
+    console.log('[SPECIAL] ユーザーメッセージなし → specialProcess スキップ');
+    return;
+  }
+
+  const detailUrl = BASE_URL + 'mg_kaiin_syosai.php?u_id=' + uid;
+  console.log(`[SPECIAL] 詳細ページ (${detailUrl}) で処理: ${JSON.stringify(processes)}`);
+
+  let detailPage = null;
+  try {
+    detailPage = await page.context().newPage();
+    await detailPage.goto(detailUrl, { waitUntil: 'networkidle' });
+
+    for (const proc of processes) {
+      if (proc === 'saveMemo1') {
+        await saveMemo1(detailPage, userTexts, dryRun);
+      } else if (proc === 'saveNickname') {
+        await saveNickname(detailPage, userTexts, dryRun);
+      } else {
+        console.log(`[SPECIAL] 未実装のprocess: "${proc}"`);
+      }
+    }
+  } catch (e) {
+    console.error(`[SPECIAL ERROR] ${e.message}`);
+  } finally {
+    if (detailPage) await detailPage.close().catch(() => {});
+  }
+}
+
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
 async function processUsers(page) {
@@ -842,6 +949,7 @@ async function processUsers(page) {
       if (actionCfg) {
         if (actionCfg.specialProcess) {
           console.log(`[JSON] specialProcess: ${JSON.stringify(actionCfg.specialProcess)}`);
+          await executeSpecialProcess(actionCfg.specialProcess, page, uid, analysis, DRY_RUN);
         }
 
         if (actionCfg.branch) {
