@@ -828,7 +828,7 @@ async function processUsers(page) {
             : actionCfg.branch.negative;
           console.log(`[JSON] 分岐自動判定: ${branchChoice} → ${branchTarget}`);
           try {
-            replyData = getReplyFromCSVByTarget(charaId, branchTarget, false, fileId);
+            replyData = getReplyFromCSVByTarget(charaId, branchTarget, true, fileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
