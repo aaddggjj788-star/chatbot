@@ -658,31 +658,32 @@ function isInStopTime(charaId) {
 }
 
 // ─── A/B分岐自動判定 ─────────────────────────────────────────────
-// ユーザーメッセージ群を結合してキーワードで判定
+// 最新のユーザーメッセージ1件のみを対象にキーワード判定する
 // 肯定キーワードあり → A（最優先）
 // 肯定なし・否定あり → B
 // どちらもなし → B（デフォルト）
-function detectBranchChoice(userTexts) {
-  const combined = userTexts.join('');
+function detectBranchChoice(latestUserText) {
+  const text = latestUserText || '';
   // 肯定キーワード（長い→短い順: 複合表現を単語より先にマッチさせる）
   const positiveKeywords = [
-    'あったと思う', 'あると思う', 'あります',
-    '思える', '感じる', 'あった',
-    'はい', 'そう', '思う', 'ある',
+    'あったと思います', 'チャンスはあった', 'ばりばりあった',
+    'あったと思う', 'あったと感じ', 'あったかも',
+    'ありました', 'そう思う', 'はい',
   ];
-  // 否定キーワード（bare「ない」は除外: 誤検知の原因のため具体的な表現のみ）
+  // 否定キーワード（長い→短い順）
   const negativeKeywords = [
-    '心当たりがない', 'ないと思う', 'わからない', '特にない',
-    'ないかも', 'ないです', '思えない', '感じない',
+    '心当たりがない', 'なかったです', 'ないと思う', 'わからない',
+    '特にない', 'ないかも', 'ないです', '思えない', '感じない',
+    'なかった', '無かった', '無い',
   ];
   for (const kw of positiveKeywords) {
-    if (combined.includes(kw)) {
+    if (text.includes(kw)) {
       console.log(`[BRANCH] 肯定キーワード "${kw}" 検出 → A`);
       return 'A';
     }
   }
   for (const kw of negativeKeywords) {
-    if (combined.includes(kw)) {
+    if (text.includes(kw)) {
       console.log(`[BRANCH] 否定キーワード "${kw}" 検出 → B`);
       return 'B';
     }
@@ -1152,8 +1153,9 @@ async function processUsers(page) {
 
         // branch設定がある場合: A/B判定してCSV取得（searchTargetがない場合も対応）
         if (!replyData && !skipUser && actionCfg.branch) {
-          const branchTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
-          const branchChoice = detectBranchChoice(branchTexts);
+          const latestText = bodyNaibuTexts.length > 0 ? bodyNaibuTexts[0] : (analysis.latestUserTexts?.[0] || '');
+          console.log(`[BRANCH] 判定対象テキスト: "${latestText.slice(0, 60)}"`);
+          const branchChoice = detectBranchChoice(latestText);
           const branchTarget = branchChoice === 'A' ? actionCfg.branch.positive : actionCfg.branch.negative;
           console.log(`[JSON] subAction branch自動判定: ${branchChoice} → ${branchTarget} (charaId=${parsed.charaId} fileId=${fileId})`);
           try {
@@ -1220,8 +1222,9 @@ async function processUsers(page) {
         }
 
         if (hoActionCfg.branch) {
-          const branchTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
-          const branchChoice = detectBranchChoice(branchTexts);
+          const latestText = bodyNaibuTexts.length > 0 ? bodyNaibuTexts[0] : (analysis.latestUserTexts?.[0] || '');
+          console.log(`[BRANCH] 判定対象テキスト: "${latestText.slice(0, 60)}"`);
+          const branchChoice = detectBranchChoice(latestText);
           const branchTarget = branchChoice === 'A' ? hoActionCfg.branch.positive : hoActionCfg.branch.negative;
           console.log(`[JSON] ho分岐自動判定: ${branchChoice} → ${branchTarget}`);
           try {
@@ -1365,9 +1368,10 @@ async function processUsers(page) {
         }
 
         if (actionCfg.branch) {
-          // A/B分岐: div.bodyNaibu 本文のキーワードで自動判定
-          const branchTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
-          const branchChoice = detectBranchChoice(branchTexts);
+          // A/B分岐: 最新ユーザーメッセージ1件のみでキーワード判定
+          const latestText = bodyNaibuTexts.length > 0 ? bodyNaibuTexts[0] : (analysis.latestUserTexts?.[0] || '');
+          console.log(`[BRANCH] 判定対象テキスト: "${latestText.slice(0, 60)}"`);
+          const branchChoice = detectBranchChoice(latestText);
           const branchTarget = (branchChoice === 'A')
             ? actionCfg.branch.positive
             : actionCfg.branch.negative;
