@@ -213,9 +213,9 @@ function getReplyFromCSV(charaId, sinkoNum) {
   const title = rows[0] ? (rows[0][0] || '') : '';
   console.log(`[CSV] 1行目A列(件名): "${title}"`);
 
-  // sinko/N または his/N の行を特定する（sinko/2・sinko2 両形式に対応）
+  // sinko/N または his/N の行を特定する（sinko/2・sinko2・sinko/3/A 等に対応）
   const sinkoPattern = new RegExp(
-    `<!--${resolvedCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:sinko|his)\\/?${sinkoNum}-->`
+    `<!--${resolvedCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:sinko|his)\\/?${sinkoNum}(?:\\/[A-Za-z0-9]+)?-->`
   );
   console.log(`[CSV] 検索パターン: ${sinkoPattern}`);
   const idx = rows.findIndex(r => sinkoPattern.test((r[0] || '').trim()));
