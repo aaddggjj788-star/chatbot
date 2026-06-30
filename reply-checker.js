@@ -744,8 +744,8 @@ function extractNickname(userTexts) {
   return { nickname: null, needsConfirmation: false };
 }
 
-// saveMemo1: 詳細ページの非公開メモ1に先頭追記して保存
-async function saveMemo1(detailPage, userTexts, dryRun) {
+// saveMemo1: ope_mainフレーム内の非公開メモ1に先頭追記して保存
+async function saveMemo1(frame, userTexts, dryRun) {
   const newContent = userTexts.filter(t => t.trim()).join('\n---\n');
   if (!newContent) {
     console.log('[SPECIAL] saveMemo1: ユーザーメッセージなし → スキップ');
@@ -754,7 +754,7 @@ async function saveMemo1(detailPage, userTexts, dryRun) {
 
   let existingMemo = '';
   try {
-    existingMemo = await detailPage.inputValue('textarea[name="user_memo1"]');
+    existingMemo = await frame.inputValue('textarea[name="user_memo1"]');
   } catch (_) {}
 
   const combined = existingMemo.trim()
@@ -766,14 +766,14 @@ async function saveMemo1(detailPage, userTexts, dryRun) {
     return;
   }
 
-  await detailPage.fill('textarea[name="user_memo1"]', combined);
-  await detailPage.click('input[name="memo_henko"]#user_memo_submit');
-  await detailPage.waitForLoadState('networkidle').catch(() => {});
+  await frame.fill('textarea[name="user_memo1"]', combined);
+  await frame.click('input[name="memo_henko"]#user_memo_submit');
+  await frame.waitForLoadState('networkidle').catch(() => {});
   console.log('[SPECIAL] saveMemo1: 保存完了');
 }
 
-// saveNickname: ニックネームを抽出して詳細ページのあだ名欄に保存
-async function saveNickname(detailPage, userTexts, dryRun) {
+// saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存
+async function saveNickname(frame, userTexts, dryRun) {
   const result = extractNickname(userTexts);
 
   if (result.needsConfirmation) {
@@ -794,13 +794,13 @@ async function saveNickname(detailPage, userTexts, dryRun) {
     return;
   }
 
-  await detailPage.fill('input[name="nickname"]', nickname);
-  await detailPage.click('input[name="memo_henko"]#appointment_memo');
-  await detailPage.waitForLoadState('networkidle').catch(() => {});
+  await frame.fill('input[name="nickname"]', nickname);
+  await frame.click('input[name="memo_henko"]#appointment_memo');
+  await frame.waitForLoadState('networkidle').catch(() => {});
   console.log(`[SPECIAL] saveNickname: "${nickname}" 保存完了`);
 }
 
-// specialProcessリストを実行する（詳細ページを別タブで開いて処理）
+// specialProcessリストを実行する（ope_mainフレーム内で直接操作）
 async function executeSpecialProcess(processes, page, uid, analysis, dryRun) {
   if (!processes || processes.length === 0) return;
 
@@ -810,27 +810,25 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun) {
     return;
   }
 
-  const detailUrl = BASE_URL + 'mg_kaiin_syosai.php?u_id=' + uid;
-  console.log(`[SPECIAL] 詳細ページ (${detailUrl}) で処理: ${JSON.stringify(processes)}`);
+  const mainFrame = page.frame({ name: 'ope_main' });
+  if (!mainFrame) {
+    console.error('[SPECIAL ERROR] ope_mainフレームが見つかりません');
+    return;
+  }
 
-  let detailPage = null;
+  console.log(`[SPECIAL] ope_mainフレームで処理: ${JSON.stringify(processes)}`);
   try {
-    detailPage = await page.context().newPage();
-    await detailPage.goto(detailUrl, { waitUntil: 'networkidle' });
-
     for (const proc of processes) {
       if (proc === 'saveMemo1') {
-        await saveMemo1(detailPage, userTexts, dryRun);
+        await saveMemo1(mainFrame, userTexts, dryRun);
       } else if (proc === 'saveNickname') {
-        await saveNickname(detailPage, userTexts, dryRun);
+        await saveNickname(mainFrame, userTexts, dryRun);
       } else {
         console.log(`[SPECIAL] 未実装のprocess: "${proc}"`);
       }
     }
   } catch (e) {
     console.error(`[SPECIAL ERROR] ${e.message}`);
-  } finally {
-    if (detailPage) await detailPage.close().catch(() => {});
   }
 }
 
