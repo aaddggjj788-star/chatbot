@@ -1,0 +1,86 @@
+{
+  "charaId": "12675",
+  "name": "津木嶋　恵子",
+  "globalStopTime": { "start": "23:00", "end": "09:00" },
+  "spanMatchExclude": [
+    "12675mu2/sinko/6",
+    "12675mu2/sinko/7",
+    "12675mu2/sinko/9",
+    "12675mu2/sinko/10",
+    "12675mu2/sinko/11",
+    "12675mu2/sinko/12",
+    "12675mu2/kouhan/sinko"
+  ],
+  "receiveTimeLimit": {
+    "phases": ["mu1", "mu2", "yu4mu"],
+    "minutes": 25
+  },
+  "phases": {
+    "mu1": {
+      "stopAfter": "18:30",
+      "do1": { "searchTarget": "12675mu1/do/1", "useCurrentRow": false },
+      "sinko4": {
+        "requiredKeywords": ["10万円", "100万円", "1000万円", "1億円"],
+        "requiredCount": 1,
+        "skipIfNotFound": true
+      },
+      "sinko5": {
+        "requiredKeywords": ["株", "カジノ", "パチンコ", "スロット", "宝くじ", "スクラッチ", "競馬", "競輪", "LOTO7", "LOTO6", "ミニロト", "NAMBERS4", "NAMBERS3", "BINGO5"],
+        "requiredCount": 1,
+        "skipIfNotFound": true
+      }
+    },
+    "mu2": {
+      "stopAfter": "18:30",
+      "sinko2": {
+        "requiredKeywords": ["財をつかみ取る手：右手", "財をつかみ取る手：左手", "右手", "左手"],
+        "requiredCount": 1,
+        "skipIfNotFound": false,
+        "fallbackText": "お返事確認しましたよ。\n\n私は先ほどあなたに『言霊として送ってください』とお願いをしました。\n\n言霊として送るというのは、私がお伝えした形で送るという事です。\n\nそれはちゃんと読んでくださっていれば理解はして下さると思っております。\n\nですが、あなたがお返事を下さった内容は私がお伝えした形で言霊として送る物ではありませんでした。\n\n「細かい事なんていいでしょう。」\n「伝われば問題ないのでは？」\n\nと思われてしまうかもしれませんが、工程に従ってもらうという事はとても大事な事なんです。\n\n仮にあなたがとても大事な機転に到達している時、工程に従って頂けなかった事によって時間が余計にかかり、その機転を逃してしまうなんて事も十分にあり得る事です。\n\nですから、ひとつひとつの工程、それの取り組み方はしっかりと指示に従って頂かなければ進めて行く事は出来ません。\n\nお手数ですが先ほどの工程から改めてしっかりと私がお伝えした形で言霊として送り返していただく様お願いしますね。\n\n<!--12675mu2/sinko2-->",
+        "fallbackComment": "12675mu2/sinko2"
+      },
+      "sinko3": {
+        "requiredKeywords": ["はい", "1", "2", "3", "4", "5", "6", "7", "個", "一", "二", "三", "四", "五", "六", "七"],
+        "requiredCount": 1,
+        "skipIfNotFound": true
+      },
+      "sinko5": {
+        "requiredKeywords": ["親指", "人差し指", "中指", "薬指", "小指"],
+        "requiredCount": 1,
+        "skipIfNotFound": true
+      },
+      "sinko6": {
+        "requiredKeywords": ["左向き", "右向き", "左", "右"],
+        "requiredCount": 1,
+        "skipIfNotFound": true
+      },
+      "sinko7": {
+        "requiredKeywords": ["上向き", "下向き", "上", "下"],
+        "requiredCount": 1,
+        "skipIfNotFound": true
+      },
+      "sinko9": {
+        "requiredKeywords": ["起きれる", "起きれない", "起きられる", "起きられない"],
+        "requiredCount": 1,
+        "skipIfNotFound": true
+      }
+    },
+    "yu1": {
+      "ho": { "searchTarget": "12675yu1/ho", "useCurrentRow": false },
+      "stop1": { "searchTarget": "12675yu1/sinko/1", "useCurrentRow": true }
+    },
+    "yu2": {
+      "noresHo": { "searchTarget": "12675yu1/stop/1", "useCurrentRow": true }
+    },
+    "yu3": {
+      "noresHo": { "searchTarget": "12675yu1/stop/1", "useCurrentRow": true }
+    },
+    "yu4": {
+      "noresHo": { "searchTarget": "12675yu4/mu/sinko/1", "useCurrentRow": true },
+      "muHo": { "searchTarget": "12675yu4/mu/sinko/2", "useCurrentRow": true }
+    },
+    "yu5": {
+      "ho": { "searchTarget": "12675yu5/ho", "useCurrentRow": false }
+    }
+  }
+}
