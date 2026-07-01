@@ -1,0 +1,52 @@
+{
+  "charaId": "12673",
+  "name": "悠仁",
+  "globalStopTime": { "start": "23:00", "end": "09:00" },
+  "spanMatchExclude": [
+    "12673mu1/sinko/2",
+    "12673mu2/his/2"
+  ],
+  "receiveTimeLimit": {
+    "phases": ["mu1", "mu2"],
+    "minutes": 25
+  },
+  "phases": {
+    "mu1": {
+      "do1": { "searchTarget": "12673mu1/do/1", "useCurrentRow": false }
+    },
+    "mu2": {
+      "ho1": { "searchTarget": "12673mu2/ho1", "useCurrentRow": false }
+    },
+    "mu2his": {
+      "do1": { "searchTarget": "12673mu2his/do/1", "useCurrentRow": false }
+    },
+    "yu1": {
+      "ho1": { "searchTarget": "12673yu1/ho/1", "useCurrentRow": false }
+    },
+    "yu2": {
+      "noresHo": { "fileId": "12673yu1", "searchTarget": "12673yu1/sinko/1", "useCurrentRow": true }
+    },
+    "yu3": {
+      "noresHo": { "fileId": "12673yu1", "searchTarget": "12673yu1/sinko/1", "useCurrentRow": true }
+    },
+    "yu4": {
+      "noresHo": { "fileId": "12673yu1", "searchTarget": "12673yu1/sinko/1", "useCurrentRow": true },
+      "muHo": { "useHistorySearch": true, "fallback": { "fileId": "12673yu1", "searchTarget": "12673yu1/sinko/1", "useCurrentRow": true } }
+    },
+    "yu6": {
+      "noresHo": { "fileId": "12673yu5", "searchTarget": "12673yu5/sinko/71", "useCurrentRow": true }
+    },
+    "yu7": {
+      "noresHo": { "fileId": "12673yu5", "searchTarget": "12673yu5/sinko/71", "useCurrentRow": true }
+    },
+    "yu8": {
+      "noresHo": { "fileId": "12673yu5", "searchTarget": "12673yu5/sinko/71", "useCurrentRow": true }
+    },
+    "yu9": {
+      "ho": { "searchTarget": "12673yu9/ho", "useCurrentRow": false }
+    },
+    "yu10": {
+      "ho": { "useHistorySearch": true }
+    }
+  }
+}
