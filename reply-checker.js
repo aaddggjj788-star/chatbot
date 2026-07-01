@@ -1571,38 +1571,21 @@ async function processUsers(page) {
           continue;
         }
 
-        // ─── タイマー判定 ────────────────────────────────────────
+        // ─── 受信時刻チェック（20分以内はスキップ）────────────────
         const receivedAt = parseMessageTime(analysis.latestUserTime || '');
-        const nowTs = new Date();
-        const TIMER_MIN = 15;
-        let useTimer = false;
-        let timerTs = null;
         if (receivedAt) {
-          const elapsedMin = (nowTs.getTime() - receivedAt.getTime()) / 60000;
-          if (elapsedMin < TIMER_MIN) {
-            useTimer = true;
-            timerTs = new Date(receivedAt.getTime() + TIMER_MIN * 60000);
-            console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → タイマー設定 (送信予定: ${timerTs.toLocaleTimeString('ja-JP')})`);
-          } else {
-            console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 即時送信`);
+          const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
+          if (elapsedMin < 20) {
+            console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 20分未満のためスキップ`);
+            continue;
           }
+          console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 即時送信`);
         } else {
           console.log(`[TIMER] ${userName}: 受信時刻が取得できません → 即時送信`);
         }
 
         // 本文：返信文 + 改行 + 次のコメントアウト
         await sendFrame.fill('textarea#mess_body', textToSend);
-
-        if (useTimer) {
-          // タイマーモードに切り替え
-          await sendFrame.click('input[name="timerSet"][value=""]');
-          // receivehun(Unixタイムスタンプ秒) をブラウザ側で実行
-          const tsSeconds = Math.floor(timerTs.getTime() / 1000);
-          await sendFrame.evaluate((ts) => {
-            if (typeof receivehun === 'function') receivehun(ts);
-          }, tsSeconds);
-          console.log(`[TIMER] ${userName}: タイムスタンプ=${tsSeconds} receivehun()実行済み`);
-        }
 
         await sendFrame.click('#chara_mail_send');
         await sendFrame.waitForLoadState('networkidle').catch(() => {});
