@@ -1112,13 +1112,13 @@ async function processUsers(page) {
 
     // ─── 判定5: コメントアウト判定（最新鑑定士メッセージのみ）──
 
-    // /mtm・/do を含むコメントがある → スキップ
-    // ただし /mtm かつ /his も含む（his/mtm形式）はスキップしない
-    const hasMtmOrDo = allComments.some(c => /\/mtm\b|\/do\b/.test(c));
-    if (hasMtmOrDo) {
+    // /mtm を含むコメントがある → スキップ（/his との共存は除外）
+    // /do は別途 CSV 検索で処理するためスキップしない
+    const hasMtm = allComments.some(c => /\/mtm\b/.test(c));
+    if (hasMtm) {
       const hasBothMtmAndHis = allComments.some(c => /\/mtm\b/.test(c) && /\/his/.test(c));
       if (!hasBothMtmAndHis) {
-        console.log(`[SKIP] ${userName}: /mtm・/do コメントあり（/his なし）`);
+        console.log(`[SKIP] ${userName}: /mtm コメントあり（/his なし）`);
         continue;
       }
       console.log(`[INFO] ${userName}: /mtm と /his が共存 → スキップしない`);
@@ -1156,6 +1156,20 @@ async function processUsers(page) {
         console.log(`[COMMENT] ${userName}: subAction comment="${parsed.comment}" actionKey="${parsed.actionKey}" phase=${phaseResult?.key} actionCfg=${JSON.stringify(actionCfg)}`);
 
         if (!actionCfg) {
+          if (parsed.sub === 'do') {
+            // /do コメント: JSON設定なしでも CSV を直接検索して次行を送信
+            charaId = parsed.charaId;
+            latestComment = parsed.comment;
+            const doFileId = phaseCfg?.fileId ?? null;
+            console.log(`[DO] ${userName}: /do 直接検索 comment="${parsed.comment}" charaId="${charaId}" fileId="${doFileId}"`);
+            try {
+              replyData = getReplyFromCSVByTarget(charaId, parsed.comment, false, doFileId);
+            } catch (e) {
+              console.error(`[ERROR] /do CSV取得失敗 (${userName}): ${e.message}`);
+              skipUser = true;
+            }
+            break;
+          }
           console.log(`[SKIP] ${userName}: subAction actionCfgなし (${parsed.actionKey})`);
           skipUser = true;
           break;
