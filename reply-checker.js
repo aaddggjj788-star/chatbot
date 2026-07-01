@@ -637,6 +637,18 @@ function loadCharaConfig(charaId) {
   }
 }
 
+// phase設定の時間帯制限チェック（stopAfter/activeFrom/activeUntilのいずれかが制限中なら true）
+function isPhaseBlocked(phaseCfg) {
+  if (!phaseCfg) return false;
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const parseMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  if (phaseCfg.stopAfter && cur >= parseMin(phaseCfg.stopAfter)) return true;
+  if (phaseCfg.activeFrom && cur < parseMin(phaseCfg.activeFrom)) return true;
+  if (phaseCfg.activeUntil && cur >= parseMin(phaseCfg.activeUntil)) return true;
+  return false;
+}
+
 // start===end → 常時稼働。start>end → 深夜またぎ。start<end → 同日内停止。
 function isInStopTime(charaId) {
   const config = loadCharaConfig(charaId);
@@ -1055,9 +1067,16 @@ async function processUsers(page) {
 
     // ─── 判定4: span個数とユーザーメッセージ通数の照合 ──────────
     // subActionコメントあり（requiredMessages独自判定を使う）→ span照合スキップ
+    // spanMatchExclude: 最新コメントアウトが除外リストに含まれる場合はスキップ
+    const _charaCfgForSpan = loadCharaConfig(kid);
+    const _spanExcludeList = _charaCfgForSpan?.spanMatchExclude ?? [];
+    const spanMatchExcluded = _spanExcludeList.length > 0 && allComments.some(c => _spanExcludeList.includes(c));
+    if (spanMatchExcluded) {
+      console.log(`[SPAN-CHECK] ${userName}: spanMatchExclude に一致 → span個数チェックをスキップ`);
+    }
     const { spanCount, userMsgCount } = analysis;
     console.log(`[SPAN-CHECK] ${userName}: ユーザーメッセージ=${userMsgCount}通, span個数=${spanCount}`);
-    if (!hasSubAction && spanCount > 0 && userMsgCount !== spanCount) {
+    if (!spanMatchExcluded && !hasSubAction && spanCount > 0 && userMsgCount !== spanCount) {
       console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount})とspan個数(${spanCount})が不一致`);
       continue;
     }
@@ -1101,7 +1120,11 @@ async function processUsers(page) {
         const phaseResult = (charaCfg && parsed.typeNum)
           ? resolveHoPhase(charaCfg, parsed.typeNum, parsed.actionKey)
           : null;
-        const phaseCfg  = phaseResult?.cfg ?? null;
+        let phaseCfg  = phaseResult?.cfg ?? null;
+        if (isPhaseBlocked(phaseCfg)) {
+          console.log(`[TIME] ${userName}: subAction phase "${phaseResult?.key}" 時間帯制限 → スキップ`);
+          phaseCfg = null;
+        }
         const actionCfg = phaseCfg?.[parsed.actionKey] ?? null;
 
         console.log(`[COMMENT] ${userName}: subAction comment="${parsed.comment}" actionKey="${parsed.actionKey}" phase=${phaseResult?.key} actionCfg=${JSON.stringify(actionCfg)}`);
@@ -1196,7 +1219,11 @@ async function processUsers(page) {
       // JSON設定の読み込みとphase解決
       const hoCharaCfg   = hoBaseId ? loadCharaConfig(hoBaseId) : null;
       const hoPhaseResult = (hoCharaCfg && hoTypeNum) ? resolveHoPhase(hoCharaCfg, hoTypeNum, hoType) : null;
-      const hoPhaseCfg   = hoPhaseResult?.cfg ?? null;
+      let hoPhaseCfg   = hoPhaseResult?.cfg ?? null;
+      if (isPhaseBlocked(hoPhaseCfg)) {
+        console.log(`[TIME] ${userName}: hoPhase "${hoPhaseResult?.key}" 時間帯制限 → フォールバックへ`);
+        hoPhaseCfg = null;
+      }
       const hoFileId     = hoPhaseCfg?.fileId ?? null;
 
       // actionCfg決定: 完全一致優先 → 数値サフィックス除去で前方一致
@@ -1353,7 +1380,11 @@ async function processUsers(page) {
       const baseCharaId = parsed?.baseId ?? (charaId?.match(/^(\d+)/)?.[1] ?? null);
       const charaCfg   = baseCharaId ? loadCharaConfig(baseCharaId) : null;
       const phaseResult = (parsed && charaCfg) ? resolvePhaseCfg(parsed, charaCfg) : null;
-      const phaseCfg   = phaseResult?.cfg ?? null;
+      let phaseCfg   = phaseResult?.cfg ?? null;
+      if (isPhaseBlocked(phaseCfg)) {
+        console.log(`[TIME] ${userName}: phase "${phaseResult?.key}" 時間帯制限 → 通常ルールへ`);
+        phaseCfg = null;
+      }
       const fileId     = phaseCfg?.fileId ?? null;
       const actionKey  = parsed ? `${parsed.type}${parsed.num}` : null;
       const actionCfg  = (phaseCfg && actionKey) ? (phaseCfg[actionKey] ?? null) : null;
