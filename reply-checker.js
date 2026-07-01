@@ -1084,6 +1084,32 @@ async function processUsers(page) {
       console.log(`[SPAN-CHECK] ${userName}: subActionあり → span照合スキップ`);
     }
 
+    // ─── 念言チェック ────────────────────────────────────────────
+    {
+      const kanteishiBody = analysis.kanteishiBodyText || '';
+      const nengenWords = [];
+      const nengenRe = /<span class="fortune-word-insert">([^<]+)<\/span>/g;
+      let nengenM;
+      while ((nengenM = nengenRe.exec(kanteishiBody)) !== null) {
+        nengenWords.push(nengenM[1]);
+      }
+      if (nengenWords.length > 0) {
+        const allUserText = (bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || [])).join('');
+        const nengenFound = nengenWords.some(w => allUserText.includes(w));
+        console.log(`[NENGEN] ${userName}: 念言=${JSON.stringify(nengenWords)} 含有=${nengenFound}`);
+        if (!nengenFound) {
+          console.log(`[SKIP] ${userName}: 念言がユーザーメッセージに未発見`);
+          continue;
+        }
+        // ─── 相談内容の判定 ──────────────────────────────────────
+        const CONSULT_KEYWORDS = ['？', '?', 'かな', 'でしょうか', 'ですか', '教えて'];
+        analysis.hasConsultation = allUserText.length >= 20 || CONSULT_KEYWORDS.some(kw => allUserText.includes(kw));
+        console.log(`[CONSULT] ${userName}: 文字数=${allUserText.length} hasConsultation=${analysis.hasConsultation}`);
+      } else {
+        analysis.hasConsultation = false;
+      }
+    }
+
     // ─── 判定5: コメントアウト判定（最新鑑定士メッセージのみ）──
 
     // /mtm・/do を含むコメントがある → スキップ
@@ -1534,6 +1560,7 @@ async function processUsers(page) {
       '【返信確認】',
       `ユーザー：${userName}`,
       `対象コメントアウト：${latestComment || '（不明）'}`,
+      ...(analysis.hasConsultation ? ['【相談あり】'] : []),
       '返信文：',
       '---',
       displayReplyText,
