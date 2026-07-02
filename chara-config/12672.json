@@ -1,0 +1,50 @@
+{
+  "charaId": "12672",
+  "name": "白鳳 静江",
+  "globalStopTime": { "start": "23:00", "end": "09:00" },
+  "receiveTimeLimit": {
+    "phases": ["mu1", "mu2"],
+    "minutes": 30
+  },
+  "phases": {
+    "mu1": {
+      "sinko2": {
+        "requiredKeywords": {
+          "name": ["フルネーム", "姓名"],
+          "birthdate": ["年", "月", "日", "/", "昭和", "平成", "令和"],
+          "surname": []
+        },
+        "requiredCount": 1,
+        "skipIfNotFound": true,
+        "actions": ["saveMemo1"]
+      },
+      "sinko3": {
+        "requiredKeywords": [
+          "北海道", "青森", "岩手", "宮城", "秋田", "山形", "福島",
+          "茨城", "栃木", "群馬", "埼玉", "千葉", "東京", "神奈川",
+          "新潟", "富山", "石川", "福井", "山梨", "長野", "岐阜",
+          "静岡", "愛知", "三重", "滋賀", "京都", "大阪", "兵庫",
+          "奈良", "和歌山", "鳥取", "島根", "岡山", "広島", "山口",
+          "徳島", "香川", "愛媛", "高知", "福岡", "佐賀", "長崎",
+          "熊本", "大分", "宮崎", "鹿児島", "沖縄", "県"
+        ],
+        "requiredCount": 1,
+        "skipIfNotFound": true,
+        "actions": ["saveMemo1"]
+      },
+      "do1": { "searchTarget": "12672mu1/do/1", "useCurrentRow": false }
+    },
+    "mu2": {
+      "ho": { "searchTarget": "12672mu2/sinko1", "useCurrentRow": true }
+    },
+    "yu1": {
+      "ho": { "searchTarget": "12672yu1/ho", "useCurrentRow": false }
+    },
+    "yu4": {
+      "ho1": { "searchTarget": "12672yu4/ho1", "useCurrentRow": false }
+    },
+    "yu9": {
+      "ho1": { "searchTarget": "12672yu9/ho/1", "useCurrentRow": false }
+    }
+  }
+}
