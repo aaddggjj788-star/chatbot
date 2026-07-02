@@ -9,7 +9,23 @@
     "12675mu2/sinko/10",
     "12675mu2/sinko/11",
     "12675mu2/sinko/12",
-    "12675mu2/kouhan/sinko"
+    "12675mu2/kouhan/sinko",
+    "12675yu1/sinko/65",
+    "12675yu1/sinko/66",
+    "12675yu1/sinko/67",
+    "12675yu1/sinko/68",
+    "12675yu1/sinko/69",
+    "12675yu1/sinko/70",
+    "12675yu1/sinko/71",
+    "12675yu1/sinko/72",
+    "12675yu1/sinko/73"
+  ],
+  "spanMatchRange": [
+    {
+      "from": "12675yu5/sinko/81",
+      "to": "12675yu5/sinko/259",
+      "minOffset": 1
+    }
   ],
   "receiveTimeLimit": {
     "phases": ["mu1", "mu2", "yu4mu"],

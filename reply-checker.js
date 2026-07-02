@@ -141,6 +141,35 @@ function parseCommentStr(commentStr) {
   return null;
 }
 
+// コメント一覧の中から sinko/his 番号が最大のコメントを返す（判定4のspanMatchRange解決用）
+function getLatestSinkoComment(comments) {
+  let best = null, bestNum = -1;
+  for (const c of comments || []) {
+    const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+    if (!m) continue;
+    const n = parseInt(m[1], 10);
+    if (n > bestNum) { bestNum = n; best = c; }
+  }
+  return best;
+}
+
+// 最新コメントがspanMatchRange設定の範囲（同一baseId/typeNum/type かつ num範囲内）に該当するか判定する
+function matchesSpanRange(comment, rangeList) {
+  if (!comment || !rangeList || rangeList.length === 0) return null;
+  const parsed = parseCommentStr(comment);
+  if (!parsed) return null;
+  for (const r of rangeList) {
+    const fromP = parseCommentStr(r.from);
+    const toP = parseCommentStr(r.to);
+    if (!fromP || !toP) continue;
+    if (parsed.baseId === fromP.baseId && parsed.typeNum === fromP.typeNum && parsed.type === fromP.type &&
+        parsed.num >= fromP.num && parsed.num <= toP.num) {
+      return r;
+    }
+  }
+  return null;
+}
+
 // 三段形式の特殊コメント解析（sinkoHo/noresHo/stop1/hisuMtm等のrequiredMessages対象）
 // 例: "12668yu1/sinko/ho"  → { actionKey:"sinkoHo",  ... }
 // 例: "12668yu1/stop/1"    → { actionKey:"stop1",    ... }
@@ -549,7 +578,9 @@ async function analyzeMessages(page) {
         const row = el.closest('tr') || el;
         const timeTd = row.querySelector('td[style*="width:110px"]');
         const timeText = timeTd ? timeTd.textContent.trim() : '';
-        msgs.push({ type: 'user', rowText: row.textContent || '', timeText });
+        const fullRowText = row.textContent || '';
+        const msgText = (timeText ? fullRowText.replace(timeText, '') : fullRowText).trim();
+        msgs.push({ type: 'user', rowText: fullRowText, msgText, timeText });
       }
     }
 
@@ -575,6 +606,12 @@ async function analyzeMessages(page) {
 
     // 最新鑑定士より上（新しい）のユーザーメッセージ
     const beforeUser = msgs.slice(0, firstKIdx).filter(m => m.type === 'user');
+
+    // 【追加判定】50文字以上メッセージチェック（判定1の後に追加）
+    // 最新鑑定士より上のユーザーメッセージ群の中に50文字以上のものが1通でもあれば対象外
+    if (beforeUser.some(m => (m.msgText || '').length >= 50)) {
+      return { result: { target: false, reason: 'ユーザーメッセージに50文字以上のものあり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+    }
 
     const km = msgs[firstKIdx];
     const bodyText = km.bodyText || '';
@@ -1068,17 +1105,31 @@ async function processUsers(page) {
     // ─── 判定4: span個数とユーザーメッセージ通数の照合 ──────────
     // subActionコメントあり（requiredMessages独自判定を使う）→ span照合スキップ
     // spanMatchExclude: 最新コメントアウトが除外リストに含まれる場合はスキップ
+    // spanMatchRange: 対象範囲内の場合、span個数 >= ユーザーメッセージ通数 - minOffset であればOK
     const _charaCfgForSpan = loadCharaConfig(kid);
     const _spanExcludeList = _charaCfgForSpan?.spanMatchExclude ?? [];
     const spanMatchExcluded = _spanExcludeList.length > 0 && allComments.some(c => _spanExcludeList.includes(c));
     if (spanMatchExcluded) {
       console.log(`[SPAN-CHECK] ${userName}: spanMatchExclude に一致 → span個数チェックをスキップ`);
     }
+    const _spanRangeList = _charaCfgForSpan?.spanMatchRange ?? [];
+    const _latestSinkoForSpan = getLatestSinkoComment(allComments);
+    const _spanRangeMatch = matchesSpanRange(_latestSinkoForSpan, _spanRangeList);
+
     const { spanCount, userMsgCount } = analysis;
     console.log(`[SPAN-CHECK] ${userName}: ユーザーメッセージ=${userMsgCount}通, span個数=${spanCount}`);
-    if (!spanMatchExcluded && !hasSubAction && spanCount > 0 && userMsgCount !== spanCount) {
-      console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount})とspan個数(${spanCount})が不一致`);
-      continue;
+    if (!spanMatchExcluded && !hasSubAction && spanCount > 0) {
+      if (_spanRangeMatch) {
+        const minOffset = _spanRangeMatch.minOffset ?? 0;
+        console.log(`[SPAN-CHECK] ${userName}: spanMatchRange一致 (${_spanRangeMatch.from}〜${_spanRangeMatch.to}, minOffset=${minOffset})`);
+        if (spanCount < userMsgCount - minOffset) {
+          console.log(`[SKIP] ${userName}: span個数(${spanCount}) < ユーザーメッセージ通数(${userMsgCount})-${minOffset}`);
+          continue;
+        }
+      } else if (userMsgCount !== spanCount) {
+        console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount})とspan個数(${spanCount})が不一致`);
+        continue;
+      }
     }
     if (hasSubAction && spanCount > 0 && userMsgCount !== spanCount) {
       console.log(`[SPAN-CHECK] ${userName}: subActionあり → span照合スキップ`);
@@ -1244,7 +1295,8 @@ async function processUsers(page) {
       // 例: "12668mu3sinko/ho"   → baseId=12668, typeNum=mu3sinko, hoType=ho
       // 例: "12668yu3/ho"        → baseId=12668, typeNum=yu3,      hoType=ho
       // 例: "12668mu2zenhan/ho1" → baseId=12668, typeNum=mu2zenhan, hoType=ho1
-      const hoMatch = hoComment.match(/^(\d+)((?:yu|mu)\d+\w*)\/(\w+)$/);
+      // 例: "12673yu1/sinko/ho"  → baseId=12673, typeNum=yu1,      hoType=ho（sinko挟み込み形式）
+      const hoMatch = hoComment.match(/^(\d+)((?:yu|mu)\d+\w*)\/(?:sinko\/)?(\w+)$/);
 
       let hoBaseId = null;
       let hoTypeNum = null;
