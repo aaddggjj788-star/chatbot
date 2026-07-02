@@ -567,13 +567,14 @@ async function analyzeMessages(page) {
         // hidden input の value 属性から生テキストを取得して正規表現で抽出する
         const trEl = el.tagName === 'TR' ? el : (el.closest('tr') || el);
         const trHtml = trEl.innerHTML; // デバッグ用
+        const trText = trEl.textContent || ''; // 既/未判定用
         const bodyInput = trEl.querySelector('input[type="hidden"][id^="body_"]');
         const bodyText = bodyInput ? bodyInput.value : '';
         const comments = [];
         const cre = /<!--([^>]+)-->/g;
         let cm;
         while ((cm = cre.exec(bodyText)) !== null) { comments.push(cm[1]); }
-        msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, bodyText, comments });
+        msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, trText, bodyText, comments });
       } else if (bg.includes('aaaaff') || bg.includes('ffaaaa')) {
         const row = el.closest('tr') || el;
         const timeTd = row.querySelector('td[style*="width:110px"]');
@@ -602,6 +603,11 @@ async function analyzeMessages(page) {
 
     if (firstKIdx === -1) {
       return { result: { target: false, reason: '鑑定士メッセージなし', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
+    }
+
+    // 【判定1.5】最新鑑定士メッセージの既/未チェック（「未」ならスキップ）
+    if (!(msgs[firstKIdx].trText || '').includes('既')) {
+      return { result: { target: false, reason: '最新鑑定士メッセージが未読', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
 
     // 最新鑑定士より上（新しい）のユーザーメッセージ
