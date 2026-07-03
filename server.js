@@ -30,6 +30,15 @@ try {
   console.warn('reply-checker のロードに失敗しました:', e.message);
 }
 
+// support-checker は依存パッケージが別環境にある場合があるため安全に読み込む
+let checkSupport = () => console.warn('support-checker 未ロード');
+try {
+  const sc = require('./support-checker');
+  checkSupport = sc.checkSupport;
+} catch (e) {
+  console.warn('support-checker のロードに失敗しました:', e.message);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const INQUIRY_POST_URL = ''; // 後で設定
@@ -274,6 +283,11 @@ async function handleEvent(event) {
   if (text === '返信チェック停止') {
     stopReplies();
     return lineReply(replyToken, '返信チェックを停止しました');
+  }
+
+  if (text === 'サポートチェック開始') {
+    checkSupport().catch(err => console.error('[SUPPORT] エラー:', err.message));
+    return lineReply(replyToken, 'サポートチェックを開始しました');
   }
 
   if (text === 'ステータス') {
