@@ -170,46 +170,70 @@ async function openMemberDetail(page) {
 // ─── 一覧テーブルから本日8:00以降の行を取得（3列目=送信(予定)日時）──
 // target: Page または Frame
 
+// 2段階で処理する:
+//   1) 3列目（送信(予定)日時）のテキストのみを解析し、本日8:00以降かどうかを判定する
+//      （この時点では本文列には一切触れない。「HTMLメールとしてみる」ボタンもクリックしない）
+//   2) 条件を満たした行についてのみ、本文列 input[name="body"] の value属性を取得する
 async function getTodayCampaignRows(target) {
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-
-  const rows = await target.evaluate((todayStr) => {
+  const { matched, debugRows } = await target.evaluate(() => {
+    // 日時テキストを month/day/hour/minute に分解する
+    // 対応形式: "2026/07/03 09:15" ・ "2026-07-03 09:15" ・ "07月03日 09時15分"（年なし可）
     function parseDateCell(text) {
-      const m = text.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\D+(\d{1,2}):(\d{2})/);
-      if (!m) return null;
-      return {
-        dateStr: `${m[1]}/${String(m[2]).padStart(2, '0')}/${String(m[3]).padStart(2, '0')}`,
-        hour: parseInt(m[4], 10),
-        minute: parseInt(m[5], 10),
-      };
+      let m = text.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[^\d]+(\d{1,2})[:時](\d{1,2})/);
+      if (m) {
+        return { month: parseInt(m[2], 10), day: parseInt(m[3], 10), hour: parseInt(m[4], 10), minute: parseInt(m[5], 10) };
+      }
+      m = text.match(/(?:\d{4}年)?(\d{1,2})月(\d{1,2})日[^\d]*(\d{1,2})時(\d{1,2})分/);
+      if (m) {
+        return { month: parseInt(m[1], 10), day: parseInt(m[2], 10), hour: parseInt(m[3], 10), minute: parseInt(m[4], 10) };
+      }
+      return null;
     }
 
-    const trs = Array.from(document.querySelectorAll('table tr'));
-    const results = [];
-    for (const tr of trs) {
+    // ナビゲーション等の無関係なtr混入を避けるため、本文input[name="body"]を持つ行だけを
+    // 「一覧テーブルの行」とみなす
+    const candidateRows = Array.from(document.querySelectorAll('tr')).filter(tr => tr.querySelector('input[name="body"]'));
+
+    const now = new Date();
+    const nowMonth = now.getMonth() + 1;
+    const nowDay = now.getDate();
+
+    const debugRows = [];
+    const matched = [];
+
+    for (const tr of candidateRows) {
       const cells = Array.from(tr.querySelectorAll('td'));
-      if (cells.length < 3) continue;
-
-      const dateCellText = (cells[2].textContent || '').trim(); // 3列目 = 送信(予定)日時
+      const dateCellText = cells[2] ? (cells[2].textContent || '').trim() : ''; // 3列目 = 送信(予定)日時
       const parsed = parseDateCell(dateCellText);
-      if (!parsed) continue;
-      if (parsed.dateStr !== todayStr) continue;
-      if (parsed.hour * 60 + parsed.minute < 8 * 60) continue; // 08:00未満は除外
+      debugRows.push({ dateCellText, parsed });
 
+      // ─── 1) 日時判定（本文はまだ読まない）───────────────────────
+      if (!parsed) continue;
+      const isToday = parsed.month === nowMonth && parsed.day === nowDay;
+      const isAfter8 = (parsed.hour * 60 + parsed.minute) >= 8 * 60;
+      if (!isToday || !isAfter8) continue;
+
+      // ─── 2) 条件を満たした行のみ本文列 input[name="body"] を取得 ──
       const bodyInput = tr.querySelector('input[name="body"]');
-      const bodyHtml = bodyInput ? bodyInput.value : '';
+      const bodyHtml = bodyInput ? (bodyInput.getAttribute('value') || bodyInput.value || '') : '';
 
       // タイトル列は明示セレクター指定なしのため、日時列以外の最初の非空セルを採用
       const titleCell = cells.find(td => td !== cells[2] && (td.textContent || '').trim().length > 0);
       const title = titleCell ? titleCell.textContent.trim() : '';
 
-      results.push({ dateText: dateCellText, title, bodyHtml });
+      matched.push({ dateText: dateCellText, title, bodyHtml });
     }
-    return results;
-  }, todayStr);
 
-  return rows;
+    return { matched, debugRows };
+  });
+
+  console.log(`[STEP6] 本文input保有行: ${debugRows.length}件`);
+  for (const r of debugRows) {
+    console.log(`[STEP6]   日時列="${r.dateCellText}" → 解析=${JSON.stringify(r.parsed)}`);
+  }
+  console.log(`[STEP6] 本日8時以降に該当: ${matched.length}件`);
+
+  return matched;
 }
 
 // ─── HTML本文からキャンペーン内容を抽出・解析 ───────────────────────
