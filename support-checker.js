@@ -321,9 +321,8 @@ async function getTodayCampaignRows(target) {
       const htmlButton = tr.querySelector('input[value="HTMLメールとしてみる"]');
       const body = extractBody(tr, htmlButton);
 
-      // タイトル列は明示セレクター指定なしのため、日時列以外の最初の非空セルを採用
-      const titleCell = cells.find(td => td !== cells[2] && (td.textContent || '').trim().length > 0);
-      const title = titleCell ? titleCell.textContent.trim() : '';
+      // タイトルは4列目（cells[3]）
+      const title = cells[3] ? (cells[3].textContent || '').trim() : '';
 
       matched.push({ dateText: dateCellText, title, bodyHtml: body.value, bodySource: body.source });
     }
@@ -344,8 +343,9 @@ async function getTodayCampaignRows(target) {
 }
 
 // ─── HTML本文からキャンペーン内容を抽出・解析 ───────────────────────
-// パターン: ①固定値（〇円以上購入→〇円分/ポイント追加） ②倍率（ポイント〇倍） ③割引（〇ポイント割引適用）
-// ボーナスルーレット・MAXボーナスルーレット関連の記述は除外する
+// 2種類のメールパターンを判別して解析する:
+//   パターン1: 補助ポイント（「○○円以上のご購入」＋「合計補助」＋「○○円分」）
+//   パターン2: 割引ポイント（「ptの割引」または「pt引き」）
 
 function htmlToLines(html) {
   if (!html) return [];
@@ -362,52 +362,95 @@ function htmlToLines(html) {
   return text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 }
 
-function parseCampaignHTML(html) {
-  const lines = htmlToLines(html);
+// パターン1: 「○○円以上のご購入」ごとに、次の閾値が現れるまでの範囲
+// （＝同じカードdiv相当）に限定して「合計補助」直後の「○○円分」のみを
+// 補助金額として採用する。これにより閾値と無関係な円表記の重複検出を防ぐ
+function parseSubsidyPattern(html) {
   const campaigns = [];
+  const thresholdRe = /([\d,]+)\s*円以上のご購入/g;
+  const matches = [...html.matchAll(thresholdRe)];
 
-  for (const line of lines) {
-    if (/ボーナスルーレット|MAXボーナスルーレット/.test(line)) {
-      console.log(`[CAMPAIGN] ルーレット関連のため除外: "${line.slice(0, 40)}"`);
-      continue;
-    }
+  for (let i = 0; i < matches.length; i++) {
+    const thresholdAmount = matches[i][1];
+    const scopeStart = matches[i].index + matches[i][0].length;
+    const scopeEnd = i + 1 < matches.length ? matches[i + 1].index : html.length;
+    const scope = html.slice(scopeStart, scopeEnd);
 
-    const amounts = [...line.matchAll(/([\d,]+)\s*円/g)].map(m => m[1]);
-    if (amounts.length === 0) continue;
-    const thresholdAmount = amounts[0];
+    const subsidyMatch = scope.match(/合計補助[\s\S]*?([\d,]+)\s*円分/);
+    if (!subsidyMatch) continue;
 
-    let type = null;
-    let value = null;
-
-    if (/割引/.test(line)) {
-      const m = line.match(/([\d,]+)\s*(?:ポイント|pt|Pt)[^。]{0,10}割引/);
-      if (m) { type = 'discount'; value = m[1]; }
-    } else if (/倍/.test(line)) {
-      const m = line.match(/([\d.]+)\s*倍/);
-      if (m) { type = 'multiplier'; value = m[1]; }
-    } else if (/追加|プレゼント|付与/.test(line)) {
-      const m = line.match(/([\d,]+)\s*円分/) || line.match(/([\d,]+)\s*(?:ポイント|pt|Pt)/);
-      if (m) {
-        type = 'fixed';
-        value = m[1];
-      } else if (amounts.length >= 2) {
-        type = 'fixed';
-        value = amounts[1];
-      }
-    }
-
-    if (!type || !value) continue;
-
-    let display;
-    if (type === 'fixed')      display = `${thresholdAmount}円購入 → ${value}pt追加`;
-    else if (type === 'multiplier') display = `${thresholdAmount}円購入 → ポイント${value}倍`;
-    else                        display = `${thresholdAmount}円購入 → ${value}ポイント割引適用`;
-
-    console.log(`[CAMPAIGN] 検出(${type}): "${display}" ← "${line.slice(0, 60)}"`);
-    campaigns.push({ type, thresholdAmount, value, display, raw: line });
+    const value = subsidyMatch[1];
+    const display = `${thresholdAmount}円以上 → ${value}円分補助`;
+    console.log(`[CAMPAIGN] 検出(subsidy): "${display}"`);
+    campaigns.push({ type: 'subsidy', thresholdAmount, value, display });
   }
 
   return campaigns;
+}
+
+// パターン2: 「■」で始まる条件行から割引ポイントを抽出する
+//   「■ 無償適用」→「○○ptの割引」（デフォルト3時間）
+//   「■ ○○円以上のご入金」→「○○pt引き」（デフォルト終日）
+function parseDiscountPattern(html) {
+  const campaigns = [];
+  const lines = htmlToLines(html);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.includes('■')) continue;
+
+    // 効果（○○ptの割引／○○pt引き）は条件行の次の行以降、次の■が
+    // 現れるまでの範囲に書かれているため、まとめて連結して検索する
+    let j = i + 1;
+    const scopeLines = [line];
+    while (j < lines.length && !lines[j].includes('■')) {
+      scopeLines.push(lines[j]);
+      j++;
+    }
+    const scopeText = scopeLines.join(' ');
+
+    const durationMatch = scopeText.match(/[（(]([^）)]+)[）)]/);
+    const duration = durationMatch ? durationMatch[1] : null;
+
+    if (/無償適用/.test(line)) {
+      const ptMatch = scopeText.match(/([\d,]+)\s*ptの?割引/);
+      if (!ptMatch) continue;
+      const value = ptMatch[1];
+      const finalDuration = duration || '3時間';
+      const display = `無償適用 → ${value}pt割引（${finalDuration}）`;
+      console.log(`[CAMPAIGN] 検出(discount): "${display}"`);
+      campaigns.push({ type: 'discount', condition: '無償適用', value, duration: finalDuration, display });
+      continue;
+    }
+
+    const depositMatch = line.match(/([\d,]+)\s*円以上のご入金/);
+    if (!depositMatch) continue;
+    const ptMatch = scopeText.match(/([\d,]+)\s*pt引き/);
+    if (!ptMatch) continue;
+
+    const thresholdAmount = depositMatch[1];
+    const value = ptMatch[1];
+    const finalDuration = duration || '終日';
+    const display = `${thresholdAmount}円以上 → ${value}pt割引（${finalDuration}）`;
+    console.log(`[CAMPAIGN] 検出(discount): "${display}"`);
+    campaigns.push({ type: 'discount', condition: `${thresholdAmount}円以上`, value, duration: finalDuration, display });
+  }
+
+  return campaigns;
+}
+
+function parseCampaignHTML(html) {
+  if (!html) return [];
+
+  if (html.includes('円以上のご購入') && html.includes('合計補助')) {
+    return parseSubsidyPattern(html);
+  }
+  if (html.includes('ptの割引') || html.includes('pt引き')) {
+    return parseDiscountPattern(html);
+  }
+
+  console.log('[CAMPAIGN] 既知のパターン（補助ポイント／割引ポイント）に一致しませんでした');
+  return [];
 }
 
 // ─── LINE通知メッセージ組み立て ─────────────────────────────────────
@@ -416,10 +459,11 @@ function buildResultMessage(userName, mails) {
   const lines = ['【キャンペーン解析結果】', `ユーザー：${userName}`, `配信メール数：${mails.length}件`, ''];
   mails.forEach((mail, i) => {
     lines.push(`【メール${i + 1}】タイトル：${mail.title}`);
-    lines.push('キャンペーン内容：');
     if (mail.campaigns.length === 0) {
       lines.push('（キャンペーン内容を検出できませんでした）');
     } else {
+      const label = mail.campaigns[0].type === 'subsidy' ? '補助ポイント：' : '割引ポイント：';
+      lines.push(label);
       for (const c of mail.campaigns) lines.push(`・${c.display}`);
     }
     lines.push('');
