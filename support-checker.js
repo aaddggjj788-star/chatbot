@@ -413,7 +413,7 @@ function parseDiscountPattern(html) {
     const duration = durationMatch ? durationMatch[1] : null;
 
     if (/無償適用/.test(line)) {
-      const ptMatch = scopeText.match(/([\d,]+)\s*ptの?割引/);
+      const ptMatch = scopeText.match(/([\d,]+)\s*pt\s*の?\s*割引/);
       if (!ptMatch) continue;
       const value = ptMatch[1];
       const finalDuration = duration || '3時間';
@@ -425,7 +425,7 @@ function parseDiscountPattern(html) {
 
     const depositMatch = line.match(/([\d,]+)\s*円以上のご入金/);
     if (!depositMatch) continue;
-    const ptMatch = scopeText.match(/([\d,]+)\s*pt引き/);
+    const ptMatch = scopeText.match(/([\d,]+)\s*pt\s*引き/);
     if (!ptMatch) continue;
 
     const thresholdAmount = depositMatch[1];
@@ -445,7 +445,12 @@ function parseCampaignHTML(html) {
   if (html.includes('円以上のご購入') && html.includes('合計補助')) {
     return parseSubsidyPattern(html);
   }
-  if (html.includes('ptの割引') || html.includes('pt引き')) {
+
+  // タグ除去後のテキストで判定する（例: "<b>75</b>pt<br>引き" のように
+  // 数字とpt・割引/引きの間がタグで分断されていると、生HTMLへの
+  // 単純な部分一致では検出できないため）
+  const plainText = htmlToLines(html).join(' ');
+  if (/pt\s*の?\s*割引/.test(plainText) || /pt\s*引き/.test(plainText)) {
     return parseDiscountPattern(html);
   }
 
@@ -460,7 +465,7 @@ function buildResultMessage(userName, mails) {
   mails.forEach((mail, i) => {
     lines.push(`【メール${i + 1}】タイトル：${mail.title}`);
     if (mail.campaigns.length === 0) {
-      lines.push('（キャンペーン内容を検出できませんでした）');
+      lines.push('（キャンペーン内容なし）');
     } else {
       const label = mail.campaigns[0].type === 'subsidy' ? '補助ポイント：' : '割引ポイント：';
       lines.push(label);
