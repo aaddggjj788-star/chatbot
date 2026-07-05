@@ -367,20 +367,31 @@ async function checkSupport() {
 
     await mainFrame.click('input[name="info_mess"]');
 
-    const popup = await popupPromise;
+    const [popup, navResult] = await Promise.all([popupPromise, navPromise]);
+    console.log(`[STEP5] popup発生: ${!!popup}`);
+    console.log(`[STEP5] navigation発生: ${!!navResult}`);
+
     let mailEditPage;
     if (popup) {
       await popup.waitForLoadState('load').catch(() => {});
       console.log(`[STEP5] 新しいタブへ遷移: ${popup.url()}`);
       mailEditPage = popup;
     } else {
-      await navPromise;
       console.log(`[STEP5] 同一ページ内で遷移: ${page.url()}`);
       mailEditPage = page;
     }
 
     console.log('[STEP6] mg_mail_edit.phpのtableから本日8時以降の配信メール一覧を取得');
-    await mailEditPage.waitForSelector('table', { timeout: 10000 });
+    try {
+      await mailEditPage.waitForSelector('table', { timeout: 10000 });
+    } catch (e) {
+      console.log(`[STEP6] table待機タイムアウト（URL: ${mailEditPage.url()}）`);
+      throw e;
+    } finally {
+      const tableCount = await mailEditPage.evaluate(() => document.querySelectorAll('table').length).catch(() => -1);
+      console.log(`[STEP6] mailEditPage URL: ${mailEditPage.url()}`);
+      console.log(`[STEP6] table数: ${tableCount}`);
+    }
     const mailRows = await getTodayCampaignRows(mailEditPage);
     console.log(`[STEP6] 対象件数: ${mailRows.length}件`);
 
