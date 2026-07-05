@@ -343,135 +343,109 @@ async function getTodayCampaignRows(target) {
 }
 
 // ─── HTML本文からキャンペーン内容を抽出・解析 ───────────────────────
-// input[name="body"]のvalueはHTMLタグを含む生のHTML文字列であるため、
-// Node.js側の正規表現だけでは<b>等のインラインタグや崩れたネスト構造を
-// 取りこぼす（例: 30,000円行だけ<b>で囲まれている等）。
-// そのためevalTarget（Page または Frame）のpage.evaluate()内で
-// ブラウザ側のDOMParserを使ってHTMLを解析し、doc.querySelectorAllで
-// 取得した要素のtextContentをもとに判定する。
+// input[name="body"]のvalueはHTMLタグを含む生のHTML文字列。
+// 以前はpage.evaluate()内でDOMParser＋ブロック要素境界により「行」を
+// 復元してから条件・効果を対応付けていたが、タグ構成によっては複数件が
+// 1つの「行」に混在し、非グローバルmatch()が最初の1件しか拾えず
+// 取りこぼすケースがあった（例: ブラウザコンソールでは
+// body.match(/(\d+)pt(?:の割引|引き|割引)/g)が4件ヒットするのに
+// Playwright側の解析では2件しか取得できない）。
+// タグ構造に依存しないよう、生HTML文字列に対して正規表現で
+// 直接パターンマッチする方式に変更する。
 //
 // 2種類のメールパターンを判別して解析する:
 //   パターン1: 補助ポイント（「○○円以上のご購入」＋「合計補助」＋「○○円分」）
-//   パターン2: 割引ポイント（「ptの割引」または「pt引き」）
+//   パターン2: 割引ポイント（「○○ptの割引」「○○pt割引」「○○pt引き」）
 //
-// evalTarget: page.evaluate()を持つPlaywrightのPageまたはFrame
 // 戻り値: { subsidies: [...], discounts: [...] }
 
-async function parseCampaignHTML(evalTarget, bodyHtml) {
+const PT_EFFECT_RE = /([\d,]+)\s*pt\s*(?:の\s*割引|割引|引き)/;
+
+// <b>等の装飾タグが金額とキーワードの間に割り込むと（例: "合計補助 <b>500</b>円分"）
+// タグを残したままでは正規表現が数字と後続キーワードを連続と認識できず
+// マッチに失敗するため、解析前にタグを除去したプレーンテキストへ変換する。
+// 「■」の出現位置や各キーワードの前後関係だけを見るこの解析方式では
+// タグによる行・ブロック構造は不要なため、除去してしまって問題ない
+function stripTags(html) {
+  return html.replace(/<[^>]+>/g, '');
+}
+
+// 「○○円以上のご購入」ごとに、次の閾値が現れるまでの範囲（＝同じカード
+// 相当）に限定して「合計補助」直後の「○○円分」のみを補助金額として
+// 採用する。これにより閾値と無関係な円表記の重複検出を防ぐ
+function parseSubsidyPattern(text) {
+  const subsidies = [];
+  const thresholdRe = /([\d,]+)\s*円以上のご購入/g;
+  const matches = [...text.matchAll(thresholdRe)];
+
+  for (let i = 0; i < matches.length; i++) {
+    const thresholdAmount = matches[i][1];
+    const scopeStart = matches[i].index + matches[i][0].length;
+    const scopeEnd = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const scope = text.slice(scopeStart, scopeEnd);
+
+    const subsidyMatch = scope.match(/合計補助[\s\S]*?([\d,]+)\s*円分/);
+    if (!subsidyMatch) continue;
+
+    const value = subsidyMatch[1];
+    const display = `${thresholdAmount}円以上 → ${value}円分補助`;
+    subsidies.push({ type: 'subsidy', thresholdAmount, value, display });
+  }
+
+  return subsidies;
+}
+
+// 「■」を区切りとして条件ブロックごとにテキストを分割し、各ブロック内で
+// 条件（無償適用／○○円以上のご入金）と効果（○○pt割引・引き）を抽出する。
+// 「■」は本文中に条件の数だけしか現れない区切り文字であるため、
+// タグ除去後のテキストに対して行っても件数分だけ正しく分割できる
+//   「■ 無償適用」→「○○ptの割引／○○pt割引」（デフォルト3時間）
+//   「■ ○○円以上のご入金」→「○○pt引き／○○pt割引」（デフォルト終日）
+function parseDiscountPattern(text) {
+  const discounts = [];
+  const segments = text.split('■').slice(1); // 最初の■より前はどの条件にも属さないため除外
+
+  for (const segment of segments) {
+    const durationMatch = segment.match(/[（(]([^）)]+)[）)]/);
+    const duration = durationMatch ? durationMatch[1] : null;
+
+    if (/無償適用/.test(segment)) {
+      const ptMatch = segment.match(PT_EFFECT_RE);
+      if (!ptMatch) continue;
+      const value = ptMatch[1];
+      const finalDuration = duration || '3時間';
+      const display = `無償適用 → ${value}pt割引（${finalDuration}）`;
+      discounts.push({ type: 'discount', condition: '無償適用', value, duration: finalDuration, display });
+      continue;
+    }
+
+    const depositMatch = segment.match(/([\d,]+)\s*円以上のご入金/);
+    if (!depositMatch) continue;
+    const ptMatch = segment.match(PT_EFFECT_RE);
+    if (!ptMatch) continue;
+
+    const thresholdAmount = depositMatch[1];
+    const value = ptMatch[1];
+    const finalDuration = duration || '終日';
+    const display = `${thresholdAmount}円以上 → ${value}pt割引（${finalDuration}）`;
+    discounts.push({ type: 'discount', condition: `${thresholdAmount}円以上`, value, duration: finalDuration, display });
+  }
+
+  return discounts;
+}
+
+function parseCampaignHTML(bodyHtml) {
   if (!bodyHtml) return { subsidies: [], discounts: [] };
 
-  return evalTarget.evaluate((html) => {
-    const parser = new DOMParser();
-    // <tr>/<td>を含む断片が<table>で囲まれていない場合、ブラウザの
-    // テーブル構文解析によりtr/td構造が保持されず（foster parenting）
-    // テキストが1行に潰れてしまうため、常にtable/tbodyで包んでから解析する
-    // （既にhtml側に<table>タグが含まれていてもネスト解析され問題ない）
-    const doc = parser.parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html');
+  const text = stripTags(bodyHtml);
 
-    // ブロック要素（p/div/li/td/tr）の境界とbrで「行」を区切る。
-    // b/span等のインライン要素は素通りしてtextContentに合流させるため、
-    // <b>タグの有無に関わらず正しく1つの「行」として扱われる
-    const BLOCK_TAGS = new Set(['P', 'DIV', 'LI', 'TD', 'TR']);
-    const lines = [];
-    let buffer = '';
-    function flush() {
-      const t = buffer.trim();
-      if (t.length > 0) lines.push(t);
-      buffer = '';
-    }
-    function walk(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        buffer += node.textContent;
-        return;
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) return;
-      if (node.tagName === 'BR') {
-        flush();
-        return;
-      }
-      for (const child of node.childNodes) walk(child);
-      if (BLOCK_TAGS.has(node.tagName)) flush();
-    }
-    walk(doc.body);
-    flush();
+  const subsidies = (text.includes('円以上のご購入') && text.includes('合計補助'))
+    ? parseSubsidyPattern(text)
+    : [];
 
-    const fullText = lines.join('\n');
-    const subsidies = [];
-    const discounts = [];
+  const discounts = PT_EFFECT_RE.test(text) ? parseDiscountPattern(text) : [];
 
-    // パターン1: 「○○円以上のご購入」ごとに、次の閾値が現れるまでの範囲
-    // （＝同じカード相当）に限定して「合計補助」直後の「○○円分」のみを
-    // 補助金額として採用する。これにより閾値と無関係な円表記の重複検出を防ぐ
-    if (fullText.includes('円以上のご購入') && fullText.includes('合計補助')) {
-      const thresholdRe = /([\d,]+)\s*円以上のご購入/;
-      for (let i = 0; i < lines.length; i++) {
-        const m = lines[i].match(thresholdRe);
-        if (!m) continue;
-        const thresholdAmount = m[1];
-
-        let scopeEnd = lines.length;
-        for (let k = i + 1; k < lines.length; k++) {
-          if (thresholdRe.test(lines[k])) { scopeEnd = k; break; }
-        }
-        const scopeText = lines.slice(i, scopeEnd).join(' ');
-
-        const subsidyMatch = scopeText.match(/合計補助[\s\S]*?([\d,]+)\s*円分/);
-        if (!subsidyMatch) continue;
-
-        const value = subsidyMatch[1];
-        const display = `${thresholdAmount}円以上 → ${value}円分補助`;
-        subsidies.push({ type: 'subsidy', thresholdAmount, value, display });
-      }
-    }
-
-    // パターン2: 「■」で始まる条件行から割引ポイントを抽出する
-    //   「■ 無償適用」→「○○ptの割引／○○pt割引」（デフォルト3時間）
-    //   「■ ○○円以上のご入金」→「○○pt引き／○○pt割引」（デフォルト終日）
-    // 効果表現は「の割引」「割引」「引き」のいずれの表記にも対応する
-    const PT_EFFECT_RE = /([\d,]+)\s*pt\s*(?:の\s*割引|割引|引き)/;
-    if (PT_EFFECT_RE.test(fullText)) {
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.includes('■')) continue;
-
-        // 効果（○○ptの割引／○○pt引き）は条件行の次の行以降、次の■が
-        // 現れるまでの範囲に書かれているため、まとめて連結して検索する
-        let j = i + 1;
-        const scopeLines = [line];
-        while (j < lines.length && !lines[j].includes('■')) {
-          scopeLines.push(lines[j]);
-          j++;
-        }
-        const scopeText = scopeLines.join(' ');
-
-        const durationMatch = scopeText.match(/[（(]([^）)]+)[）)]/);
-        const duration = durationMatch ? durationMatch[1] : null;
-
-        if (/無償適用/.test(line)) {
-          const ptMatch = scopeText.match(PT_EFFECT_RE);
-          if (!ptMatch) continue;
-          const value = ptMatch[1];
-          const finalDuration = duration || '3時間';
-          const display = `無償適用 → ${value}pt割引（${finalDuration}）`;
-          discounts.push({ type: 'discount', condition: '無償適用', value, duration: finalDuration, display });
-          continue;
-        }
-
-        const depositMatch = line.match(/([\d,]+)\s*円以上のご入金/);
-        if (!depositMatch) continue;
-        const ptMatch = scopeText.match(PT_EFFECT_RE);
-        if (!ptMatch) continue;
-
-        const thresholdAmount = depositMatch[1];
-        const value = ptMatch[1];
-        const finalDuration = duration || '終日';
-        const display = `${thresholdAmount}円以上 → ${value}pt割引（${finalDuration}）`;
-        discounts.push({ type: 'discount', condition: `${thresholdAmount}円以上`, value, duration: finalDuration, display });
-      }
-    }
-
-    return { subsidies, discounts };
-  }, bodyHtml);
+  return { subsidies, discounts };
 }
 
 // ─── LINE通知メッセージ組み立て ─────────────────────────────────────
@@ -589,14 +563,12 @@ async function checkSupport() {
     }
 
     console.log('[STEP7-8] 各メールの本文からキャンペーン内容を解析');
-    const mails = [];
-    for (let i = 0; i < mailRows.length; i++) {
-      const row = mailRows[i];
-      const { subsidies, discounts } = await parseCampaignHTML(mailPage, row.bodyHtml);
+    const mails = mailRows.map((row, i) => {
+      const { subsidies, discounts } = parseCampaignHTML(row.bodyHtml);
       const campaigns = [...subsidies, ...discounts];
       console.log(`[CAMPAIGN] メール${i + 1} "${row.title}" (${row.dateText}): ${campaigns.length}件検出（補助${subsidies.length}／割引${discounts.length}）`);
-      mails.push({ title: row.title || `メール${i + 1}`, campaigns });
-    }
+      return { title: row.title || `メール${i + 1}`, campaigns };
+    });
 
     console.log('[STEP9] LINEに解析結果を通知');
     await sendLine(buildResultMessage(target.userName, mails));
