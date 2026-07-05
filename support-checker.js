@@ -352,19 +352,36 @@ async function checkSupport() {
     console.log('[STEP4] ope_main内のユーザー名リンクをクリック');
     await openMemberDetail(page);
 
-    // 「お知らせメッセージ編集」はope_mainフレーム内のボタンで、
-    // クリックしてもURLは変わらずope_mainフレーム内の表示がお知らせメール一覧に
-    // 切り替わるだけ（返信補助のreplay()と同じAjax切替パターン）。
-    // popup発生を待つclickAndFollow()は使わず、ope_mainフレームを直接操作する。
+    // 「お知らせメッセージ編集」はope_mainフレーム内のボタンだが、クリックすると
+    // ope_mainフレーム内には留まらず、mg_mail_edit.php?u_id=...&info_mess=... という
+    // 新しいページへ遷移する（同一タブ内の遷移／新タブでの遷移のどちらもあり得るため
+    // 両方を待ち受け、遷移先ページを直接操作する）。
     console.log('[STEP5] 「お知らせメッセージ編集」ボタンをクリック');
     const mainFrame = page.frame({ name: 'ope_main' });
     if (!mainFrame) throw new Error('ope_mainフレームが取得できません');
     await mainFrame.waitForSelector('input[name="info_mess"]', { timeout: 10000 });
+
+    const browserContext = page.context();
+    const popupPromise = browserContext.waitForEvent('page', { timeout: 10000 }).catch(() => null);
+    const navPromise = page.waitForNavigation({ waitUntil: 'load', timeout: 10000 }).catch(() => null);
+
     await mainFrame.click('input[name="info_mess"]');
 
-    console.log('[STEP6] ope_mainフレーム内でtable表示を待機し、本日8時以降の配信メール一覧を取得');
-    await mainFrame.waitForSelector('table', { timeout: 10000 });
-    const mailRows = await getTodayCampaignRows(mainFrame);
+    const popup = await popupPromise;
+    let mailEditPage;
+    if (popup) {
+      await popup.waitForLoadState('load').catch(() => {});
+      console.log(`[STEP5] 新しいタブへ遷移: ${popup.url()}`);
+      mailEditPage = popup;
+    } else {
+      await navPromise;
+      console.log(`[STEP5] 同一ページ内で遷移: ${page.url()}`);
+      mailEditPage = page;
+    }
+
+    console.log('[STEP6] mg_mail_edit.phpのtableから本日8時以降の配信メール一覧を取得');
+    await mailEditPage.waitForSelector('table', { timeout: 10000 });
+    const mailRows = await getTodayCampaignRows(mailEditPage);
     console.log(`[STEP6] 対象件数: ${mailRows.length}件`);
 
     if (mailRows.length === 0) {
