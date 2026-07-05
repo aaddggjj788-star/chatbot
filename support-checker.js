@@ -490,21 +490,18 @@ async function checkSupport() {
     const infoMessCount = await mainFrame.locator('input[name="info_mess"]').count();
     console.log('[DEBUG] info_mess件数:', infoMessCount);
 
-    // info_messクリックは新しいタブではなく、同じpage内でmg_mail_edit.phpへ遷移する
+    // info_messボタンはope_mainフレーム内にあるため、遷移後のURLも
+    // page.url()ではなくmainFrame.url()で確認する必要がある
     console.log('[STEP5] 「お知らせメッセージ編集」ボタンをクリック');
-    console.log('[DEBUG] クリック前URL:', page.url());
-    const navigationPromise = page.waitForNavigation({ waitUntil: 'load', timeout: 15000 }).catch(() => null);
+    console.log('[DEBUG] クリック前URL:', mainFrame.url());
     await mainFrame.click('input[name="info_mess"]');
-    await navigationPromise;
+    await new Promise(r => setTimeout(r, 3000));
 
-    await new Promise(r => setTimeout(r, 5000));
-    console.log('[DEBUG] 5秒後URL:', page.url());
+    const frameUrl = mainFrame.url();
+    console.log('[STEP5] フレームURL:', frameUrl);
 
-    const currentUrl = page.url();
-    console.log('[STEP5] 遷移後URL:', currentUrl);
-
-    // URLにmg_mail_editが含まれていれば同じpageを使用
-    const mailPage = currentUrl.includes('mg_mail_edit') ? page : null;
+    // frameUrlにmg_mail_editが含まれていればmainFrameをmailPageとして使用
+    const mailPage = frameUrl.includes('mg_mail_edit') ? mainFrame : null;
 
     if (!mailPage) {
       console.log('[STEP5] mg_mail_edit.phpへの遷移が確認できませんでした');
