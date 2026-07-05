@@ -1032,7 +1032,7 @@ async function processUsers(page) {
     }
 
     // ─── キャラ別停止時間チェック ──────────────────────────────────
-    if (isInStopTime(kid)) {
+    if (process.env.DISABLE_STOP_TIME !== 'true' && isInStopTime(kid)) {
       console.log(`[SKIP] ${userName}: 停止時間帯のためスキップ (k_id=${kid})`);
       continue;
     }
