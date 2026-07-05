@@ -487,12 +487,19 @@ async function checkSupport() {
     console.log('[STEP4] ope_main内のユーザー名リンクをクリックし、会員詳細ページの表示を待機');
     const mainFrame = await openMemberDetail(page);
 
+    // info_messクリックはope_mainフレーム内には留まらず、mg_mail_edit.phpという
+    // 独立したページ（iframeなし）を新規に開く
     console.log('[STEP5] 「お知らせメッセージ編集」ボタンをクリック');
-    await mainFrame.click('input[name="info_mess"]');
-    await mainFrame.waitForSelector('table', { timeout: 10000 });
+    const [mailPage] = await Promise.all([
+      page.context().waitForEvent('page'),
+      mainFrame.click('input[name="info_mess"]'),
+    ]);
+    await mailPage.waitForLoadState('load');
+    console.log(`[STEP5] mg_mail_edit.phpへ遷移: ${mailPage.url()}`);
 
-    console.log('[STEP6] ope_mainフレーム内のtableから本日8時以降の配信メール一覧を取得');
-    const mailRows = await getTodayCampaignRows(mainFrame);
+    console.log('[STEP6] mg_mail_edit.phpのtableから本日8時以降の配信メール一覧を取得');
+    await mailPage.waitForSelector('table', { timeout: 10000 });
+    const mailRows = await getTodayCampaignRows(mailPage);
     console.log(`[STEP6] 対象件数: ${mailRows.length}件`);
     if (mailRows.length > 0) {
       console.log(`[STEP6] 1行目 送信日時: "${mailRows[0].dateText}"`);
