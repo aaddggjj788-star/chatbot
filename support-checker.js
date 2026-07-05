@@ -168,6 +168,12 @@ async function getLatestUserMessage(page) {
   }
 
   try {
+    await mainFrame.waitForSelector('div.bodyNaibu', { timeout: 10000 });
+  } catch (_) {
+    console.log('[SUPPORT] div.bodyNaibu の表示待機がタイムアウトしました');
+  }
+
+  try {
     const texts = await mainFrame.evaluate(() => {
       function normStyle(el) {
         return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
@@ -184,10 +190,14 @@ async function getLatestUserMessage(page) {
       const all = Array.from(document.querySelectorAll('div.bodyNaibu'));
       const userOnly = all.filter(el => !isKanteishiAncestor(el));
       return userOnly
-        .map(el => el.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim())
+        .map(el => (el.textContent || '').trim())
         .filter(t => t.length > 0);
     });
-    return texts[0] || '';
+
+    const latest = texts[0] || '';
+    console.log(`[SUPPORT] div.bodyNaibu 取得件数: ${texts.length}件`);
+    console.log(`[SUPPORT] 最新メッセージ(先頭100文字): "${latest.slice(0, 100)}"`);
+    return latest;
   } catch (e) {
     console.error('[ERROR] getLatestUserMessage:', e.message);
     return '';
