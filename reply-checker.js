@@ -615,6 +615,10 @@ async function analyzeMessages(page) {
 
     // 【追加判定】50文字以上メッセージチェック（判定1の後に追加）
     // 最新鑑定士より上のユーザーメッセージ群の中に50文字以上のものが1通でもあれば対象外
+    beforeUser.forEach((m) => {
+      const text = m.msgText || '';
+      console.log('[DEBUG] メッセージ文字数:', text.length, '内容:', text.slice(0, 50));
+    });
     if (beforeUser.some(m => (m.msgText || '').length >= 50)) {
       return { result: { target: false, reason: 'ユーザーメッセージに50文字以上のものあり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
     }
