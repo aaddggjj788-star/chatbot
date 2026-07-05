@@ -88,13 +88,15 @@ async function openSupportPage(page) {
   return page;
 }
 
-// ─── ope_menuフレーム内の#ffffe0行数を数える ─────────────────────────
+// ─── ope_menuフレーム内の#ffffe0行からstringID一覧を取得 ─────────────
+// onclick="javascript:replay('108894512609')" からstringIDを抽出する
+// （reply-checker.js の getTargetUsers と同じ抽出方法）
 
-async function countFfffe0Rows(page) {
+async function getFfffe0Candidates(page) {
   const menuFrame = page.frame({ name: 'ope_menu' });
   if (!menuFrame) {
     console.log('[SUPPORT] ope_menuフレームが取得できません');
-    return 0;
+    return [];
   }
 
   try {
@@ -103,57 +105,73 @@ async function countFfffe0Rows(page) {
     console.log('[SUPPORT] #ffffe0 のセルが見つかりません（タイムアウト）');
   }
 
-  return menuFrame.evaluate(() => {
+  const candidates = await menuFrame.evaluate(() => {
     const rows = Array.from(document.querySelectorAll('tr'));
-    return rows.filter(row => {
+    const results = [];
+    for (const row of rows) {
       const cells = Array.from(row.querySelectorAll('td'));
-      return cells.some(td => (td.getAttribute('style') || '').includes('background-color: #ffffe0'));
-    }).length;
+      const isYellow = cells.some(td => (td.getAttribute('style') || '').includes('background-color: #ffffe0'));
+      if (!isYellow) continue;
+
+      const onclickEl = row.querySelector('[onclick*="replay"]');
+      if (!onclickEl) continue;
+      const onclickVal = onclickEl.getAttribute('onclick') || '';
+      const m = onclickVal.match(/replay\(['"]([^'"]+)['"]\)/);
+      if (!m) continue;
+
+      const link = row.querySelector('a');
+      const userName = (link ? link.textContent : onclickEl.textContent).trim();
+
+      results.push({ userName, stringID: m[1] });
+    }
+    return results;
   });
+
+  console.log(`[SUPPORT] #ffffe0 候補: ${candidates.length}件`);
+  return candidates;
 }
 
-// ─── ope_menuフレーム内の#ffffe0行のうちindex番目をクリック ─────────
-// スキップ後も残りの候補を順にクリックできるよう、行はindexで指定する
+// ─── ope_menuフレーム内でreplay(stringID)相当のform submitを実行し、 ──
+// ope_mainフレームの#bodyKakuninが更新されるのを待つ
+// （reply-checker.js の processUsers と同じAjax更新待ちパターン）
 
-async function clickTargetUserAtIndex(page, index) {
+async function clickTargetUserByStringID(page, stringID) {
   const menuFrame = page.frame({ name: 'ope_menu' });
   if (!menuFrame) {
     console.log('[SUPPORT] ope_menuフレームが取得できません');
-    return null;
+    return false;
+  }
+  const mainFrame = page.frame({ name: 'ope_main' });
+  if (!mainFrame) {
+    console.log('[SUPPORT] ope_mainフレームが取得できません');
+    return false;
   }
 
-  const result = await menuFrame.evaluate((index) => {
-    const rows = Array.from(document.querySelectorAll('tr'));
-    const yellowRows = rows.filter(row => {
-      const cells = Array.from(row.querySelectorAll('td'));
-      return cells.some(td => (td.getAttribute('style') || '').includes('background-color: #ffffe0'));
-    });
-    const row = yellowRows[index];
-    if (!row) return { found: false, userName: '', method: '' };
+  // submit前に#bodyKakuninを空にする（前候補の内容の誤検知防止）
+  await mainFrame.evaluate(() => {
+    const el = document.querySelector('#bodyKakunin');
+    if (el) el.innerHTML = '';
+  });
 
-    const link = row.querySelector('a');
-    const onclickEl = row.querySelector('[onclick]');
-    const userName = (link ? link.textContent : (onclickEl ? onclickEl.textContent : '')).trim();
-
-    if (link) {
-      link.click();
-      return { found: true, userName, method: 'a.click()' };
-    }
-    if (onclickEl) {
-      onclickEl.click();
-      return { found: true, userName, method: 'onclickEl.click()' };
-    }
-    return { found: true, userName, method: 'クリック対象なし' };
-  }, index);
-
-  if (!result.found) {
-    console.log(`[SUPPORT] #ffffe0[${index}] の行が見つかりません`);
-    return null;
+  try {
+    await menuFrame.evaluate((sid) => {
+      document.getElementById(sid).submit();
+    }, stringID);
+  } catch (e) {
+    console.log(`[SUPPORT] stringID="${stringID}" のform submitに失敗: ${e.message}`);
+    return false;
   }
 
-  console.log(`[SUPPORT] #ffffe0[${index}] 検出: ユーザー名="${result.userName}" (${result.method})`);
-  await page.waitForTimeout(1000); // ope_mainのAjax更新待ち
-  return { userName: result.userName };
+  try {
+    await mainFrame.waitForFunction(() => {
+      const el = document.querySelector('#bodyKakunin');
+      return el !== null && el.innerHTML.length > 0;
+    }, { timeout: 15000 });
+  } catch (_) {
+    console.log(`[SUPPORT] stringID="${stringID}": #bodyKakunin のタイムアウト`);
+  }
+
+  return true;
 }
 
 // ─── ope_mainフレーム内のdiv.bodyNaibuからユーザーの最新メッセージ本文を取得 ──
@@ -165,12 +183,6 @@ async function getLatestUserMessage(page) {
   if (!mainFrame) {
     console.log('[SUPPORT] ope_mainフレームが取得できません');
     return '';
-  }
-
-  try {
-    await mainFrame.waitForSelector('div.bodyNaibu', { timeout: 10000 });
-  } catch (_) {
-    console.log('[SUPPORT] div.bodyNaibu の表示待機がタイムアウトしました');
   }
 
   try {
@@ -426,30 +438,29 @@ async function checkSupport() {
     await openSupportPage(page);
 
     console.log('[STEP3] #ffffe0 の行を検出してユーザー名欄をクリック');
-    const candidateCount = await countFfffe0Rows(page);
-    if (candidateCount === 0) {
+    const candidates = await getFfffe0Candidates(page);
+    if (candidates.length === 0) {
       await sendLine('サポート画面に対象ユーザー（#ffffe0）が見つかりませんでした');
       return;
     }
-    console.log(`[STEP3] #ffffe0 候補: ${candidateCount}件`);
 
     // ─── STEP3-4間: ユーザーの最新問い合わせ本文がポイント関連かを確認 ──
     // 該当しない候補はスキップし、次の#ffffe0行を確認する
     let target = null;
-    for (let i = 0; i < candidateCount; i++) {
-      const clicked = await clickTargetUserAtIndex(page, i);
+    for (const candidate of candidates) {
+      const clicked = await clickTargetUserByStringID(page, candidate.stringID);
       if (!clicked) continue;
 
       const latestMessage = await getLatestUserMessage(page);
-      console.log(`[STEP3] ${clicked.userName} の最新メッセージ: "${latestMessage.slice(0, 80)}"`);
+      console.log(`[STEP3] ${candidate.userName} の最新メッセージ: "${latestMessage.slice(0, 80)}"`);
 
       if (!isPointRelatedInquiry(latestMessage)) {
-        console.log(`[STEP3] ${clicked.userName}: ポイント関連の問い合わせではないためスキップ`);
+        console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせではないためスキップ`);
         continue;
       }
 
-      console.log(`[STEP3] ${clicked.userName}: ポイント関連の問い合わせと判定`);
-      target = clicked;
+      console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせと判定`);
+      target = candidate;
       break;
     }
 
