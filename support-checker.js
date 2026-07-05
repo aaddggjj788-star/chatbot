@@ -350,14 +350,21 @@ async function checkSupport() {
     }
 
     console.log('[STEP4] ope_main内のユーザー名リンクをクリック');
-    let detailTarget = await openMemberDetail(page);
+    await openMemberDetail(page);
 
+    // 「お知らせメッセージ編集」はope_mainフレーム内のボタンで、
+    // クリックしてもURLは変わらずope_mainフレーム内の表示がお知らせメール一覧に
+    // 切り替わるだけ（返信補助のreplay()と同じAjax切替パターン）。
+    // popup発生を待つclickAndFollow()は使わず、ope_mainフレームを直接操作する。
     console.log('[STEP5] 「お知らせメッセージ編集」ボタンをクリック');
-    await detailTarget.waitForSelector('input[name="info_mess"]', { timeout: 10000 });
-    detailTarget = await clickAndFollow(detailTarget, 'input[name="info_mess"]');
+    const mainFrame = page.frame({ name: 'ope_main' });
+    if (!mainFrame) throw new Error('ope_mainフレームが取得できません');
+    await mainFrame.waitForSelector('input[name="info_mess"]', { timeout: 10000 });
+    await mainFrame.click('input[name="info_mess"]');
 
-    console.log('[STEP6] 本日8時以降の配信メール一覧を取得');
-    const mailRows = await getTodayCampaignRows(detailTarget);
+    console.log('[STEP6] ope_mainフレーム内でtable表示を待機し、本日8時以降の配信メール一覧を取得');
+    await mainFrame.waitForSelector('table', { timeout: 10000 });
+    const mailRows = await getTodayCampaignRows(mainFrame);
     console.log(`[STEP6] 対象件数: ${mailRows.length}件`);
 
     if (mailRows.length === 0) {
