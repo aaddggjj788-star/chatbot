@@ -612,6 +612,8 @@ async function analyzeMessages(page) {
 
     // 最新鑑定士より上（新しい）のユーザーメッセージ
     const beforeUser = msgs.slice(0, firstKIdx).filter(m => m.type === 'user');
+    console.log('[DEBUG] beforeUser件数:', beforeUser.length);
+    console.log('[DEBUG] beforeUser内容:', JSON.stringify(beforeUser.map(m => ({ msgText: m.msgText?.slice(0, 30), len: m.msgText?.length }))));
 
     // 【追加判定】50文字以上メッセージチェック（判定1の後に追加）
     // 最新鑑定士より上のユーザーメッセージ群の中に50文字以上のものが1通でもあれば対象外
