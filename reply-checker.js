@@ -580,7 +580,10 @@ async function analyzeMessages(page) {
         const timeTd = row.querySelector('td[style*="width:110px"]');
         const timeText = timeTd ? timeTd.textContent.trim() : '';
         const fullRowText = row.textContent || '';
-        const msgText = (timeText ? fullRowText.replace(timeText, '') : fullRowText).trim();
+        const msgText = (timeText ? fullRowText.replace(timeText, '') : fullRowText)
+          .replace(/[\t\n\r]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
         msgs.push({ type: 'user', rowText: fullRowText, msgText, timeText });
       }
     }
@@ -648,9 +651,12 @@ async function analyzeMessages(page) {
 
   // 【追加判定】50文字以上メッセージチェック（Node.js側で判定する）
   // page.evaluate()内（ブラウザ側）ではmsgTextが正しく取得できていない
-  // 可能性があるため、生のbeforeUserTextsをNode.js側に渡して判定する
-  const hasLongMessage = (beforeUserTexts || []).some(t => t.length >= 50);
-  console.log('[DEBUG] beforeUserTexts:', (beforeUserTexts || []).map(t => t.slice(0, 50)));
+  // 可能性があるため、生のbeforeUserTextsをNode.js側に渡して判定する。
+  // タブ・改行・連続スペースがHTML由来で大量に含まれ文字数がかさ増しされる
+  // ため、比較前に正規化してから文字数をカウントする
+  const normalize = (t) => t.replace(/[\t\n\r]/g, '').replace(/\s+/g, ' ').trim();
+  const hasLongMessage = (beforeUserTexts || []).some(t => normalize(t).length >= 50);
+  console.log('[DEBUG] beforeUserTexts:', (beforeUserTexts || []).map(t => normalize(t).slice(0, 50)));
   if (hasLongMessage) {
     return { target: false, reason: 'ユーザーメッセージに50文字以上のものあり' };
   }
