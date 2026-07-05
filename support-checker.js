@@ -425,9 +425,11 @@ async function parseCampaignHTML(evalTarget, bodyHtml) {
     }
 
     // パターン2: 「■」で始まる条件行から割引ポイントを抽出する
-    //   「■ 無償適用」→「○○ptの割引」（デフォルト3時間）
-    //   「■ ○○円以上のご入金」→「○○pt引き」（デフォルト終日）
-    if (fullText.includes('ptの割引') || /pt\s*引き/.test(fullText) || /pt\s*の?\s*割引/.test(fullText)) {
+    //   「■ 無償適用」→「○○ptの割引／○○pt割引」（デフォルト3時間）
+    //   「■ ○○円以上のご入金」→「○○pt引き／○○pt割引」（デフォルト終日）
+    // 効果表現は「の割引」「割引」「引き」のいずれの表記にも対応する
+    const PT_EFFECT_RE = /([\d,]+)\s*pt\s*(?:の\s*割引|割引|引き)/;
+    if (PT_EFFECT_RE.test(fullText)) {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (!line.includes('■')) continue;
@@ -446,7 +448,7 @@ async function parseCampaignHTML(evalTarget, bodyHtml) {
         const duration = durationMatch ? durationMatch[1] : null;
 
         if (/無償適用/.test(line)) {
-          const ptMatch = scopeText.match(/([\d,]+)\s*pt\s*の?\s*割引/);
+          const ptMatch = scopeText.match(PT_EFFECT_RE);
           if (!ptMatch) continue;
           const value = ptMatch[1];
           const finalDuration = duration || '3時間';
@@ -457,7 +459,7 @@ async function parseCampaignHTML(evalTarget, bodyHtml) {
 
         const depositMatch = line.match(/([\d,]+)\s*円以上のご入金/);
         if (!depositMatch) continue;
-        const ptMatch = scopeText.match(/([\d,]+)\s*pt\s*引き/);
+        const ptMatch = scopeText.match(PT_EFFECT_RE);
         if (!ptMatch) continue;
 
         const thresholdAmount = depositMatch[1];
