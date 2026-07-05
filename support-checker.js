@@ -487,11 +487,18 @@ async function checkSupport() {
     console.log('[STEP4] ope_main内のユーザー名リンクをクリックし、会員詳細ページの表示を待機');
     const mainFrame = await openMemberDetail(page);
 
+    const infoMessCount = await mainFrame.locator('input[name="info_mess"]').count();
+    console.log('[DEBUG] info_mess件数:', infoMessCount);
+
     // info_messクリックは新しいタブではなく、同じpage内でmg_mail_edit.phpへ遷移する
     console.log('[STEP5] 「お知らせメッセージ編集」ボタンをクリック');
+    console.log('[DEBUG] クリック前URL:', page.url());
     const navigationPromise = page.waitForNavigation({ waitUntil: 'load', timeout: 15000 }).catch(() => null);
     await mainFrame.click('input[name="info_mess"]');
     await navigationPromise;
+
+    await new Promise(r => setTimeout(r, 5000));
+    console.log('[DEBUG] 5秒後URL:', page.url());
 
     const currentUrl = page.url();
     console.log('[STEP5] 遷移後URL:', currentUrl);
