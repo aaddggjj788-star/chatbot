@@ -537,7 +537,7 @@ async function analyzeMessages(page) {
     return { target: false, reason: 'ope_mainフレームが取得できません', kanteishiHtml: '' };
   }
 
-  const { result, debugRows, lastKIdx, afterUserCount } = await mainFrame.evaluate(() => {
+  const { result, debugRows, lastKIdx, afterUserCount, beforeUserTexts } = await mainFrame.evaluate(() => {
     function normStyle(el) {
       return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
     }
@@ -612,18 +612,7 @@ async function analyzeMessages(page) {
 
     // 最新鑑定士より上（新しい）のユーザーメッセージ
     const beforeUser = msgs.slice(0, firstKIdx).filter(m => m.type === 'user');
-    console.log('[DEBUG] beforeUser件数:', beforeUser.length);
-    console.log('[DEBUG] beforeUser内容:', JSON.stringify(beforeUser.map(m => ({ msgText: m.msgText?.slice(0, 30), len: m.msgText?.length }))));
-
-    // 【追加判定】50文字以上メッセージチェック（判定1の後に追加）
-    // 最新鑑定士より上のユーザーメッセージ群の中に50文字以上のものが1通でもあれば対象外
-    beforeUser.forEach((m) => {
-      const text = m.msgText || '';
-      console.log('[DEBUG] メッセージ文字数:', text.length, '内容:', text.slice(0, 50));
-    });
-    if (beforeUser.some(m => (m.msgText || '').length >= 50)) {
-      return { result: { target: false, reason: 'ユーザーメッセージに50文字以上のものあり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
-    }
+    const beforeUserTexts = beforeUser.map(m => m.msgText || '');
 
     const km = msgs[firstKIdx];
     const bodyText = km.bodyText || '';
@@ -651,11 +640,20 @@ async function analyzeMessages(page) {
 
     // 【判定3】既読チェック
     if (beforeUser.some(m => m.rowText.includes('既'))) {
-      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, beforeUserTexts };
     }
 
-    return { result: { target: true, reason: '', ...successK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+    return { result: { target: true, reason: '', ...successK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, beforeUserTexts };
   });
+
+  // 【追加判定】50文字以上メッセージチェック（Node.js側で判定する）
+  // page.evaluate()内（ブラウザ側）ではmsgTextが正しく取得できていない
+  // 可能性があるため、生のbeforeUserTextsをNode.js側に渡して判定する
+  const hasLongMessage = (beforeUserTexts || []).some(t => t.length >= 50);
+  console.log('[DEBUG] beforeUserTexts:', (beforeUserTexts || []).map(t => t.slice(0, 50)));
+  if (hasLongMessage) {
+    return { target: false, reason: 'ユーザーメッセージに50文字以上のものあり' };
+  }
 
   // ── Node.js側でデバッグログ出力 ────────────────────────────────
   for (const row of debugRows) {
