@@ -267,8 +267,10 @@ async function openMemberDetail(page) {
 
 // 2段階で処理する:
 //   1) 3列目（送信(予定)日時）のテキストのみを解析し、本日8:00以降かどうかを判定する
-//      （この時点では本文列には一切触れない。「HTMLメールとしてみる」ボタンもクリックしない）
-//   2) 条件を満たした行についてのみ、本文列 input[name="body"] の value属性を取得する
+//      （この時点では「HTMLメールとしてみる」ボタンはクリックしない）
+//   2) 条件を満たした行についてのみ、本文を取得する
+//      本文は input[name="body"] を最優先に探し、無ければ「HTMLメールとしてみる」
+//      ボタンと同じform内のhidden input・textareaを順に探す
 async function getTodayCampaignRows(target) {
   const { matched, debugRows } = await target.evaluate(() => {
     // 日時テキストを month/day/hour/minute に分解する
@@ -285,9 +287,32 @@ async function getTodayCampaignRows(target) {
       return null;
     }
 
-    // ナビゲーション等の無関係なtr混入を避けるため、本文input[name="body"]を持つ行だけを
-    // 「一覧テーブルの行」とみなす
-    const candidateRows = Array.from(document.querySelectorAll('tr')).filter(tr => tr.querySelector('input[name="body"]'));
+    // 「HTMLメールとしてみる」ボタンを持つ行だけを「一覧テーブルの行」とみなす
+    const candidateRows = Array.from(document.querySelectorAll('tr'))
+      .filter(tr => tr.querySelector('input[value="HTMLメールとしてみる"]'));
+
+    // ボタンをクリックせず、同じform内のhidden input／textareaから本文を取得する
+    function extractBody(tr, htmlButton) {
+      const scope = (htmlButton && htmlButton.closest('form')) || tr;
+
+      const bodyInput = scope.querySelector('input[name="body"]');
+      if (bodyInput) {
+        return { source: 'input[name="body"]', value: bodyInput.getAttribute('value') || bodyInput.value || '' };
+      }
+
+      const hiddenInputs = Array.from(scope.querySelectorAll('input[type="hidden"]'));
+      const hiddenBody = hiddenInputs.find(el => el !== htmlButton && (el.getAttribute('value') || el.value || '').length > 0);
+      if (hiddenBody) {
+        return { source: `input[type="hidden"][name="${hiddenBody.name}"]`, value: hiddenBody.getAttribute('value') || hiddenBody.value || '' };
+      }
+
+      const textarea = scope.querySelector('textarea');
+      if (textarea) {
+        return { source: 'textarea', value: textarea.value || textarea.textContent || '' };
+      }
+
+      return { source: 'none', value: '' };
+    }
 
     const now = new Date();
     const nowMonth = now.getMonth() + 1;
@@ -308,25 +333,28 @@ async function getTodayCampaignRows(target) {
       const isAfter8 = (parsed.hour * 60 + parsed.minute) >= 8 * 60;
       if (!isToday || !isAfter8) continue;
 
-      // ─── 2) 条件を満たした行のみ本文列 input[name="body"] を取得 ──
-      const bodyInput = tr.querySelector('input[name="body"]');
-      const bodyHtml = bodyInput ? (bodyInput.getAttribute('value') || bodyInput.value || '') : '';
+      // ─── 2) 条件を満たした行のみ本文を取得 ────────────────────
+      const htmlButton = tr.querySelector('input[value="HTMLメールとしてみる"]');
+      const body = extractBody(tr, htmlButton);
 
       // タイトル列は明示セレクター指定なしのため、日時列以外の最初の非空セルを採用
       const titleCell = cells.find(td => td !== cells[2] && (td.textContent || '').trim().length > 0);
       const title = titleCell ? titleCell.textContent.trim() : '';
 
-      matched.push({ dateText: dateCellText, title, bodyHtml });
+      matched.push({ dateText: dateCellText, title, bodyHtml: body.value, bodySource: body.source });
     }
 
     return { matched, debugRows };
   });
 
-  console.log(`[STEP6] 本文input保有行: ${debugRows.length}件`);
+  console.log(`[STEP6] 「HTMLメールとしてみる」保有行: ${debugRows.length}件`);
   for (const r of debugRows) {
     console.log(`[STEP6]   日時列="${r.dateCellText}" → 解析=${JSON.stringify(r.parsed)}`);
   }
   console.log(`[STEP6] 本日8時以降に該当: ${matched.length}件`);
+  for (const m of matched) {
+    console.log(`[STEP6]   本文取得元: ${m.bodySource}`);
+  }
 
   return matched;
 }
@@ -473,20 +501,38 @@ async function checkSupport() {
     console.log('[STEP4] ope_main内のユーザー名リンクをクリック');
     await openMemberDetail(page);
 
-    // 「お知らせメッセージ編集」はope_mainフレーム内のボタンで、
-    // クリック後もope_mainフレーム内でtableが表示される
+    // 「お知らせメッセージ編集」はope_mainフレーム内のボタンだが、クリックすると
+    // ope_mainフレーム内には留まらず、mg_mail_edit.php という別ページへ遷移する
+    // （同一タブ内遷移／新タブでの遷移のどちらもあり得るため両方を待ち受ける）
     console.log('[STEP5] 「お知らせメッセージ編集」ボタンをクリック');
     const mainFrame = page.frame({ name: 'ope_main' });
     if (!mainFrame) throw new Error('ope_mainフレームが取得できません');
     await mainFrame.waitForSelector('input[name="info_mess"]', { timeout: 10000 });
+
+    const browserContext = page.context();
+    const popupPromise = browserContext.waitForEvent('page', { timeout: 10000 }).catch(() => null);
+    const navPromise = page.waitForNavigation({ waitUntil: 'load', timeout: 10000 }).catch(() => null);
+
     await mainFrame.click('input[name="info_mess"]');
 
-    console.log('[STEP6] ope_mainフレーム内でtable表示を待機し、本日8時以降の配信メール一覧を取得');
-    await mainFrame.waitForSelector('table', { timeout: 10000 });
-    const tableCount = await mainFrame.evaluate(() => document.querySelectorAll('table').length).catch(() => -1);
-    console.log(`[STEP6] ope_mainフレーム内のtable数: ${tableCount}`);
-    const mailRows = await getTodayCampaignRows(mainFrame);
+    const [popup, navResult] = await Promise.all([popupPromise, navPromise]);
+    console.log(`[STEP5] popup発生: ${!!popup}`);
+    console.log(`[STEP5] navigation発生: ${!!navResult}`);
+
+    const mailEditPage = popup ? popup : page;
+    if (popup) {
+      await popup.waitForLoadState('load').catch(() => {});
+    }
+    console.log(`[STEP5] 遷移後のURL: ${mailEditPage.url()}`);
+
+    console.log('[STEP6] mg_mail_edit.phpのtableから本日8時以降の配信メール一覧を取得');
+    await mailEditPage.waitForSelector('table', { timeout: 10000 });
+    const mailRows = await getTodayCampaignRows(mailEditPage);
     console.log(`[STEP6] 対象件数: ${mailRows.length}件`);
+    if (mailRows.length > 0) {
+      console.log(`[STEP6] 1行目 送信日時: "${mailRows[0].dateText}"`);
+      console.log(`[STEP6] 1行目 本文(先頭100文字): "${(mailRows[0].bodyHtml || '').slice(0, 100)}"`);
+    }
 
     if (mailRows.length === 0) {
       await sendLine(`【キャンペーン解析結果】\nユーザー：${target.userName}\n配信メール数：0件\n本日8時以降のお知らせメールは見つかりませんでした`);
