@@ -351,7 +351,7 @@ function htmlToLines(html) {
   if (!html) return [];
   const text = html
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|tr)>/gi, '\n')
+    .replace(/<\/(p|div|li|td|tr)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
