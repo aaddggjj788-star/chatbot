@@ -12,9 +12,11 @@
  *   1. ログイン（reply-checker.js と同じログイン処理）
  *   2. サポート画面（mg_ope.php）を開く
  *   3. ope_menuフレーム内から#ffffe0の行を検出し、ユーザー名欄をクリック
+ *      → ope_mainフレーム内 div.bodyNaibu の最新ユーザーメッセージを確認し、
+ *        ポイント関連の問い合わせでなければ次の#ffffe0行へスキップ
  *   4. ope_mainフレーム内の a[href*="mg_kyoseitaikai.php"] をクリック（新規ページが開けば切り替え）
- *   5. 会員詳細ページの input[name="info_mess"]（お知らせメッセージ編集）をクリック
- *   6. 一覧テーブルから本日8:00以降の行を全件取得（3列目=送信(予定)日時）
+ *   5. 会員詳細ページ（ope_mainフレーム内）の input[name="info_mess"]（お知らせメッセージ編集）をクリック
+ *   6. ope_mainフレーム内の一覧テーブルから本日8:00以降の行を全件取得（3列目=送信(予定)日時）
  *   7. 各行 input[name="body"] の value からHTML本文を取得
  *   8. HTML本文からキャンペーン内容（固定値／倍率／割引）を抽出（ルーレット系は除外）
  *   9. 解析結果をLINEに通知
@@ -86,13 +88,13 @@ async function openSupportPage(page) {
   return page;
 }
 
-// ─── ope_menuフレーム内で#ffffe0の行を検出しユーザー名欄をクリック ───
+// ─── ope_menuフレーム内の#ffffe0行数を数える ─────────────────────────
 
-async function findAndClickTargetUser(page) {
+async function countFfffe0Rows(page) {
   const menuFrame = page.frame({ name: 'ope_menu' });
   if (!menuFrame) {
     console.log('[SUPPORT] ope_menuフレームが取得できません');
-    return null;
+    return 0;
   }
 
   try {
@@ -101,38 +103,109 @@ async function findAndClickTargetUser(page) {
     console.log('[SUPPORT] #ffffe0 のセルが見つかりません（タイムアウト）');
   }
 
-  const result = await menuFrame.evaluate(() => {
+  return menuFrame.evaluate(() => {
     const rows = Array.from(document.querySelectorAll('tr'));
-    for (const row of rows) {
+    return rows.filter(row => {
       const cells = Array.from(row.querySelectorAll('td'));
-      const yellowCell = cells.find(td => (td.getAttribute('style') || '').includes('background-color: #ffffe0'));
-      if (!yellowCell) continue;
-
-      const link = row.querySelector('a');
-      const onclickEl = row.querySelector('[onclick]');
-      const userName = (link ? link.textContent : (onclickEl ? onclickEl.textContent : '')).trim();
-
-      if (link) {
-        link.click();
-        return { found: true, userName, method: 'a.click()' };
-      }
-      if (onclickEl) {
-        onclickEl.click();
-        return { found: true, userName, method: 'onclickEl.click()' };
-      }
-      return { found: true, userName, method: 'クリック対象なし' };
-    }
-    return { found: false, userName: '', method: '' };
+      return cells.some(td => (td.getAttribute('style') || '').includes('background-color: #ffffe0'));
+    }).length;
   });
+}
 
-  if (!result.found) {
-    console.log('[SUPPORT] #ffffe0 の行が見つかりません');
+// ─── ope_menuフレーム内の#ffffe0行のうちindex番目をクリック ─────────
+// スキップ後も残りの候補を順にクリックできるよう、行はindexで指定する
+
+async function clickTargetUserAtIndex(page, index) {
+  const menuFrame = page.frame({ name: 'ope_menu' });
+  if (!menuFrame) {
+    console.log('[SUPPORT] ope_menuフレームが取得できません');
     return null;
   }
 
-  console.log(`[SUPPORT] #ffffe0 検出: ユーザー名="${result.userName}" (${result.method})`);
+  const result = await menuFrame.evaluate((index) => {
+    const rows = Array.from(document.querySelectorAll('tr'));
+    const yellowRows = rows.filter(row => {
+      const cells = Array.from(row.querySelectorAll('td'));
+      return cells.some(td => (td.getAttribute('style') || '').includes('background-color: #ffffe0'));
+    });
+    const row = yellowRows[index];
+    if (!row) return { found: false, userName: '', method: '' };
+
+    const link = row.querySelector('a');
+    const onclickEl = row.querySelector('[onclick]');
+    const userName = (link ? link.textContent : (onclickEl ? onclickEl.textContent : '')).trim();
+
+    if (link) {
+      link.click();
+      return { found: true, userName, method: 'a.click()' };
+    }
+    if (onclickEl) {
+      onclickEl.click();
+      return { found: true, userName, method: 'onclickEl.click()' };
+    }
+    return { found: true, userName, method: 'クリック対象なし' };
+  }, index);
+
+  if (!result.found) {
+    console.log(`[SUPPORT] #ffffe0[${index}] の行が見つかりません`);
+    return null;
+  }
+
+  console.log(`[SUPPORT] #ffffe0[${index}] 検出: ユーザー名="${result.userName}" (${result.method})`);
   await page.waitForTimeout(1000); // ope_mainのAjax更新待ち
   return { userName: result.userName };
+}
+
+// ─── ope_mainフレーム内のdiv.bodyNaibuからユーザーの最新メッセージ本文を取得 ──
+// 鑑定士メッセージ（#90EE90背景を祖先に持つdiv.bodyNaibu）は除外し、
+// DOM順で先頭（＝最新）のユーザーメッセージ本文を返す
+
+async function getLatestUserMessage(page) {
+  const mainFrame = page.frame({ name: 'ope_main' });
+  if (!mainFrame) {
+    console.log('[SUPPORT] ope_mainフレームが取得できません');
+    return '';
+  }
+
+  try {
+    const texts = await mainFrame.evaluate(() => {
+      function normStyle(el) {
+        return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
+      }
+      function isKanteishiAncestor(el) {
+        let node = el.parentElement;
+        while (node) {
+          const bg = normStyle(node);
+          if (bg.includes('90ee90') || bg.includes('144,238,144')) return true;
+          node = node.parentElement;
+        }
+        return false;
+      }
+      const all = Array.from(document.querySelectorAll('div.bodyNaibu'));
+      const userOnly = all.filter(el => !isKanteishiAncestor(el));
+      return userOnly
+        .map(el => el.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim())
+        .filter(t => t.length > 0);
+    });
+    return texts[0] || '';
+  } catch (e) {
+    console.error('[ERROR] getLatestUserMessage:', e.message);
+    return '';
+  }
+}
+
+// ─── ポイント関連の問い合わせかどうかを判定 ─────────────────────────
+// （「合わない」「足りない」「おかしい」「違う」「間違い」「少ない」のいずれか）
+// かつ（「ポイント」「pt」「PT」のいずれか）を含む場合のみ true
+
+const NEGATIVE_KEYWORDS = ['合わない', '足りない', 'おかしい', '違う', '間違い', '少ない'];
+const POINT_KEYWORDS = ['ポイント', 'pt', 'PT'];
+
+function isPointRelatedInquiry(text) {
+  if (!text) return false;
+  const hasNegative = NEGATIVE_KEYWORDS.some(k => text.includes(k));
+  const hasPoint = POINT_KEYWORDS.some(k => text.includes(k));
+  return hasNegative && hasPoint;
 }
 
 // ─── クリック後に新規ページ(popup)が開けばそちらへ切り替える ─────────
@@ -343,56 +416,55 @@ async function checkSupport() {
     await openSupportPage(page);
 
     console.log('[STEP3] #ffffe0 の行を検出してユーザー名欄をクリック');
-    const target = await findAndClickTargetUser(page);
-    if (!target) {
+    const candidateCount = await countFfffe0Rows(page);
+    if (candidateCount === 0) {
       await sendLine('サポート画面に対象ユーザー（#ffffe0）が見つかりませんでした');
+      return;
+    }
+    console.log(`[STEP3] #ffffe0 候補: ${candidateCount}件`);
+
+    // ─── STEP3-4間: ユーザーの最新問い合わせ本文がポイント関連かを確認 ──
+    // 該当しない候補はスキップし、次の#ffffe0行を確認する
+    let target = null;
+    for (let i = 0; i < candidateCount; i++) {
+      const clicked = await clickTargetUserAtIndex(page, i);
+      if (!clicked) continue;
+
+      const latestMessage = await getLatestUserMessage(page);
+      console.log(`[STEP3] ${clicked.userName} の最新メッセージ: "${latestMessage.slice(0, 80)}"`);
+
+      if (!isPointRelatedInquiry(latestMessage)) {
+        console.log(`[STEP3] ${clicked.userName}: ポイント関連の問い合わせではないためスキップ`);
+        continue;
+      }
+
+      console.log(`[STEP3] ${clicked.userName}: ポイント関連の問い合わせと判定`);
+      target = clicked;
+      break;
+    }
+
+    if (!target) {
+      await sendLine('ポイント関連の問い合わせを持つ対象ユーザーが見つかりませんでした');
+      console.log('=== support-checker 完了（該当ユーザーなし） ===');
       return;
     }
 
     console.log('[STEP4] ope_main内のユーザー名リンクをクリック');
     await openMemberDetail(page);
 
-    // 「お知らせメッセージ編集」はope_mainフレーム内のボタンだが、クリックすると
-    // ope_mainフレーム内には留まらず、mg_mail_edit.php?u_id=...&info_mess=... という
-    // 新しいページへ遷移する（同一タブ内の遷移／新タブでの遷移のどちらもあり得るため
-    // 両方を待ち受け、遷移先ページを直接操作する）。
+    // 「お知らせメッセージ編集」はope_mainフレーム内のボタンで、
+    // クリック後もope_mainフレーム内でtableが表示される
     console.log('[STEP5] 「お知らせメッセージ編集」ボタンをクリック');
     const mainFrame = page.frame({ name: 'ope_main' });
     if (!mainFrame) throw new Error('ope_mainフレームが取得できません');
     await mainFrame.waitForSelector('input[name="info_mess"]', { timeout: 10000 });
-
-    const browserContext = page.context();
-    const popupPromise = browserContext.waitForEvent('page', { timeout: 10000 }).catch(() => null);
-    const navPromise = page.waitForNavigation({ waitUntil: 'load', timeout: 10000 }).catch(() => null);
-
     await mainFrame.click('input[name="info_mess"]');
 
-    const [popup, navResult] = await Promise.all([popupPromise, navPromise]);
-    console.log(`[STEP5] popup発生: ${!!popup}`);
-    console.log(`[STEP5] navigation発生: ${!!navResult}`);
-
-    let mailEditPage;
-    if (popup) {
-      await popup.waitForLoadState('load').catch(() => {});
-      console.log(`[STEP5] 新しいタブへ遷移: ${popup.url()}`);
-      mailEditPage = popup;
-    } else {
-      console.log(`[STEP5] 同一ページ内で遷移: ${page.url()}`);
-      mailEditPage = page;
-    }
-
-    console.log('[STEP6] mg_mail_edit.phpのtableから本日8時以降の配信メール一覧を取得');
-    try {
-      await mailEditPage.waitForSelector('table', { timeout: 10000 });
-    } catch (e) {
-      console.log(`[STEP6] table待機タイムアウト（URL: ${mailEditPage.url()}）`);
-      throw e;
-    } finally {
-      const tableCount = await mailEditPage.evaluate(() => document.querySelectorAll('table').length).catch(() => -1);
-      console.log(`[STEP6] mailEditPage URL: ${mailEditPage.url()}`);
-      console.log(`[STEP6] table数: ${tableCount}`);
-    }
-    const mailRows = await getTodayCampaignRows(mailEditPage);
+    console.log('[STEP6] ope_mainフレーム内でtable表示を待機し、本日8時以降の配信メール一覧を取得');
+    await mainFrame.waitForSelector('table', { timeout: 10000 });
+    const tableCount = await mainFrame.evaluate(() => document.querySelectorAll('table').length).catch(() => -1);
+    console.log(`[STEP6] ope_mainフレーム内のtable数: ${tableCount}`);
+    const mailRows = await getTodayCampaignRows(mainFrame);
     console.log(`[STEP6] 対象件数: ${mailRows.length}件`);
 
     if (mailRows.length === 0) {
