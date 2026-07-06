@@ -26,12 +26,19 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const { chromium } = require('playwright');
 const axios = require('axios');
+const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 
 const anthropic = new Anthropic();
 
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const DRY_RUN    = process.env.DRY_RUN === 'true';
+
+// reply-checker.jsと同じLINE返信待ちファイルを共有する（server.jsのLINE
+// webhookが「調整する」「スキップ」等の返信テキストをここに書き込む想定）
+const STATE_FILE = '/tmp/rune-reply-state.json';
+const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 // ─── LINE 送信 ────────────────────────────────────────────────────
 
@@ -57,6 +64,40 @@ async function sendLine(message) {
       }
     }
   }
+}
+
+// ─── LINE 返信待ち（ファイルポーリング、reply-checker.js と同じ仕組み）──
+
+function setWaiting() {
+  fs.writeFileSync(STATE_FILE, JSON.stringify({ status: 'waiting', reply: null }));
+}
+
+function clearState() {
+  try { fs.unlinkSync(STATE_FILE); } catch (_) {}
+}
+
+function waitForLineReply() {
+  return new Promise((resolve, reject) => {
+    setWaiting();
+    const start = Date.now();
+    const timer = setInterval(() => {
+      try {
+        if (!fs.existsSync(STATE_FILE)) return;
+        const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+        if (state.status === 'replied' && state.reply) {
+          clearInterval(timer);
+          clearState();
+          resolve(state.reply);
+          return;
+        }
+      } catch (_) {}
+      if (Date.now() - start > REPLY_TIMEOUT_MS) {
+        clearInterval(timer);
+        clearState();
+        reject(new Error('タイムアウト'));
+      }
+    }, 2000);
+  });
 }
 
 // ─── Playwright: ログイン（reply-checker.js と同じ処理）─────────────
@@ -472,6 +513,51 @@ function formatCampaignDisplay(c) {
   }
 }
 
+// ─── 入金額から期待ポイントを計算する ───────────────────────────────
+// 通常付与 = 入金額÷10、サービスポイント = 入金額×0.5%（mail-checker.jsの
+// calcPoints()と同じ計算式）に加え、キャンペーン条件（campaigns、全メール
+// 分をまとめて渡す）から補助分を加算する。
+//
+// ・fixed/rate/percentは、入金額が閾値(amount)以上のもののうち
+//   最も有利な条件のみを採用する（複数条件の合算はしない）
+// ・discount（pt割引）は鑑定料金の割引であり入金ポイント付与とは
+//   無関係なため、この計算には含めない
+// ・rateは「通常ポイントの○.○倍」を意味するため、通常付与分
+//   （サービスポイントは含まない）に対する増加分のみを補助として計上する
+//
+// ※ 複数キャンペーンの組み合わせルールは実際の運用に合わせて要調整
+function calcExpectedPoints(amount, campaigns) {
+  const normalPt = Math.floor(amount / 10);
+  const servicePt = Math.floor(amount * 0.005);
+
+  let campaignBonus = 0;
+
+  const fixedApplicable = campaigns.filter(c => c.type === 'fixed' && amount >= c.amount);
+  if (fixedApplicable.length > 0) {
+    campaignBonus += Math.max(...fixedApplicable.map(c => c.bonus));
+  }
+
+  const rateApplicable = campaigns.filter(c => c.type === 'rate' && amount >= c.amount);
+  if (rateApplicable.length > 0) {
+    const bestRate = Math.max(...rateApplicable.map(c => c.rate));
+    // (bestRate - 1)を先に計算すると浮動小数点誤差で1pt程度ずれることが
+    // あるため（例: 1.2 - 1 = 0.19999999999999996）、乗算を先に行い
+    // 丸めてから通常付与分を差し引く
+    campaignBonus += Math.round(normalPt * bestRate) - normalPt;
+  }
+
+  const percentApplicable = campaigns.filter(c => c.type === 'percent' && amount >= c.amount);
+  if (percentApplicable.length > 0) {
+    const bestPercent = Math.max(...percentApplicable.map(c => c.rate));
+    // 同様の理由で「amount * (bestPercent / 100)」ではなく
+    // 「amount * bestPercent」を先に計算してから100で割る
+    campaignBonus += Math.floor((amount * bestPercent) / 100);
+  }
+
+  const total = normalPt + servicePt + campaignBonus;
+  return { normalPt, servicePt, campaignBonus, total };
+}
+
 function buildResultMessage(userName, mails) {
   const lines = ['【キャンペーン解析結果】', `ユーザー：${userName}`, `配信メール数：${mails.length}件`, ''];
   mails.forEach((mail, i) => {
@@ -598,6 +684,141 @@ async function checkSupport() {
 
     console.log('[STEP9] LINEに解析結果を通知');
     await sendLine(buildResultMessage(target.userName, mails));
+
+    // ─── STEP10-17: ポイント履歴確認・調整 ───────────────────────────
+    // 実在ユーザーの所持ポイントを変更する処理を含むため、DRY_RUN=trueの
+    // 間はSTEP10（+1加算）を含め一切実行しない
+    if (DRY_RUN) {
+      console.log('[DRY RUN] ポイント履歴確認・調整処理（STEP10-17）をスキップ');
+    } else {
+      const allCampaigns = mails.flatMap(m => m.campaigns);
+
+      console.log('[STEP10] ブラウザバックで会員詳細ページに戻る');
+      await mailPage.evaluate(() => window.history.back());
+      await new Promise(r => setTimeout(r, 2000));
+      console.log('[DEBUG] STEP10後のフレームURL:', mainFrame.url());
+
+      console.log('[STEP11] 所持ポイントに1を加算');
+      const currentPointText = await mainFrame.locator('input[name="pointOut"]').inputValue().catch(() => '0');
+      const currentPoint = parseInt((currentPointText || '0').replace(/[^\d]/g, ''), 10) || 0;
+      const newPoint = currentPoint + 1;
+      console.log(`[DEBUG] 現在ポイント=${currentPoint} → pointOutに入力=${newPoint}`);
+      await mainFrame.fill('input[name="pointOut"]', String(newPoint));
+      await mainFrame.click('input[name="ginkoRadio"][value="+"]');
+      await mainFrame.fill('input[value="1"]', '1');
+      await mainFrame.click('input[name="user_henko"]');
+      await new Promise(r => setTimeout(r, 3000));
+      console.log('[STEP11] ページ更新待機完了');
+
+      // ポイント増減履歴ページの構造（新規ページ/frame内遷移のどちらか）が
+      // 未確認のため、popupイベントの有無で判定しデバッグログを残す
+      console.log('[STEP12] 「ポイント増減履歴」を開く');
+      console.log('[DEBUG] クリック前フレームURL:', mainFrame.url());
+      const popupPromise = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
+      await mainFrame.click('input[value="ポイント増減履歴"]');
+      const popup = await popupPromise;
+
+      let historyPage;
+      if (popup) {
+        console.log('[STEP12] 新しいページ(popup)で開かれました:', popup.url());
+        await popup.waitForLoadState('networkidle').catch(() => {});
+        historyPage = popup;
+      } else {
+        await new Promise(r => setTimeout(r, 3000));
+        console.log('[STEP12] 既存フレーム内で遷移しました:', mainFrame.url());
+        historyPage = mainFrame;
+      }
+
+      console.log('[STEP13] 「表示」ボタンをクリック');
+      await historyPage.click('input[name="search"][value="表示"]');
+      await new Promise(r => setTimeout(r, 3000));
+
+      console.log('[STEP14] 当日の銀行振込履歴を取得');
+      const bankRows = await historyPage.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll('tr'));
+        const results = [];
+        for (const tr of rows) {
+          const cells = Array.from(tr.querySelectorAll('td')).map(td => (td.textContent || '').trim());
+          if (cells.length === 0) continue;
+          const rowText = cells.join(' | ');
+          if (!rowText.includes('銀行振込')) continue;
+          results.push({ cells, rowText });
+        }
+        return results;
+      });
+      console.log(`[STEP14] 銀行振込行数: ${bankRows.length}`);
+      bankRows.forEach((r, i) => console.log(`[DEBUG] 銀行振込行[${i}]: ${r.rowText}`));
+
+      // テーブルの列構成が未確認のため、セル内容全体を正規表現で走査して
+      // 時間・増減ポイント・入金金額（操作前の決済金額）を抽出する。
+      // 実際の列位置が判明次第、cells[index]による直接参照に置き換える
+      const parsedBankRows = bankRows.map(r => {
+        const timeMatch = r.rowText.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+        const pointMatch = r.rowText.match(/([+\-－]?[\d,]+)\s*pt/);
+        const amountMatch = r.rowText.match(/([\d,]+)\s*円/);
+        return {
+          time: timeMatch ? timeMatch[1] : null,
+          point: pointMatch ? parseInt(pointMatch[1].replace('－', '-').replace(/,/g, ''), 10) : null,
+          amount: amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : null,
+          raw: r.rowText,
+        };
+      }).filter(r => r.amount !== null && r.point !== null);
+      console.log(`[STEP14] 時間・ポイント・金額の抽出成功: ${parsedBankRows.length}件`);
+
+      console.log('[STEP15] ポイント計算と照合');
+      for (const row of parsedBankRows) {
+        const expected = calcExpectedPoints(row.amount, allCampaigns);
+        const diff = row.point - expected.total;
+        console.log(`[STEP15] 時間=${row.time} 入金額=${row.amount}円 期待値=${expected.total}pt（通常${expected.normalPt}+サービス${expected.servicePt}+補助${expected.campaignBonus}） 実際=${row.point}pt 差異=${diff}`);
+
+        if (diff === 0) {
+          console.log('[STEP15] 一致 → 問題なし');
+          continue;
+        }
+
+        const diffLabel = diff < 0 ? '不足' : '過剰';
+        const diffAbs = Math.abs(diff);
+
+        console.log('[STEP16] 差異ありのためLINEに確認通知');
+        await sendLine(`【ポイント確認】
+ユーザー：${target.userName}
+入金金額：${formatNumber(row.amount)}円
+期待ポイント：${expected.total}pt
+実際のポイント：${row.point}pt
+差異：${diffAbs}pt（${diffLabel}）
+調整しますか？「調整する」または「スキップ」`);
+
+        let reply;
+        try {
+          reply = await waitForLineReply();
+        } catch (e) {
+          console.log('[STEP16] LINE返信待ちタイムアウト → スキップ扱い:', e.message);
+          continue;
+        }
+        console.log(`[STEP16] LINE返信: ${reply}`);
+
+        if (reply !== '調整する') {
+          console.log('[STEP16] スキップが選択されました');
+          continue;
+        }
+
+        console.log('[STEP17] 会員詳細ページに戻りポイントを調整');
+        if (historyPage !== mainFrame) {
+          await historyPage.close().catch(() => {});
+        } else {
+          await mainFrame.evaluate(() => window.history.back());
+          await new Promise(r => setTimeout(r, 2000));
+        }
+
+        const sign = diff < 0 ? '+' : '-';
+        console.log(`[STEP17] ${sign}${diffAbs}pt を調整`);
+        await mainFrame.click(`input[name="ginkoRadio"][value="${sign}"]`);
+        await mainFrame.fill('input[value="1"]', String(diffAbs));
+        await mainFrame.click('input[name="user_henko"]');
+        await new Promise(r => setTimeout(r, 3000));
+        await sendLine(`【調整完了】${target.userName}のポイントを${sign}${diffAbs}pt調整しました`);
+      }
+    }
 
     console.log('=== support-checker 完了 ===');
   } catch (err) {
