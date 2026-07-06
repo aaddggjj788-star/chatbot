@@ -550,7 +550,7 @@ async function analyzeMessages(page) {
     return { target: false, reason: 'ope_mainフレームが取得できません', kanteishiHtml: '' };
   }
 
-  const { result, lastKIdx, afterUserCount, beforeUserTexts } = await mainFrame.evaluate(() => {
+  const { result, lastKIdx, afterUserCount } = await mainFrame.evaluate(() => {
     function normStyle(el) {
       return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
     }
@@ -582,11 +582,7 @@ async function analyzeMessages(page) {
         const timeTd = row.querySelector('td[style*="width:110px"]');
         const timeText = timeTd ? timeTd.textContent.trim() : '';
         const fullRowText = row.textContent || '';
-        const msgText = (timeText ? fullRowText.replace(timeText, '') : fullRowText)
-          .replace(/[\t\n\r]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        msgs.push({ type: 'user', rowText: fullRowText, msgText, timeText });
+        msgs.push({ type: 'user', rowText: fullRowText, timeText });
       }
     }
 
@@ -617,7 +613,6 @@ async function analyzeMessages(page) {
 
     // 最新鑑定士より上（新しい）のユーザーメッセージ
     const beforeUser = msgs.slice(0, firstKIdx).filter(m => m.type === 'user');
-    const beforeUserTexts = beforeUser.map(m => m.msgText || '');
 
     const km = msgs[firstKIdx];
     const bodyText = km.bodyText || '';
@@ -645,19 +640,20 @@ async function analyzeMessages(page) {
 
     // 【判定3】既読チェック
     if (beforeUser.some(m => m.rowText.includes('既'))) {
-      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, beforeUserTexts };
+      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
     }
 
-    return { result: { target: true, reason: '', ...successK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, beforeUserTexts };
+    return { result: { target: true, reason: '', ...successK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
   });
 
-  // 【追加判定】50文字以上メッセージチェック（Node.js側で判定する）
-  // page.evaluate()内（ブラウザ側）ではmsgTextが正しく取得できていない
-  // 可能性があるため、生のbeforeUserTextsをNode.js側に渡して判定する。
-  // タブ・改行・連続スペースがHTML由来で大量に含まれ文字数がかさ増しされる
-  // ため、比較前に正規化してから文字数をカウントする
+  // div.bodyNaibuのテキストを取得する。tr全体のtextContent（rowText）には
+  // 「未」「07月06日 09時37分」「ユーザー」等のメタ情報が混入するため、
+  // 50文字判定・相談判定・相談内容の引用にはこちらを使用する
+  const bodyNaibuTexts = await getBodyNaibuTexts(mainFrame);
+
+  // 【追加判定】50文字以上メッセージチェック（bodyNaibuTextsで判定する）
   const normalize = (t) => t.replace(/[\t\n\r]/g, '').replace(/\s+/g, ' ').trim();
-  const hasLongMessage = (beforeUserTexts || []).some(t => normalize(t).length >= 50);
+  const hasLongMessage = bodyNaibuTexts.some(t => normalize(t).length >= 50);
   if (hasLongMessage) {
     return { target: false, reason: 'ユーザーメッセージに50文字以上のものあり' };
   }
@@ -672,7 +668,7 @@ async function analyzeMessages(page) {
   console.log(`[DEBUG] span個数: ${result.spanCount}, ユーザーメッセージ通数: ${result.userMsgCount}`);
   console.log(`[DEBUG] 最新ユーザー受信時刻: "${result.latestUserTime}"`);
 
-  return result;
+  return { ...result, bodyNaibuTexts };
 }
 
 // ─── キャラ設定読み込み ───────────────────────────────────────────
@@ -1112,8 +1108,8 @@ async function processUsers(page) {
       console.log(`[TIMER] ${userName}: 受信時刻が取得できません → 処理続行`);
     }
 
-    // div.bodyNaibu から本文テキストを取得（branch判定・specialProcess・requiredMessages用）
-    const bodyNaibuTexts = await getBodyNaibuTexts(mainFrame);
+    // div.bodyNaibu から本文テキストを取得（analyzeMessages()内で取得済みのものを再利用）
+    const bodyNaibuTexts = analysis.bodyNaibuTexts || [];
     console.log(`[BODY] ${userName}: bodyNaibu ${bodyNaibuTexts.length}件取得`);
 
     // コメントを事前取得（判定4より前にrequiredMessages有無を確認するため）
@@ -1167,7 +1163,8 @@ async function processUsers(page) {
         nengenWords.push(nengenM[1]);
       }
       if (nengenWords.length > 0) {
-        const allUserText = (bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || [])).join('');
+        const userTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
+        const allUserText = userTexts.join('');
         const nengenFound = nengenWords.some(w => allUserText.includes(w));
         console.log(`[NENGEN] ${userName}: 念言=${JSON.stringify(nengenWords)} 含有=${nengenFound}`);
         if (!nengenFound) {
@@ -1175,11 +1172,16 @@ async function processUsers(page) {
           continue;
         }
         // ─── 相談内容の判定 ──────────────────────────────────────
+        // bodyNaibuTextsの各テキストごとに判定し、該当したテキストを
+        // 相談内容としてLINE通知で引用できるよう保持する
         const CONSULT_KEYWORDS = ['？', '?', 'かな', 'でしょうか', 'ですか', '教えて'];
-        analysis.hasConsultation = allUserText.length >= 20 || CONSULT_KEYWORDS.some(kw => allUserText.includes(kw));
-        console.log(`[CONSULT] ${userName}: 文字数=${allUserText.length} hasConsultation=${analysis.hasConsultation}`);
+        const consultationTexts = userTexts.filter(t => t.length >= 20 || CONSULT_KEYWORDS.some(kw => t.includes(kw)));
+        analysis.hasConsultation = consultationTexts.length > 0;
+        analysis.consultationTexts = consultationTexts;
+        console.log(`[CONSULT] ${userName}: 該当${consultationTexts.length}件 hasConsultation=${analysis.hasConsultation}`);
       } else {
         analysis.hasConsultation = false;
+        analysis.consultationTexts = [];
       }
     }
 
@@ -1695,7 +1697,7 @@ async function processUsers(page) {
         '【相談あり】',
         '相談内容：',
         '---',
-        (analysis.latestUserTexts || []).join('\n'),
+        (analysis.consultationTexts || []).join('\n'),
         '---',
       ] : []),
       '返信文：',
