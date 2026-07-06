@@ -91,6 +91,15 @@ function extractAmount(text) {
   return parseInt(match[1].replace(/,/g, ''), 10);
 }
 
+// メールを既読にする（処理が正常に完了した場合のみ呼び出す）
+async function markAsSeen(connection, msg) {
+  try {
+    await connection.addFlags(msg.attributes.uid, '\\Seen');
+  } catch (err) {
+    console.error('既読化エラー:', err.message);
+  }
+}
+
 // IMAP接続（失敗時は30秒待って最大3回まで再試行）
 async function connectImapWithRetry(imapConfig, maxRetries = 3) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -214,7 +223,7 @@ async function checkMail() {
       : ['UNSEEN', ['SUBJECT', TARGET_SUBJECT]];
     const fetchOptions = {
       bodies: [''],
-      markSeen: true,     // 処理済みメールを既読にして次回スキップ
+      markSeen: false,    // フェッチ時点では既読にしない（処理成功時のみ既読化する）
     };
     if (TEST_MODE) console.log('  [TEST_MODE] 件名フィルターなし・最新1件のみ処理');
 
@@ -253,6 +262,7 @@ async function checkMail() {
         await sendLine(
           `【要確認】入金通知のパースに失敗しました。\n件名：${parsed.subject || TARGET_SUBJECT}\n本文（先頭200文字）：${text.slice(0, 200)}`
         );
+        await markAsSeen(connection, msg); // 内容は変わらないため再試行しても解決しない
         continue;
       }
 
@@ -264,6 +274,7 @@ async function checkMail() {
       // 優先順位2: 除外IDはスキップ（通知なし）
       if (memberId && EXCLUDED_IDS.includes(memberId)) {
         console.log(`  スキップ（除外ID） 会員ID:${memberId}`);
+        await markAsSeen(connection, msg);
         continue;
       }
 
@@ -273,6 +284,7 @@ async function checkMail() {
         await sendLine(
           `【入金通知】会員ID：${memberId}\n入金額：${amount}円\n※処理は除外対象です`
         );
+        await markAsSeen(connection, msg);
         continue;
       }
 
@@ -281,6 +293,7 @@ async function checkMail() {
         await sendLine(
           `【要確認】入金通知が届きましたが会員IDが判別できませんでした。\n依頼人名：${senderName}\n入金額：${amount}円`
         );
+        await markAsSeen(connection, msg); // 名前は変わらないため再試行しても解決しない
         continue;
       }
 
@@ -290,6 +303,7 @@ async function checkMail() {
 
       if (DRY_RUN) {
         console.log(`  [DRY RUN] ポイント追加をスキップ 会員ID:${memberId} ${amount}円 → ${points}pt`);
+        await markAsSeen(connection, msg);
       } else {
         try {
           await addPointsViaPlaywright(memberId, amount, points);
@@ -297,11 +311,13 @@ async function checkMail() {
             `【入金処理完了】\n会員ID：${memberId}\n入金額：${amount}円\n追加ポイント：${points}pt`
           );
           console.log(`  ✓ 処理完了 会員ID:${memberId} ${amount}円 → ${points}pt`);
+          await markAsSeen(connection, msg); // 正常完了した場合のみ既読化する
         } catch (err) {
           console.error('ポイント追加エラー:', err.message);
           await sendLine(
             `【処理エラー】ポイント追加に失敗しました。手動対応をお願いします。\n会員ID：${memberId}\n入金額：${amount}円\n追加ポイント：${points}pt\nエラー：${err.message}`
           );
+          // 既読にしない → 次回チェック時も未読として検出し再試行する
         }
       }
 
