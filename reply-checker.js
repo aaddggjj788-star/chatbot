@@ -537,21 +537,10 @@ async function analyzeMessages(page) {
     return { target: false, reason: 'ope_mainフレームが取得できません', kanteishiHtml: '' };
   }
 
-  const { result, debugRows, lastKIdx, afterUserCount, beforeUserTexts } = await mainFrame.evaluate(() => {
+  const { result, lastKIdx, afterUserCount, beforeUserTexts } = await mainFrame.evaluate(() => {
     function normStyle(el) {
       return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
     }
-
-    // ── デバッグ: 全trの背景色と既/未 ──────────────────────────
-    const debugRows = Array.from(document.querySelectorAll('tr')).map((tr, i) => {
-      const style = tr.getAttribute('style') || '';
-      const colorMatch = style.match(/#[0-9a-fA-F]{3,6}/);
-      return {
-        i,
-        color: colorMatch ? colorMatch[0] : null,
-        hasKi: tr.textContent.includes('既'),
-      };
-    });
 
     // ── メッセージ収集: DOM順（上=新しい → 下=古い）で走査 ──────
     // 上（tr番号小）= 新しいメッセージ、下（tr番号大）= 古いメッセージ。
@@ -592,10 +581,10 @@ async function analyzeMessages(page) {
 
     // 【判定2】最新メッセージチェック（DOM最上位 = 最新）
     if (msgs.length === 0) {
-      return { result: { target: false, reason: 'メッセージなし', ...emptyK }, debugRows, lastKIdx: -1, afterUserCount: 0 };
+      return { result: { target: false, reason: 'メッセージなし', ...emptyK }, lastKIdx: -1, afterUserCount: 0 };
     }
     if (msgs[0].type === 'kanteishi') {
-      return { result: { target: false, reason: '最新メッセージが鑑定士（返信済み）', ...emptyK }, debugRows, lastKIdx: 0, afterUserCount: 0 };
+      return { result: { target: false, reason: '最新メッセージが鑑定士（返信済み）', ...emptyK }, lastKIdx: 0, afterUserCount: 0 };
     }
 
     // 最新の鑑定士メッセージを探す
@@ -605,12 +594,12 @@ async function analyzeMessages(page) {
     }
 
     if (firstKIdx === -1) {
-      return { result: { target: false, reason: '鑑定士メッセージなし', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
+      return { result: { target: false, reason: '鑑定士メッセージなし', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
 
     // 【判定1.5】最新鑑定士メッセージの既/未チェック（「未」ならスキップ）
     if (!(msgs[firstKIdx].trText || '').includes('既')) {
-      return { result: { target: false, reason: '最新鑑定士メッセージが未読', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: 0 };
+      return { result: { target: false, reason: '最新鑑定士メッセージが未読', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: 0 };
     }
 
     // 最新鑑定士より上（新しい）のユーザーメッセージ
@@ -643,10 +632,10 @@ async function analyzeMessages(page) {
 
     // 【判定3】既読チェック
     if (beforeUser.some(m => m.rowText.includes('既'))) {
-      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, beforeUserTexts };
+      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, beforeUserTexts };
     }
 
-    return { result: { target: true, reason: '', ...successK }, debugRows, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, beforeUserTexts };
+    return { result: { target: true, reason: '', ...successK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, beforeUserTexts };
   });
 
   // 【追加判定】50文字以上メッセージチェック（Node.js側で判定する）
@@ -656,21 +645,15 @@ async function analyzeMessages(page) {
   // ため、比較前に正規化してから文字数をカウントする
   const normalize = (t) => t.replace(/[\t\n\r]/g, '').replace(/\s+/g, ' ').trim();
   const hasLongMessage = (beforeUserTexts || []).some(t => normalize(t).length >= 50);
-  console.log('[DEBUG] beforeUserTexts:', (beforeUserTexts || []).map(t => normalize(t).slice(0, 50)));
   if (hasLongMessage) {
     return { target: false, reason: 'ユーザーメッセージに50文字以上のものあり' };
   }
 
   // ── Node.js側でデバッグログ出力 ────────────────────────────────
-  for (const row of debugRows) {
-    if (row.color) {
-      console.log(`[DEBUG] tr[${row.i}]: 色=${row.color}, 既/未=${row.hasKi ? '既' : '未'}`);
-    }
-  }
   console.log(`[DEBUG] 最新鑑定士メッセージ index: ${lastKIdx}`);
   console.log(`[DEBUG] 鑑定士より新しいユーザーメッセージ: ${afterUserCount}件`);
   if (result.kanteishiTrHtml) {
-    console.log(`[DEBUG] 鑑定士行HTML(先頭500文字): ${result.kanteishiTrHtml.slice(0, 500)}`);
+    console.log(`[DEBUG] 鑑定士行HTML(先頭100文字): ${result.kanteishiTrHtml.slice(0, 100)}`);
   }
   console.log(`[DEBUG] 最新鑑定士コメント: ${JSON.stringify(result.kanteishiComments)}`);
   console.log(`[DEBUG] span個数: ${result.spanCount}, ユーザーメッセージ通数: ${result.userMsgCount}`);
@@ -905,8 +888,6 @@ async function saveMemo1(frame, userText, dryRun) {
     console.log('[SPECIAL] saveMemo1: ユーザーメッセージなし → スキップ');
     return;
   }
-  console.log('[DEBUG] saveMemo1対象テキスト:', newContent);
-
   let existingMemo = '';
   try {
     existingMemo = await frame.inputValue('textarea[name="user_memo1"]');
@@ -929,7 +910,6 @@ async function saveMemo1(frame, userText, dryRun) {
 
 // saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存（最新1件のみ）
 async function saveNickname(frame, userText, dryRun) {
-  console.log('[DEBUG] saveNickname対象テキスト:', userText);
   const { nickname } = extractNickname([userText]);
 
   if (!nickname) {
