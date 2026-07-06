@@ -1106,6 +1106,19 @@ async function processUsers(page) {
       continue;
     }
 
+    // ─── 受信時刻チェック（20分以内はスキップ）────────────────────
+    const receivedAt = parseMessageTime(analysis.latestUserTime || '');
+    if (receivedAt) {
+      const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
+      if (elapsedMin < 20) {
+        console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 20分未満のためスキップ`);
+        continue;
+      }
+      console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 処理続行`);
+    } else {
+      console.log(`[TIMER] ${userName}: 受信時刻が取得できません → 処理続行`);
+    }
+
     // div.bodyNaibu から本文テキストを取得（branch判定・specialProcess・requiredMessages用）
     const bodyNaibuTexts = await getBodyNaibuTexts(mainFrame);
     console.log(`[BODY] ${userName}: bodyNaibu ${bodyNaibuTexts.length}件取得`);
@@ -1678,19 +1691,6 @@ async function processUsers(page) {
         if (!sendFrame) {
           console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
           continue;
-        }
-
-        // ─── 受信時刻チェック（20分以内はスキップ）────────────────
-        const receivedAt = parseMessageTime(analysis.latestUserTime || '');
-        if (receivedAt) {
-          const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
-          if (elapsedMin < 20) {
-            console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 20分未満のためスキップ`);
-            continue;
-          }
-          console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 即時送信`);
-        } else {
-          console.log(`[TIMER] ${userName}: 受信時刻が取得できません → 即時送信`);
         }
 
         // 本文：返信文 + 改行 + 次のコメントアウト
