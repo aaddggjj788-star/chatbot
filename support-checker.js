@@ -353,11 +353,12 @@ async function getTodayCampaignRows(target) {
 // タグ構造に依存しないよう、生HTML文字列に対して正規表現で
 // 直接パターンマッチする方式に変更する。
 //
-// 2種類のメールパターンを判別して解析する:
+// 3種類のメールパターンを判別して解析する:
 //   パターン1: 補助ポイント（「○○円以上のご購入」＋「合計補助」＋「○○円分」）
 //   パターン2: 割引ポイント（「○○ptの割引」「○○pt割引」「○○pt引き」）
+//   パターン3: 倍率ポイント（「○○円以上の(ご)購入」＋「○.○倍」）
 //
-// 戻り値: { subsidies: [...], discounts: [...] }
+// 戻り値: { subsidies: [...], discounts: [...], multipliers: [...] }
 
 const PT_EFFECT_RE = /([\d,]+)\s*pt\s*(?:の\s*割引|割引|引き)/;
 
@@ -434,8 +435,32 @@ function parseDiscountPattern(text) {
   return discounts;
 }
 
+const MULTIPLIER_RE = /([\d.]+)\s*倍/;
+
+// 「■」を区切りとして条件ブロックごとにテキストを分割し、各ブロック内で
+// 「○○円以上の(ご)購入」条件と「○.○倍」の倍率効果を抽出する
+//   「■ ○○円以上の(ご)購入」→「○.○倍付与」
+function parseMultiplierPattern(text) {
+  const multipliers = [];
+  const segments = text.split('■').slice(1); // 最初の■より前はどの条件にも属さないため除外
+
+  for (const segment of segments) {
+    const thresholdMatch = segment.match(/([\d,]+)\s*円以上の(?:ご)?購入/);
+    if (!thresholdMatch) continue;
+    const multiplierMatch = segment.match(MULTIPLIER_RE);
+    if (!multiplierMatch) continue;
+
+    const thresholdAmount = thresholdMatch[1];
+    const value = multiplierMatch[1];
+    const display = `${thresholdAmount}円以上 → ${value}倍付与`;
+    multipliers.push({ type: 'multiplier', thresholdAmount, value, display });
+  }
+
+  return multipliers;
+}
+
 function parseCampaignHTML(bodyHtml) {
-  if (!bodyHtml) return { subsidies: [], discounts: [] };
+  if (!bodyHtml) return { subsidies: [], discounts: [], multipliers: [] };
 
   const text = stripTags(bodyHtml);
 
@@ -445,10 +470,14 @@ function parseCampaignHTML(bodyHtml) {
 
   const discounts = PT_EFFECT_RE.test(text) ? parseDiscountPattern(text) : [];
 
-  return { subsidies, discounts };
+  const multipliers = MULTIPLIER_RE.test(text) ? parseMultiplierPattern(text) : [];
+
+  return { subsidies, discounts, multipliers };
 }
 
 // ─── LINE通知メッセージ組み立て ─────────────────────────────────────
+
+const CAMPAIGN_TYPE_LABELS = { subsidy: '補助ポイント：', discount: '割引ポイント：', multiplier: '倍率ポイント：' };
 
 function buildResultMessage(userName, mails) {
   const lines = ['【キャンペーン解析結果】', `ユーザー：${userName}`, `配信メール数：${mails.length}件`, ''];
@@ -457,9 +486,12 @@ function buildResultMessage(userName, mails) {
     if (mail.campaigns.length === 0) {
       lines.push('（キャンペーン内容なし）');
     } else {
-      const label = mail.campaigns[0].type === 'subsidy' ? '補助ポイント：' : '割引ポイント：';
-      lines.push(label);
-      for (const c of mail.campaigns) lines.push(`・${c.display}`);
+      for (const type of Object.keys(CAMPAIGN_TYPE_LABELS)) {
+        const items = mail.campaigns.filter(c => c.type === type);
+        if (items.length === 0) continue;
+        lines.push(CAMPAIGN_TYPE_LABELS[type]);
+        for (const c of items) lines.push(`・${c.display}`);
+      }
     }
     lines.push('');
   });
@@ -564,9 +596,9 @@ async function checkSupport() {
 
     console.log('[STEP7-8] 各メールの本文からキャンペーン内容を解析');
     const mails = mailRows.map((row, i) => {
-      const { subsidies, discounts } = parseCampaignHTML(row.bodyHtml);
-      const campaigns = [...subsidies, ...discounts];
-      console.log(`[CAMPAIGN] メール${i + 1} "${row.title}" (${row.dateText}): ${campaigns.length}件検出（補助${subsidies.length}／割引${discounts.length}）`);
+      const { subsidies, discounts, multipliers } = parseCampaignHTML(row.bodyHtml);
+      const campaigns = [...subsidies, ...discounts, ...multipliers];
+      console.log(`[CAMPAIGN] メール${i + 1} "${row.title}" (${row.dateText}): ${campaigns.length}件検出（補助${subsidies.length}／割引${discounts.length}／倍率${multipliers.length}）`);
       return { title: row.title || `メール${i + 1}`, campaigns };
     });
 
