@@ -207,7 +207,20 @@ function resolveHoPhase(charaCfg, typeNum, hoType) {
   if (phases[typeNum]) return { key: typeNum, cfg: phases[typeNum] };
 
   const prefixMatches = Object.entries(phases).filter(([k]) => k.startsWith(typeNum));
-  if (prefixMatches.length === 0) return null;
+  if (prefixMatches.length === 0) {
+    // 通常のphase解決で見つからない場合、minPhaseNumberが設定された
+    // phaseを探し、typeNumの数値部分がminPhaseNumber以上であれば
+    // そのphaseの設定を流用する（例: yu29 → 数値29 → minPhaseNumber=10のyu10を使用）
+    const numMatch = typeNum.match(/(\d+)/);
+    if (numMatch) {
+      const num = parseInt(numMatch[1], 10);
+      const minPhaseEntry = Object.entries(phases).find(
+        ([, p]) => typeof p.minPhaseNumber === 'number' && num >= p.minPhaseNumber
+      );
+      if (minPhaseEntry) return { key: minPhaseEntry[0], cfg: minPhaseEntry[1] };
+    }
+    return null;
+  }
   if (prefixMatches.length === 1) return { key: prefixMatches[0][0], cfg: prefixMatches[0][1] };
 
   // 複数マッチ → hoTypeキー（完全 or 数値サフィックス除去）を持つphaseを優先

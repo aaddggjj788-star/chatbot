@@ -46,7 +46,8 @@
       "ho": { "searchTarget": "12673yu9/ho", "useCurrentRow": false }
     },
     "yu10": {
-      "ho": { "useHistorySearch": true }
+      "ho": { "useHistorySearch": true },
+      "minPhaseNumber": 10
     }
   }
 }
