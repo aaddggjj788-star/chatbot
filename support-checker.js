@@ -26,6 +26,9 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const { chromium } = require('playwright');
 const axios = require('axios');
+const Anthropic = require('@anthropic-ai/sdk');
+
+const anthropic = new Anthropic();
 
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -342,218 +345,124 @@ async function getTodayCampaignRows(target) {
   return matched;
 }
 
-// ─── HTML本文からキャンペーン内容を抽出・解析 ───────────────────────
-// input[name="body"]のvalueはHTMLタグを含む生のHTML文字列。
-// 以前はpage.evaluate()内でDOMParser＋ブロック要素境界により「行」を
-// 復元してから条件・効果を対応付けていたが、タグ構成によっては複数件が
-// 1つの「行」に混在し、非グローバルmatch()が最初の1件しか拾えず
-// 取りこぼすケースがあった（例: ブラウザコンソールでは
-// body.match(/(\d+)pt(?:の割引|引き|割引)/g)が4件ヒットするのに
-// Playwright側の解析では2件しか取得できない）。
-// タグ構造に依存しないよう、生HTML文字列に対して正規表現で
-// 直接パターンマッチする方式に変更する（parseCampaignHTML）。
-// ただしテーブル形式（パターン5）は行・列の対応関係を正確に取るため、
-// 実DOMのtr/td構造を使う方が確実なので、そちらのみpage.evaluate()内で
-// DOMParserを使って解析する（parseTablePattern、別関数・別経路）。
+// ─── HTML本文からキャンペーン内容を抽出・解析（Claude API使用） ─────
+// 正規表現／DOM解析ベースでは複雑なHTML構造のキャンペーンメールに
+// 対応しきれなかったため、メール本文HTMLをそのままClaude APIに渡して
+// 構造化データ（JSON）として抽出する方式に変更する。
 //
-// 5種類のメールパターンを判別して解析する:
-//   パターン1: 補助ポイント（「○○円以上のご購入」＋「合計補助」＋「○○円分」）
-//   パターン2: 割引ポイント（「○○ptの割引」「○○pt割引」「○○pt引き」）
-//   パターン3: 倍率ポイント（「○○円以上」＋「○.○倍」）
-//   パターン4: %補助（「購入金額の○○％分」）
-//   パターン5: テーブル形式（<table>のtr内、1列目=購入金額／2列目=補助
-//              内容(円分／％分／倍)の組み合わせ）
-//
-// 戻り値: { subsidies: [...], discounts: [...], multipliers: [...], percents: [...] }
-// （テーブル形式はparseTablePattern()が別途Promiseで返す）
+// campaign.type:
+//   fixed    固定ポイント補助（○○円以上 → ○○円分補助）
+//   rate     倍率ポイント付与（○○円以上 → ○.○倍付与）
+//   percent  ％補助（購入金額の○○％分を追加）
+//   discount 割引ポイント（○○pt割引）
 
-const PT_EFFECT_RE = /([\d,]+)\s*pt\s*(?:の\s*割引|割引|引き)/;
+const CAMPAIGN_SYSTEM_PROMPT =
+  'あなたはメール本文からキャンペーン情報を抽出するアシスタントです。JSONのみで回答してください。';
 
-// <b>等の装飾タグが金額とキーワードの間に割り込むと（例: "合計補助 <b>500</b>円分"）
-// タグを残したままでは正規表現が数字と後続キーワードを連続と認識できず
-// マッチに失敗するため、解析前にタグを除去したプレーンテキストへ変換する。
-// 「■」の出現位置や各キーワードの前後関係だけを見るこの解析方式では
-// タグによる行・ブロック構造は不要なため、除去してしまって問題ない
-function stripTags(html) {
-  return html.replace(/<[^>]+>/g, '');
+// output_config.format（構造化出力）でJSON形式を強制するためのスキーマ。
+// 各typeで使うフィールドが異なるため、必須項目はtype/amount/unitのみとする
+const CAMPAIGN_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    campaigns: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['fixed', 'rate', 'percent', 'discount'] },
+          amount: { type: 'integer' },
+          bonus: { type: 'integer' },
+          rate: { type: 'number' },
+          discount: { type: 'integer' },
+          unit: { type: 'string' },
+        },
+        required: ['type', 'amount', 'unit'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['campaigns'],
+  additionalProperties: false,
+};
+
+function buildCampaignUserPrompt(bodyHtml) {
+  return `以下のメール本文からキャンペーン内容を抽出してください。
+購入金額と付与ポイント/倍率/割引の対応表をJSON形式で返してください。
+
+${bodyHtml}
+
+以下のJSON形式で返してください：
+{
+  "campaigns": [
+    {"type": "fixed", "amount": 10000, "bonus": 5000, "unit": "円分"},
+    {"type": "rate", "amount": 3000, "rate": 1.2, "unit": "倍"},
+    {"type": "percent", "amount": 0, "rate": 50, "unit": "%"},
+    {"type": "discount", "amount": 0, "discount": 30, "unit": "pt"}
+  ]
+}`;
 }
 
-// 「○○円以上のご購入」ごとに、次の閾値が現れるまでの範囲（＝同じカード
-// 相当）に限定して「合計補助」直後の「○○円分」のみを補助金額として
-// 採用する。これにより閾値と無関係な円表記の重複検出を防ぐ
-function parseSubsidyPattern(text) {
-  const subsidies = [];
-  const thresholdRe = /([\d,]+)\s*円以上のご購入/g;
-  const matches = [...text.matchAll(thresholdRe)];
-
-  for (let i = 0; i < matches.length; i++) {
-    const thresholdAmount = matches[i][1];
-    const scopeStart = matches[i].index + matches[i][0].length;
-    const scopeEnd = i + 1 < matches.length ? matches[i + 1].index : text.length;
-    const scope = text.slice(scopeStart, scopeEnd);
-
-    const subsidyMatch = scope.match(/合計補助[\s\S]*?([\d,]+)\s*円分/);
-    if (!subsidyMatch) continue;
-
-    const value = subsidyMatch[1];
-    const display = `${thresholdAmount}円以上 → ${value}円分補助`;
-    subsidies.push({ type: 'subsidy', thresholdAmount, value, display });
-  }
-
-  return subsidies;
-}
-
-// 「■」を区切りとして条件ブロックごとにテキストを分割し、各ブロック内で
-// 条件（無償適用／○○円以上のご入金）と効果（○○pt割引・引き）を抽出する。
-// 「■」は本文中に条件の数だけしか現れない区切り文字であるため、
-// タグ除去後のテキストに対して行っても件数分だけ正しく分割できる
-//   「■ 無償適用」→「○○ptの割引／○○pt割引」（デフォルト3時間）
-//   「■ ○○円以上のご入金」→「○○pt引き／○○pt割引」（デフォルト終日）
-function parseDiscountPattern(text) {
-  const discounts = [];
-  const segments = text.split('■').slice(1); // 最初の■より前はどの条件にも属さないため除外
-
-  for (const segment of segments) {
-    const durationMatch = segment.match(/[（(]([^）)]+)[）)]/);
-    const duration = durationMatch ? durationMatch[1] : null;
-
-    if (/無償適用/.test(segment)) {
-      const ptMatch = segment.match(PT_EFFECT_RE);
-      if (!ptMatch) continue;
-      const value = ptMatch[1];
-      const finalDuration = duration || '3時間';
-      const display = `無償適用 → ${value}pt割引（${finalDuration}）`;
-      discounts.push({ type: 'discount', condition: '無償適用', value, duration: finalDuration, display });
-      continue;
-    }
-
-    const depositMatch = segment.match(/([\d,]+)\s*円以上のご入金/);
-    if (!depositMatch) continue;
-    const ptMatch = segment.match(PT_EFFECT_RE);
-    if (!ptMatch) continue;
-
-    const thresholdAmount = depositMatch[1];
-    const value = ptMatch[1];
-    const finalDuration = duration || '終日';
-    const display = `${thresholdAmount}円以上 → ${value}pt割引（${finalDuration}）`;
-    discounts.push({ type: 'discount', condition: `${thresholdAmount}円以上`, value, duration: finalDuration, display });
-  }
-
-  return discounts;
-}
-
-const MULTIPLIER_RE = /([\d,]+)\s*円以上[\s\S]*?([\d.]+)\s*倍/;
-
-// 「○○円以上」から次に現れる「○.○倍」までを1件として抽出する。
-// ■区切りや「の(ご)購入」等の特定の言い回しを前提にせず、閾値の直後に
-// 倍率が現れる構造であれば検出できるようにする
-function parseMultiplierPattern(text) {
-  const multipliers = [];
-  const re = new RegExp(MULTIPLIER_RE, 'g');
-  for (const m of text.matchAll(re)) {
-    const thresholdAmount = m[1];
-    const value = m[2];
-    const display = `${thresholdAmount}円以上 → ${value}倍付与`;
-    multipliers.push({ type: 'multiplier', thresholdAmount, value, display });
-  }
-  return multipliers;
-}
-
-const PERCENT_RE = /購入金額の(\d+)(?:％|%)分/;
-
-// 「ご購入金額の○○％分」を追加ポイントとして付与するパターンを抽出する
-function parsePercentPattern(text) {
-  const percents = [];
-  const re = new RegExp(PERCENT_RE, 'g');
-  for (const m of text.matchAll(re)) {
-    const value = m[1];
-    const display = `購入金額の${value}%分を追加`;
-    percents.push({ type: 'percent', value, display });
-  }
-  return percents;
-}
-
-function parseCampaignHTML(bodyHtml) {
-  if (!bodyHtml) return { subsidies: [], discounts: [], multipliers: [], percents: [] };
-
-  const text = stripTags(bodyHtml);
-
-  const subsidies = (text.includes('円以上のご購入') && text.includes('合計補助'))
-    ? parseSubsidyPattern(text)
-    : [];
-
-  const discounts = PT_EFFECT_RE.test(text) ? parseDiscountPattern(text) : [];
-
-  const multipliers = MULTIPLIER_RE.test(text) ? parseMultiplierPattern(text) : [];
-
-  const percents = PERCENT_RE.test(text) ? parsePercentPattern(text) : [];
-
-  return { subsidies, discounts, multipliers, percents };
-}
-
-// ─── テーブル形式のキャンペーン抽出（DOM解析） ─────────────────────
-// <table>のtrを走査し、1列目td（購入金額）と2列目td（補助内容:
-// 円分／%分／倍）の組み合わせを抽出する。テーブルの行・列構造は
-// 正規表現でのペアリングより実DOMのtr/td構造を使う方が確実なため、
-// evalTarget（Page/Frame）のpage.evaluate()内でDOMParserを使って解析する
-async function parseTablePattern(evalTarget, bodyHtml) {
+async function parseCampaignWithClaude(bodyHtml) {
   if (!bodyHtml) return [];
 
-  return evalTarget.evaluate((html) => {
-    const parser = new DOMParser();
-    // tr/td断片が<table>で囲まれていないとブラウザのfoster parentingで
-    // 構造が保持されないため、常にtable/tbodyで包んでから解析する
-    // （html側に既に<table>タグが含まれていてもtr自体はdocument内に
-    //  残るためquerySelectorAll('tr')で問題なく取得できる）
-    const doc = parser.parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html');
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-opus-4-8',
+      max_tokens: 8192,
+      thinking: { type: 'adaptive' },
+      system: CAMPAIGN_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildCampaignUserPrompt(bodyHtml) }],
+      output_config: {
+        effort: 'high',
+        format: { type: 'json_schema', schema: CAMPAIGN_JSON_SCHEMA },
+      },
+    });
 
-    const results = [];
-    for (const row of doc.querySelectorAll('tr')) {
-      const cells = row.querySelectorAll('td, th');
-      if (cells.length < 2) continue;
-
-      const col1 = (cells[0].textContent || '').trim();
-      const col2 = (cells[1].textContent || '').trim();
-      if (!col1 || !col2) continue;
-
-      const thresholdMatch = col1.match(/([\d,]+)\s*円(以上)?/);
-      if (!thresholdMatch) continue;
-      const thresholdAmount = thresholdMatch[1];
-      const suffix = thresholdMatch[2] ? '以上' : '';
-
-      const yenMatch = col2.match(/([\d,]+)\s*円分/);
-      const percentMatch = col2.match(/([\d.]+)\s*(?:％|%)分/);
-      const timesMatch = col2.match(/([\d.]+)\s*倍/);
-
-      let subType = null;
-      let value = null;
-      let effectDisplay = null;
-      if (yenMatch) {
-        subType = 'yen'; value = yenMatch[1]; effectDisplay = `${value}円分`;
-      } else if (percentMatch) {
-        subType = 'percent'; value = percentMatch[1]; effectDisplay = `${value}%分`;
-      } else if (timesMatch) {
-        subType = 'times'; value = timesMatch[1]; effectDisplay = `${value}倍`;
-      } else {
-        continue;
-      }
-
-      const display = `${thresholdAmount}円${suffix} → ${effectDisplay}`;
-      results.push({ type: 'table', subType, thresholdAmount, value, display });
+    const textBlock = response.content.find(b => b.type === 'text');
+    if (!textBlock) {
+      console.log('[CAMPAIGN] Claude APIレスポンスにテキストブロックがありません');
+      return [];
     }
-    return results;
-  }, bodyHtml);
+
+    const parsed = JSON.parse(textBlock.text);
+    const campaigns = Array.isArray(parsed.campaigns) ? parsed.campaigns : [];
+    console.log(`[CAMPAIGN] Claude API解析結果: ${campaigns.length}件`);
+    return campaigns;
+  } catch (e) {
+    console.error('[ERROR] Claude APIキャンペーン解析失敗:', e.message);
+    return [];
+  }
 }
 
 // ─── LINE通知メッセージ組み立て ─────────────────────────────────────
 
 const CAMPAIGN_TYPE_LABELS = {
-  subsidy: '補助ポイント：',
-  discount: '割引ポイント：',
-  multiplier: '倍率ポイント：',
+  fixed: '補助ポイント：',
+  rate: '倍率ポイント：',
   percent: '%補助：',
-  table: 'テーブル補助：',
+  discount: '割引ポイント：',
 };
+
+function formatNumber(n) {
+  return Number(n).toLocaleString('en-US');
+}
+
+// Claude APIが返す生のcampaignフィールド（type/amount/bonus/rate/discount/unit）
+// から、LINE通知用の表示文字列をtypeに応じて組み立てる
+function formatCampaignDisplay(c) {
+  switch (c.type) {
+    case 'fixed':
+      return `${formatNumber(c.amount)}円以上 → ${formatNumber(c.bonus)}円分補助`;
+    case 'rate':
+      return `${formatNumber(c.amount)}円以上 → ${c.rate}倍付与`;
+    case 'percent':
+      return `購入金額の${c.rate}%分を追加`;
+    case 'discount':
+      return `${c.discount}pt割引`;
+    default:
+      return JSON.stringify(c);
+  }
+}
 
 function buildResultMessage(userName, mails) {
   const lines = ['【キャンペーン解析結果】', `ユーザー：${userName}`, `配信メール数：${mails.length}件`, ''];
@@ -566,7 +475,7 @@ function buildResultMessage(userName, mails) {
         const items = mail.campaigns.filter(c => c.type === type);
         if (items.length === 0) continue;
         lines.push(CAMPAIGN_TYPE_LABELS[type]);
-        for (const c of items) lines.push(`・${c.display}`);
+        for (const c of items) lines.push(`・${formatCampaignDisplay(c)}`);
       }
     }
     lines.push('');
@@ -670,14 +579,12 @@ async function checkSupport() {
       return;
     }
 
-    console.log('[STEP7-8] 各メールの本文からキャンペーン内容を解析');
+    console.log('[STEP7-8] 各メールの本文からキャンペーン内容をClaude APIで解析');
     const mails = [];
     for (let i = 0; i < mailRows.length; i++) {
       const row = mailRows[i];
-      const { subsidies, discounts, multipliers, percents } = parseCampaignHTML(row.bodyHtml);
-      const tableItems = await parseTablePattern(mailPage, row.bodyHtml);
-      const campaigns = [...subsidies, ...discounts, ...multipliers, ...percents, ...tableItems];
-      console.log(`[CAMPAIGN] メール${i + 1} "${row.title}" (${row.dateText}): ${campaigns.length}件検出（補助${subsidies.length}／割引${discounts.length}／倍率${multipliers.length}／%補助${percents.length}／テーブル${tableItems.length}）`);
+      const campaigns = await parseCampaignWithClaude(row.bodyHtml);
+      console.log(`[CAMPAIGN] メール${i + 1} "${row.title}" (${row.dateText}): ${campaigns.length}件検出`);
       mails.push({ title: row.title || `メール${i + 1}`, campaigns });
     }
 
