@@ -699,13 +699,10 @@ async function checkSupport() {
       console.log('[DEBUG] STEP10後のフレームURL:', mainFrame.url());
 
       console.log('[STEP11] 所持ポイントに1を加算');
-      const currentPointText = await mainFrame.locator('input[name="pointOut"]').inputValue().catch(() => '0');
-      const currentPoint = parseInt((currentPointText || '0').replace(/[^\d]/g, ''), 10) || 0;
-      const newPoint = currentPoint + 1;
-      console.log(`[DEBUG] 現在ポイント=${currentPoint} → pointOutに入力=${newPoint}`);
-      await mainFrame.fill('input[name="pointOut"]', String(newPoint));
-      await mainFrame.click('input[name="ginkoRadio"][value="+"]');
-      await mainFrame.fill('input[value="1"]', '1');
+      // pointMark: value="1"が+（加算）、value="2"が-（減算）
+      // pointOut: 増減量そのものを入力する欄（現在値+1を入れるのではない）
+      await mainFrame.click('input[name="pointMark"][value="1"]');
+      await mainFrame.fill('input[name="pointOut"]', '1');
       await mainFrame.click('input[name="user_henko"]');
       await new Promise(r => setTimeout(r, 3000));
       console.log('[STEP11] ページ更新待機完了');
@@ -811,9 +808,11 @@ async function checkSupport() {
         }
 
         const sign = diff < 0 ? '+' : '-';
-        console.log(`[STEP17] ${sign}${diffAbs}pt を調整`);
-        await mainFrame.click(`input[name="ginkoRadio"][value="${sign}"]`);
-        await mainFrame.fill('input[value="1"]', String(diffAbs));
+        // pointMark: value="1"が+（加算）、value="2"が-（減算・要確認）
+        const pointMarkValue = sign === '+' ? '1' : '2';
+        console.log(`[STEP17] ${sign}${diffAbs}pt を調整（pointMark value=${pointMarkValue}）`);
+        await mainFrame.click(`input[name="pointMark"][value="${pointMarkValue}"]`);
+        await mainFrame.fill('input[name="pointOut"]', String(diffAbs));
         await mainFrame.click('input[name="user_henko"]');
         await new Promise(r => setTimeout(r, 3000));
         await sendLine(`【調整完了】${target.userName}のポイントを${sign}${diffAbs}pt調整しました`);
