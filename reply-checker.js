@@ -1360,6 +1360,14 @@ async function processUsers(page) {
         }
       }
 
+      // action設定（hoActionCfg）自体にactiveFrom/stopAfter/activeUntilが
+      // 入っているケース（例: yu1.ho1.activeFrom）もあるため、phase側だけでなく
+      // action側の時間帯制限も個別にチェックする
+      if (hoActionCfg && isPhaseBlocked(hoActionCfg)) {
+        console.log(`[TIME] ${userName}: hoAction "${hoType}" 時間帯制限 → フォールバックへ`);
+        hoActionCfg = null;
+      }
+
       console.log(`[COMMENT] ${userName}: /hoモード comment="${hoComment}" hoType="${hoType}" phase=${hoPhaseResult?.key} actionCfg=${JSON.stringify(hoActionCfg)}`);
 
       // ─── JSON設定に基づく処理分岐 ────────────────────────────────
