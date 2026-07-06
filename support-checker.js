@@ -34,6 +34,7 @@ const anthropic = new Anthropic();
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const DRY_RUN    = process.env.DRY_RUN === 'true';
+const SUPPORT_CHECK_TEST_MODE = process.env.SUPPORT_CHECK_TEST_MODE === 'true';
 
 // reply-checker.jsと同じLINE返信待ちファイルを共有する（server.jsのLINE
 // webhookが「調整する」「スキップ」等の返信テキストをここに書き込む想定）
@@ -300,7 +301,8 @@ async function openMemberDetail(page) {
 //      本文は input[name="body"] を最優先に探し、無ければ「HTMLメールとしてみる」
 //      ボタンと同じform内のhidden input・textareaを順に探す
 async function getTodayCampaignRows(target) {
-  const { matched, debugRows } = await target.evaluate(() => {
+  const testMode = SUPPORT_CHECK_TEST_MODE;
+  const { matched, debugRows } = await target.evaluate((testMode) => {
     // 日時テキストを month/day/hour/minute に分解する
     // 対応形式: "2026/07/03 09:15" ・ "2026-07-03 09:15" ・ "07月03日 09時15分"（年なし可）
     function parseDateCell(text) {
@@ -358,7 +360,7 @@ async function getTodayCampaignRows(target) {
       // ─── 1) 日時判定（本文はまだ読まない）───────────────────────
       if (!parsed) continue;
       const isToday = parsed.month === nowMonth && parsed.day === nowDay;
-      const isAfter8 = (parsed.hour * 60 + parsed.minute) >= 8 * 60;
+      const isAfter8 = testMode ? true : (parsed.hour * 60 + parsed.minute) >= 8 * 60;
       if (!isToday || !isAfter8) continue;
 
       // ─── 2) 条件を満たした行のみ本文を取得 ────────────────────
@@ -372,13 +374,17 @@ async function getTodayCampaignRows(target) {
     }
 
     return { matched, debugRows };
-  });
+  }, testMode);
 
   console.log(`[STEP6] 「HTMLメールとしてみる」保有行: ${debugRows.length}件`);
   for (const r of debugRows) {
     console.log(`[STEP6]   日時列="${r.dateCellText}" → 解析=${JSON.stringify(r.parsed)}`);
   }
-  console.log(`[STEP6] 本日8時以降に該当: ${matched.length}件`);
+  if (testMode) {
+    console.log(`[STEP6] テストモード: 本日の全時間帯が対象 → ${matched.length}件`);
+  } else {
+    console.log(`[STEP6] 本日8時以降に該当: ${matched.length}件`);
+  }
   for (const m of matched) {
     console.log(`[STEP6]   本文取得元: ${m.bodySource}`);
   }
@@ -658,7 +664,9 @@ async function checkSupport() {
       return;
     }
 
-    console.log('[STEP6] mg_mail_edit.phpのtableから本日8時以降の配信メール一覧を取得');
+    console.log(SUPPORT_CHECK_TEST_MODE
+      ? '[STEP6] mg_mail_edit.phpのtableから本日の配信メール一覧を取得（テストモード：時間制限なし）'
+      : '[STEP6] mg_mail_edit.phpのtableから本日8時以降の配信メール一覧を取得');
     await mailPage.waitForSelector('table', { timeout: 10000 });
     const mailRows = await getTodayCampaignRows(mailPage);
     console.log(`[STEP6] 対象件数: ${mailRows.length}件`);
@@ -668,7 +676,10 @@ async function checkSupport() {
     }
 
     if (mailRows.length === 0) {
-      await sendLine(`【キャンペーン解析結果】\nユーザー：${target.userName}\n配信メール数：0件\n本日8時以降のお知らせメールは見つかりませんでした`);
+      const notFoundMsg = SUPPORT_CHECK_TEST_MODE
+        ? '本日のお知らせメールは見つかりませんでした'
+        : '本日8時以降のお知らせメールは見つかりませんでした';
+      await sendLine(`【キャンペーン解析結果】\nユーザー：${target.userName}\n配信メール数：0件\n${notFoundMsg}`);
       console.log('=== support-checker 完了（対象メールなし） ===');
       return;
     }
