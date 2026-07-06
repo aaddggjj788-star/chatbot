@@ -1308,6 +1308,35 @@ async function processUsers(page) {
           }
         }
 
+        // useHistorySearch: 履歴から最新sinko/hisコメントを検索し、その次行を
+        // 送信する（hoのフォールバック処理=historySinkoComments と同じロジック）
+        if (!replyData && !skipUser && actionCfg.useHistorySearch) {
+          const historyComments = analysis.allKanteishiComments || [];
+          const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+
+          if (historySinkoComments.length === 0) {
+            console.log(`[SKIP] ${userName}: subAction useHistorySearch・履歴にsinko/hisコメントなし (${parsed.actionKey})`);
+            skipUser = true;
+          } else {
+            const histSinkoNums = historySinkoComments
+              .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+              .filter(n => n !== null);
+            const maxSinko = Math.max(...histSinkoNums);
+            latestComment = historySinkoComments.find(c => {
+              const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+              return m && parseInt(m[1], 10) === maxSinko;
+            }) || latestComment;
+
+            console.log(`[JSON] subAction useHistorySearch: sinko+1 charaId=${parsed.charaId} maxSinko=${maxSinko}`);
+            try {
+              replyData = getReplyFromCSV(parsed.charaId, maxSinko);
+            } catch (e) {
+              console.error(`[ERROR] subAction useHistorySearch CSV取得失敗 (${userName}): ${e.message}`);
+              skipUser = true;
+            }
+          }
+        }
+
         if (replyData) break;
       }
 
