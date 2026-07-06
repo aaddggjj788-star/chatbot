@@ -993,31 +993,54 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bod
 }
 
 // ope_mainフレームの div.bodyNaibu からユーザーメッセージ本文のみ取得する
-// 全 div.bodyNaibu から鑑定士行（90ee90 背景）に属するものを除外してユーザー分のみ返す
+// 全 div.bodyNaibu から鑑定士行（90ee90 背景）に属するものを除外し、
+// さらに最新の鑑定士メッセージより上（新しい）のユーザー分のみに限定する
+// （analyzeMessages()のfirstKIdx判定と同じ基準で最新鑑定士要素を特定する。
+//  indexそのものはevaluate()の呼び出しをまたいで受け渡せないため、
+//  ここで同じ基準を使って独自に境界を再判定する）
 // DOM順（上=最新）で返す。<br> は改行として扱い、他のHTMLタグは除去する
 async function getBodyNaibuTexts(frame) {
   try {
-    const { texts, totalCount, userCount } = await frame.evaluate(() => {
+    const { texts, totalCount, userCount, filteredCount } = await frame.evaluate(() => {
       function normStyle(el) {
         return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
+      }
+      function isKanteishiBg(el) {
+        const bg = normStyle(el);
+        return bg.includes('90ee90') || bg.includes('144,238,144');
       }
       function isKanteishiAncestor(el) {
         let node = el.parentElement;
         while (node) {
-          const bg = normStyle(node);
-          if (bg.includes('90ee90') || bg.includes('144,238,144')) return true;
+          if (isKanteishiBg(node)) return true;
           node = node.parentElement;
         }
         return false;
       }
+
+      // 最新の鑑定士メッセージ要素（DOM順で最初に見つかる鑑定士背景の
+      // tr/td/div）を特定する
+      let latestKanteishiEl = null;
+      for (const el of document.querySelectorAll('tr, td, div')) {
+        if (isKanteishiBg(el)) { latestKanteishiEl = el; break; }
+      }
+
       const all = Array.from(document.querySelectorAll('div.bodyNaibu'));
       const userOnly = all.filter(el => !isKanteishiAncestor(el));
-      const texts = userOnly
+
+      // 最新鑑定士メッセージより上（新しい）のユーザーメッセージのみに限定する
+      const filtered = userOnly.filter(el => {
+        if (!latestKanteishiEl) return true;
+        const pos = el.compareDocumentPosition(latestKanteishiEl);
+        return !!(pos & Node.DOCUMENT_POSITION_FOLLOWING);
+      });
+
+      const texts = filtered
         .map(el => el.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim())
         .filter(t => t.length > 0);
-      return { texts, totalCount: all.length, userCount: userOnly.length };
+      return { texts, totalCount: all.length, userCount: userOnly.length, filteredCount: filtered.length };
     });
-    console.log(`[DEBUG] getBodyNaibuTexts: 全bodyNaibu=${totalCount}件 / ユーザー行=${userCount}件 / テキスト=${texts.length}件`);
+    console.log(`[DEBUG] getBodyNaibuTexts: 全bodyNaibu=${totalCount}件 / ユーザー行=${userCount}件 / 最新鑑定士より上=${filteredCount}件 / テキスト=${texts.length}件`);
     if (texts.length > 0) console.log('[DEBUG] getBodyNaibuTexts 先頭:', texts[0].slice(0, 120));
     return texts;
   } catch (e) {
