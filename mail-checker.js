@@ -91,6 +91,20 @@ function extractAmount(text) {
   return parseInt(match[1].replace(/,/g, ''), 10);
 }
 
+// IMAP接続（失敗時は30秒待って最大3回まで再試行）
+async function connectImapWithRetry(imapConfig, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await imapSimple.connect(imapConfig);
+    } catch (err) {
+      console.error(`IMAP接続エラー (試行${attempt + 1}/${maxRetries + 1}回目):`, err.message);
+      if (attempt === maxRetries) throw err;
+      await sendLine('【警告】IMAP接続エラーが発生しました。再接続を試みます。');
+      await new Promise(resolve => setTimeout(resolve, 30000));
+    }
+  }
+}
+
 // ─── Playwright: ポイント追加処理 ───────────────────────────────────
 
 async function addPointsViaPlaywright(memberId, amount, points) {
@@ -183,8 +197,8 @@ async function checkMail() {
       port: parseInt(process.env.IMAP_PORT || '993', 10),
       tls: true,
       tlsOptions: { rejectUnauthorized: false },
-      connTimeout: 10000,
-      authTimeout: 10000,
+      connTimeout: 30000,
+      authTimeout: 30000,
       user: process.env.IMAP_USER,
       password: process.env.IMAP_PASS,
     },
@@ -192,7 +206,7 @@ async function checkMail() {
 
   let connection;
   try {
-    connection = await imapSimple.connect(imapConfig);
+    connection = await connectImapWithRetry(imapConfig, 3);
     await connection.openBox('INBOX');
 
     const searchCriteria = TEST_MODE
