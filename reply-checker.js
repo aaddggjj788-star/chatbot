@@ -535,6 +535,17 @@ async function getTargetUsers(page) {
   return results;
 }
 
+// HTML実体参照をデコードする（デバッグ表示用）
+function decodeHtml(text) {
+  return String(text)
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
 // ─── メッセージ履歴の詳細判定（JS評価）──────────────────────────────
 //
 // 右パネルのメッセージを上から順に走査し、以下を判定:
@@ -655,6 +666,10 @@ async function analyzeMessages(page) {
   const normalize = (t) => t.replace(/[\t\n\r]/g, '').replace(/\s+/g, ' ').trim();
   const hasLongMessage = bodyNaibuTexts.some(t => normalize(t).length >= 50);
   if (hasLongMessage) {
+    bodyNaibuTexts.forEach((t, i) => {
+      const decoded = decodeHtml(t);
+      console.log(`[DEBUG] bodyNaibu[${i}] 文字数=${decoded.length} テキスト="${decoded.slice(0, 80)}"`);
+    });
     return { target: false, reason: 'ユーザーメッセージに50文字以上のものあり' };
   }
 
