@@ -21,7 +21,7 @@
       "do1": { "searchTarget": "12673mu2his/do/1", "useCurrentRow": false }
     },
     "yu1": {
-      "ho1": { "searchTarget": "12673yu1/ho/1", "useCurrentRow": false }
+      "ho1": { "searchTarget": "12673yu1/ho/1", "useCurrentRow": false, "activeFrom": "10:30" }
     },
     "yu2": {
       "noresHo": { "fileId": "12673yu1", "searchTarget": "12673yu1/sinko/1", "useCurrentRow": true }
