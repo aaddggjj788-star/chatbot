@@ -546,6 +546,21 @@ function decodeHtml(text) {
     .replace(/&#39;/gi, "'");
 }
 
+// 念言テキストから検索ワードを抽出する
+// 【】≪≫《》()（）「」『』[]等の括弧類を区切りとして分割し、各パーツから
+// 漢字・ひらがな・カタカナのみを抽出、2文字以上のパーツのみを採用する
+// （念言全体との完全一致ではなく、ユーザーが一部だけ送ってきた場合にも
+//  マッチできるようにするため）
+function extractNengenKeywords(text) {
+  const parts = String(text).split(/[【】≪≫《》()（）「」『』\[\]]/);
+  const keywords = [];
+  for (const part of parts) {
+    const cleaned = part.replace(/[^一-鿿぀-ゟ゠-ヿ]/g, '');
+    if (cleaned.length >= 2) keywords.push(cleaned);
+  }
+  return keywords;
+}
+
 // ─── メッセージ履歴の詳細判定（JS評価）──────────────────────────────
 //
 // 右パネルのメッセージを上から順に走査し、以下を判定:
@@ -1203,8 +1218,9 @@ async function processUsers(page) {
       if (nengenWords.length > 0) {
         const userTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
         const allUserText = userTexts.join('');
-        const nengenFound = nengenWords.some(w => allUserText.includes(w));
-        console.log(`[NENGEN] ${userName}: 念言=${JSON.stringify(nengenWords)} 含有=${nengenFound}`);
+        const nengenKeywords = nengenWords.flatMap(extractNengenKeywords);
+        const nengenFound = nengenKeywords.some(kw => allUserText.includes(kw));
+        console.log(`[NENGEN] ${userName}: 念言=${JSON.stringify(nengenWords)} 検索ワード=${JSON.stringify(nengenKeywords)} 含有=${nengenFound}`);
         if (!nengenFound) {
           console.log(`[SKIP] ${userName}: 念言がユーザーメッセージに未発見`);
           continue;
