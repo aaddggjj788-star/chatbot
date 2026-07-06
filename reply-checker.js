@@ -1689,9 +1689,15 @@ async function processUsers(page) {
     const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
     const lineMsg = [
       '【返信確認】',
-      `ユーザー：${userName}`,
+      `ユーザー：${userName}（u_id: ${uid}）`,
       `対象コメントアウト：${latestComment || '（不明）'}`,
-      ...(analysis.hasConsultation ? ['【相談あり】'] : []),
+      ...(analysis.hasConsultation ? [
+        '【相談あり】',
+        '相談内容：',
+        '---',
+        (analysis.latestUserTexts || []).join('\n'),
+        '---',
+      ] : []),
       '返信文：',
       '---',
       displayReplyText,
