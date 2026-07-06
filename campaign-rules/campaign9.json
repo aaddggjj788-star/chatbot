@@ -1,0 +1,1 @@
+{"id":9,"name":"50%増量+50pt割引","rules":[{"minAmount":5000,"type":"percent","rate":50},{"minAmount":5000,"type":"discount","discount":50}]}

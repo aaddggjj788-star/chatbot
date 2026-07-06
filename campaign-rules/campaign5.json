@@ -1,0 +1,1 @@
+{"id":5,"name":"30%増量","rules":[{"minAmount":5000,"maxAmount":29999,"type":"percent","rate":30},{"minAmount":30000,"type":"percent","rate":30,"bonus":800}]}

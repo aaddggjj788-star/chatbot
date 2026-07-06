@@ -1,0 +1,1 @@
+{"id":1,"name":"ポイント増量","rules":[{"minAmount":3000,"maxAmount":29999,"type":"percent","rate":20},{"minAmount":30000,"type":"percent","rate":40}]}

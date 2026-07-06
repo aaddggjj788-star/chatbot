@@ -1,0 +1,1 @@
+{"id":2,"name":"pt割引","rules":[{"minAmount":20000,"maxAmount":29999,"type":"discount","discount":50},{"minAmount":30000,"type":"discount","discount":75}]}

@@ -1,0 +1,1 @@
+{"id":"KA1","name":"KA固定ボーナス1","rules":[{"minAmount":5000,"maxAmount":9999,"type":"fixed","bonus":100},{"minAmount":10000,"maxAmount":29999,"type":"fixed","bonus":300},{"minAmount":30000,"maxAmount":49999,"type":"fixed","bonus":1200},{"minAmount":50000,"type":"fixed","bonus":2500}]}

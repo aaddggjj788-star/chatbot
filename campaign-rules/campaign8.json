@@ -1,0 +1,1 @@
+{"id":8,"name":"ルーレット+割引","rules":[{"minAmount":10000,"type":"lottery"},{"minAmount":50000,"type":"discount","discount":50}]}

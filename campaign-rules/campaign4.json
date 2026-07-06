@@ -1,0 +1,1 @@
+{"id":4,"name":"pt割引（段階）","rules":[{"minAmount":10000,"maxAmount":19999,"type":"discount","discount":30},{"minAmount":20000,"maxAmount":29999,"type":"discount","discount":50},{"minAmount":30000,"maxAmount":49999,"type":"discount","discount":75},{"minAmount":50000,"type":"discount","discount":100}]}
