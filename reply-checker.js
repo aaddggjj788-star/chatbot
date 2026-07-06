@@ -1409,7 +1409,7 @@ async function processUsers(page) {
       // 例: "12668yu3/ho"        → baseId=12668, typeNum=yu3,      hoType=ho
       // 例: "12668mu2zenhan/ho1" → baseId=12668, typeNum=mu2zenhan, hoType=ho1
       // 例: "12673yu1/sinko/ho"  → baseId=12673, typeNum=yu1,      hoType=ho（sinko挟み込み形式）
-      const hoMatch = hoComment.match(/^(\d+)((?:yu|mu)\d+\w*)\/(?:sinko\/)?(\w+)$/);
+      const hoMatch = hoComment.match(/^(\d+)((?:yu|mu)\d+\w*)\/(?:sinko\/)?(\w+)(?:\/\w+)*$/);
 
       let hoBaseId = null;
       let hoTypeNum = null;
