@@ -1224,7 +1224,13 @@ async function processUsers(page) {
           console.log(`[TIME] ${userName}: subAction phase "${phaseResult?.key}" 時間帯制限 → スキップ`);
           phaseCfg = null;
         }
-        const actionCfg = phaseCfg?.[parsed.actionKey] ?? null;
+        let actionCfg = phaseCfg?.[parsed.actionKey] ?? null;
+        if (!actionCfg && parsed.actionKey !== 'ho' && phaseCfg) {
+          actionCfg = phaseCfg['ho'] ?? null;
+          if (actionCfg) {
+            console.log(`[JSON] actionKey="${parsed.actionKey}" → "ho"にフォールバック`);
+          }
+        }
 
         console.log(`[COMMENT] ${userName}: subAction comment="${parsed.comment}" actionKey="${parsed.actionKey}" phase=${phaseResult?.key} actionCfg=${JSON.stringify(actionCfg)}`);
 
