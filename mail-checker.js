@@ -218,9 +218,10 @@ async function checkMail() {
     connection = await connectImapWithRetry(imapConfig, 3);
     await connection.openBox('INBOX');
 
-    const searchCriteria = TEST_MODE
-      ? ['UNSEEN']
-      : ['UNSEEN', ['SUBJECT', TARGET_SUBJECT]];
+    // IMAPのSUBJECT検索フィルターは、件名がUTF-8のQuoted-Printable等で
+    // エンコードされている場合にマッチしないことがあるため、UNSEENのみで
+    // 全件取得し、件名の一致判定はNode.js側でデコード後に行う
+    const searchCriteria = ['UNSEEN'];
     const fetchOptions = {
       bodies: [''],
       markSeen: false,    // フェッチ時点では既読にしない（処理成功時のみ既読化する）
@@ -248,6 +249,16 @@ async function checkMail() {
         console.error('メールパースエラー:', err.message);
         await sendLine(`【システムエラー】メールのパースに失敗しました：${err.message}`);
         continue;
+      }
+
+      // 件名フィルター: simpleParserがMIMEエンコード（Quoted-Printable等）
+      // された件名を自動デコードするため、デコード後の文字列で比較する
+      if (!TEST_MODE) {
+        const subject = parsed.subject || '';
+        if (!subject.includes(TARGET_SUBJECT)) {
+          console.log(`  スキップ（件名不一致） 件名="${subject}"`);
+          continue;
+        }
       }
 
       const text = parsed.text || '';
