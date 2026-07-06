@@ -746,20 +746,17 @@ async function checkSupport() {
       console.log(`[STEP14] 銀行振込行数: ${bankRows.length}`);
       bankRows.forEach((r, i) => console.log(`[DEBUG] 銀行振込行[${i}]: ${r.rowText}`));
 
-      // テーブルの列構成が未確認のため、セル内容全体を正規表現で走査して
-      // 時間・増減ポイント・入金金額（操作前の決済金額）を抽出する。
-      // 実際の列位置が判明次第、cells[index]による直接参照に置き換える
+      // 実データ形式: "2026/07/06 14:11:22 | 銀行振込 | 315 | 決済 | 決済金額 : 3,000円 | 備考 : | 98216"
+      // パイプ区切りで分割し、parts[0]=時間、parts[2]=増減ポイント、
+      // parts[4]（"決済金額 : 3,000円"）から決済金額（円）を抽出する
       const parsedBankRows = bankRows.map(r => {
-        const timeMatch = r.rowText.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
-        const pointMatch = r.rowText.match(/([+\-－]?[\d,]+)\s*pt/);
-        const amountMatch = r.rowText.match(/([\d,]+)\s*円/);
-        return {
-          time: timeMatch ? timeMatch[1] : null,
-          point: pointMatch ? parseInt(pointMatch[1].replace('－', '-').replace(/,/g, ''), 10) : null,
-          amount: amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : null,
-          raw: r.rowText,
-        };
-      }).filter(r => r.amount !== null && r.point !== null);
+        const parts = r.rowText.split('|').map(s => s.trim());
+        const time = parts[0];
+        const point = parseInt(parts[2], 10);
+        const amountMatch = (parts[4] || '').match(/([\d,]+)円/);
+        const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
+        return { time, point, amount, raw: r.rowText };
+      }).filter(r => !Number.isNaN(r.point) && r.amount > 0);
       console.log(`[STEP14] 時間・ポイント・金額の抽出成功: ${parsedBankRows.length}件`);
 
       console.log('[STEP15] ポイント計算と照合');
