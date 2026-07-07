@@ -1745,6 +1745,7 @@ async function processUsers(page) {
     // ─── LINEに確認メッセージを送信 ─────────────────────────────
     // \n（リテラル）が残っている場合に備えて実際の改行に変換してから表示
     const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
+    const replyPreview = displayReplyText.split('\n').slice(0, 3).join('\n'); // 先頭3行まで表示
     const lineMsg = analysis.hasLongMessage
       ? [
           '【長文メッセージあり】',
@@ -1768,19 +1769,18 @@ async function processUsers(page) {
           `ユーザー：${userName}（u_id: ${uid}）`,
           `対象コメントアウト：${latestComment || '（不明）'}`,
           ...(analysis.hasConsultation ? [
-            '【相談あり】',
-            '相談内容：',
+            'ユーザーメッセージ：',
             '---',
             (analysis.consultationTexts || []).join('\n'),
             '---',
           ] : []),
           '返信文：',
           '---',
-          displayReplyText,
-          replyData.nextComment,
+          replyPreview,
           '---',
-          '送信する場合は「送信」',
-          'スキップする場合は「スキップ」と返信してください',
+          '「送信」：そのまま送信',
+          '「スキップ」：スキップ',
+          '「差し込み：{文章}」：2行目の後に挿入して確認',
         ].join('\n');
     await sendLine(lineMsg);
 
@@ -1795,29 +1795,64 @@ async function processUsers(page) {
 
     console.log(`[LINE] 返信: ${reply}`);
 
-    // ─── 送信 or スキップ ────────────────────────────────────────
-    if (reply === '送信') {
-      // 返信文 + 次のコメントアウトを末尾に追記（先頭・末尾の余分な改行を除去）
-      const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
+    // ope_mainフレーム内のフォームに記入して送信する共通処理
+    async function sendReplyText(textToSend) {
       console.log(`[SEND-TEXT] 送信内容: "${textToSend.slice(0, 80)}..."`);
       if (DRY_RUN) {
         console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
         await sendLine(`【DRY RUN】${userName}への返信送信をスキップしました`);
+        return;
+      }
+      const sendFrame = page.frame({ name: 'ope_main' });
+      if (!sendFrame) {
+        console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
+        return;
+      }
+      await sendFrame.fill('textarea#mess_body', textToSend);
+      await sendFrame.click('#chara_mail_send');
+      await sendFrame.waitForLoadState('networkidle').catch(() => {});
+      console.log(`[SEND] ${userName} 送信完了`);
+      await sendLine(`【送信完了】${uid}へ${kid}からの返信を送信しました`);
+    }
+
+    // 「差し込み：{文章}」形式の返信を検出（全角・半角コロンどちらも許容）
+    const sashikomiMatch = (reply || '').match(/^差し込み[:：]([\s\S]*)$/);
+
+    // ─── 送信 / スキップ / 差し込み ──────────────────────────────
+    if (reply === '送信') {
+      // 返信文 + 次のコメントアウトを末尾に追記（先頭・末尾の余分な改行を除去）
+      const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
+      await sendReplyText(textToSend);
+    } else if (sashikomiMatch) {
+      // 返信文の1行目と2行目の間に差し込み文を挿入した全文を生成
+      const insertText = sashikomiMatch[1].trim();
+      const baseLines = replyData.replyText.replace(/\\n/g, '\n').trim().split('\n');
+      const splicedLines = [baseLines[0], insertText, ...baseLines.slice(1)];
+      const splicedText = splicedLines.join('\n') + '\n' + replyData.nextComment;
+
+      const confirmMsg = [
+        '【差し込み確認】',
+        '---',
+        splicedText,
+        '---',
+        'この内容で送信しますか？',
+        '「送信」または「スキップ」',
+      ].join('\n');
+      await sendLine(confirmMsg);
+
+      let sashikomiReply;
+      try {
+        sashikomiReply = await waitForLineReply();
+      } catch (e) {
+        console.log(`[TIMEOUT] ${userName}: 差し込み確認 5分タイムアウト → スキップ`);
+        continue;
+      }
+      console.log(`[LINE] 差し込み確認返信: ${sashikomiReply}`);
+
+      if (sashikomiReply === '送信') {
+        await sendReplyText(splicedText);
       } else {
-        // ope_mainフレーム内のフォームに記入して送信
-        const sendFrame = page.frame({ name: 'ope_main' });
-        if (!sendFrame) {
-          console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
-          continue;
-        }
-
-        // 本文：返信文 + 改行 + 次のコメントアウト
-        await sendFrame.fill('textarea#mess_body', textToSend);
-
-        await sendFrame.click('#chara_mail_send');
-        await sendFrame.waitForLoadState('networkidle').catch(() => {});
-        console.log(`[SEND] ${userName} 送信完了`);
-        await sendLine(`【送信完了】${uid}へ${kid}からの返信を送信しました`);
+        console.log(`[SKIP] ${userName} 差し込みをスキップ`);
       }
     } else {
       console.log(`[SKIP] ${userName} スキップ`);
