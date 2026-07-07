@@ -1864,16 +1864,16 @@ async function processUsers(page) {
     }
 
     // 「差し込み：{文章}」形式の返信を検出（全角・半角コロンどちらも許容）
-    const sashikomiMatch = (reply || '').match(/^差し込み[:：]([\s\S]*)$/);
+    const isSashikomi = reply.startsWith('差し込み：') || reply.startsWith('差し込み:');
 
     // ─── 送信 / スキップ / 差し込み ──────────────────────────────
     if (reply === '送信') {
       // 返信文 + 次のコメントアウトを末尾に追記（先頭・末尾の余分な改行を除去）
       const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
       await sendReplyText(textToSend);
-    } else if (sashikomiMatch) {
+    } else if (isSashikomi) {
       // 返信文の1行目と2行目の間に差し込み文を挿入した全文を生成
-      const insertText = sashikomiMatch[1].trim();
+      const insertText = reply.replace(/^差し込み[：:]/, '').trim();
       const baseLines = replyData.replyText.replace(/\\n/g, '\n').trim().split('\n');
       const splicedLines = [baseLines[0], insertText, ...baseLines.slice(1)];
       const splicedText = splicedLines.join('\n') + '\n' + replyData.nextComment;
