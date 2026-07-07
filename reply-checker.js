@@ -678,14 +678,16 @@ async function analyzeMessages(page) {
   const bodyNaibuTexts = await getBodyNaibuTexts(mainFrame);
 
   // 【追加判定】50文字以上メッセージチェック（bodyNaibuTextsで判定する）
+  // スキップはせず、対象コメントアウト・返信文が判明した後にLINEへ確認通知を送る
+  // （processUsers側の【返信確認】送信箇所を参照）
   const normalize = (t) => t.replace(/[\t\n\r]/g, '').replace(/\s+/g, ' ').trim();
-  const hasLongMessage = bodyNaibuTexts.some(t => normalize(t).length >= 50);
+  const longMessageTexts = bodyNaibuTexts.filter(t => normalize(t).length >= 50).map(t => decodeHtml(t));
+  const hasLongMessage = longMessageTexts.length > 0;
   if (hasLongMessage) {
     bodyNaibuTexts.forEach((t, i) => {
       const decoded = decodeHtml(t);
       console.log(`[DEBUG] bodyNaibu[${i}] 文字数=${decoded.length} テキスト="${decoded.slice(0, 80)}"`);
     });
-    return { target: false, reason: 'ユーザーメッセージに50文字以上のものあり' };
   }
 
   // ── Node.js側でデバッグログ出力 ────────────────────────────────
@@ -698,7 +700,7 @@ async function analyzeMessages(page) {
   console.log(`[DEBUG] span個数: ${result.spanCount}, ユーザーメッセージ通数: ${result.userMsgCount}`);
   console.log(`[DEBUG] 最新ユーザー受信時刻: "${result.latestUserTime}"`);
 
-  return { ...result, bodyNaibuTexts };
+  return { ...result, bodyNaibuTexts, hasLongMessage, longMessageTexts };
 }
 
 // ─── キャラ設定読み込み ───────────────────────────────────────────
@@ -1743,25 +1745,43 @@ async function processUsers(page) {
     // ─── LINEに確認メッセージを送信 ─────────────────────────────
     // \n（リテラル）が残っている場合に備えて実際の改行に変換してから表示
     const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
-    const lineMsg = [
-      '【返信確認】',
-      `ユーザー：${userName}（u_id: ${uid}）`,
-      `対象コメントアウト：${latestComment || '（不明）'}`,
-      ...(analysis.hasConsultation ? [
-        '【相談あり】',
-        '相談内容：',
-        '---',
-        (analysis.consultationTexts || []).join('\n'),
-        '---',
-      ] : []),
-      '返信文：',
-      '---',
-      displayReplyText,
-      replyData.nextComment,
-      '---',
-      '送信する場合は「送信」',
-      'スキップする場合は「スキップ」と返信してください',
-    ].join('\n');
+    const lineMsg = analysis.hasLongMessage
+      ? [
+          '【長文メッセージあり】',
+          `ユーザー：${userName}（u_id: ${uid}）`,
+          `対象コメントアウト：${latestComment || '（不明）'}`,
+          '',
+          'ユーザーメッセージ：',
+          '---',
+          (analysis.longMessageTexts || []).join('\n'),
+          '---',
+          '返信文：',
+          '---',
+          displayReplyText,
+          replyData.nextComment,
+          '---',
+          '送信する場合は「送信」',
+          'スキップする場合は「スキップ」と返信してください',
+        ].join('\n')
+      : [
+          '【返信確認】',
+          `ユーザー：${userName}（u_id: ${uid}）`,
+          `対象コメントアウト：${latestComment || '（不明）'}`,
+          ...(analysis.hasConsultation ? [
+            '【相談あり】',
+            '相談内容：',
+            '---',
+            (analysis.consultationTexts || []).join('\n'),
+            '---',
+          ] : []),
+          '返信文：',
+          '---',
+          displayReplyText,
+          replyData.nextComment,
+          '---',
+          '送信する場合は「送信」',
+          'スキップする場合は「スキップ」と返信してください',
+        ].join('\n');
     await sendLine(lineMsg);
 
     // ─── LINE返信を待つ（5分タイムアウト → スキップ）────────────
