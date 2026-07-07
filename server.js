@@ -265,8 +265,10 @@ async function handleEvent(event) {
 
   console.log('[LINE] 受信:', JSON.stringify(text));
 
-  // reply-checker.js が返信待ち中なら「送信」「スキップ」をstate fileに書き込んで終了
-  if ((text === '送信' || text === 'スキップ') && fs.existsSync(REPLY_STATE_FILE)) {
+  // reply-checker.js が返信待ち中なら「送信」「スキップ」「差し込み：〜」をstate fileに書き込んで終了
+  if ((text === '送信' || text === 'スキップ' ||
+       text.startsWith('差し込み：') || text.startsWith('差し込み:'))
+      && fs.existsSync(REPLY_STATE_FILE)) {
     try {
       const state = JSON.parse(fs.readFileSync(REPLY_STATE_FILE, 'utf8'));
       if (state.status === 'waiting') {
