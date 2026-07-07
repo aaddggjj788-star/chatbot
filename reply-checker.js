@@ -1384,6 +1384,7 @@ async function processUsers(page) {
         // 送信する（hoのフォールバック処理=historySinkoComments と同じロジック）
         if (!replyData && !skipUser && actionCfg.useHistorySearch) {
           const historyComments = analysis.allKanteishiComments || [];
+          console.log(`[DEBUG] useHistorySearch historyComments:`, JSON.stringify(historyComments));
           const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
 
           if (historySinkoComments.length === 0) {
