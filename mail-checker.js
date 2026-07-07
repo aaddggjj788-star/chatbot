@@ -242,6 +242,8 @@ async function checkMail() {
       const rawPart = msg.parts.find(p => p.which === '');
       if (!rawPart) continue;
 
+      console.log(`  [MAIL] メール処理開始 (UID:${msg.attributes.uid})`);
+
       let parsed;
       try {
         parsed = await simpleParser(rawPart.body);
@@ -266,7 +268,9 @@ async function checkMail() {
       const senderName = extractSenderName(text);
       const amount = extractAmount(text);
 
-      console.log(`  依頼人名: ${senderName}  入金額: ${amount}円`);
+      console.log(`  [MAIL] 件名: ${parsed.subject}`);
+      console.log(`  [MAIL] 依頼人名: ${senderName}`);
+      console.log(`  [MAIL] 入金金額: ${amount}円`);
 
       // 依頼人名または入金額が取得できなかった場合
       if (!senderName || !amount) {
@@ -281,6 +285,7 @@ async function checkMail() {
       const memberId = NAME_TO_ID[senderName.trim()] || extractMemberId(senderName);
       const nameConverted = !!NAME_TO_ID[senderName.trim()];
       if (nameConverted) console.log(`  名前→ID変換: "${senderName}" → ${memberId}`);
+      console.log(`  [MAIL] 会員ID: ${memberId}`);
 
       // 優先順位2: 除外IDはスキップ（通知なし）
       if (memberId && EXCLUDED_IDS.includes(memberId)) {
@@ -316,15 +321,22 @@ async function checkMail() {
         console.log(`  [DRY RUN] ポイント追加をスキップ 会員ID:${memberId} ${amount}円 → ${points}pt`);
         await markAsSeen(connection, msg);
       } else {
+        console.log(`  [STEP] ポイント追加処理 開始 会員ID:${memberId} ${amount}円 → ${points}pt`);
         try {
           await addPointsViaPlaywright(memberId, amount, points);
+          console.log(`  [STEP] ポイント追加処理 完了 会員ID:${memberId}`);
+
+          console.log('  [STEP] LINE通知 開始');
           await sendLine(
             `【入金処理完了】\n会員ID：${memberId}\n入金額：${amount}円\n追加ポイント：${points}pt`
           );
+          console.log('  [STEP] LINE通知 完了');
+
           console.log(`  ✓ 処理完了 会員ID:${memberId} ${amount}円 → ${points}pt`);
           await markAsSeen(connection, msg); // 正常完了した場合のみ既読化する
         } catch (err) {
           console.error('ポイント追加エラー:', err.message);
+          console.log(`  [STEP] ポイント追加処理 失敗 会員ID:${memberId}: ${err.message}`);
           await sendLine(
             `【処理エラー】ポイント追加に失敗しました。手動対応をお願いします。\n会員ID：${memberId}\n入金額：${amount}円\n追加ポイント：${points}pt\nエラー：${err.message}`
           );
@@ -332,6 +344,7 @@ async function checkMail() {
         }
       }
 
+      console.log(`  [MAIL] メール処理完了 (UID:${msg.attributes.uid})`);
       processedCount++;
     }
   } catch (err) {
