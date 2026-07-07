@@ -1223,9 +1223,13 @@ async function processUsers(page) {
         const nengenKeywords = nengenWords.flatMap(extractNengenKeywords);
         const nengenFound = nengenKeywords.some(kw => allUserText.includes(kw));
         console.log(`[NENGEN] ${userName}: 念言=${JSON.stringify(nengenWords)} 検索ワード=${JSON.stringify(nengenKeywords)} 含有=${nengenFound}`);
+        // スキップはせず、対象コメントアウト・返信文が判明した後にLINEへ確認通知を送る
+        // （processUsers内の【返信確認】送信箇所を参照）
+        analysis.nengenNotFound = !nengenFound;
+        analysis.nengenWords = nengenWords;
+        analysis.nengenUserTexts = userTexts;
         if (!nengenFound) {
-          console.log(`[SKIP] ${userName}: 念言がユーザーメッセージに未発見`);
-          continue;
+          console.log(`[NENGEN] ${userName}: 念言がユーザーメッセージに未発見 → スキップせずLINE確認へ`);
         }
         // ─── 相談内容の判定 ──────────────────────────────────────
         // bodyNaibuTextsの各テキストごとに判定し、該当したテキストを
@@ -1238,6 +1242,7 @@ async function processUsers(page) {
       } else {
         analysis.hasConsultation = false;
         analysis.consultationTexts = [];
+        analysis.nengenNotFound = false;
       }
     }
 
@@ -1763,6 +1768,25 @@ async function processUsers(page) {
           '---',
           '送信する場合は「送信」',
           'スキップする場合は「スキップ」と返信してください',
+        ].join('\n')
+      : analysis.nengenNotFound
+      ? [
+          '【念言未検出】',
+          `ユーザー：${userName}（u_id: ${uid}）`,
+          `対象コメントアウト：${latestComment || '（不明）'}`,
+          `念言：${(analysis.nengenWords || []).join('、')}`,
+          '',
+          'ユーザーメッセージ：',
+          '---',
+          (analysis.nengenUserTexts || []).join('\n'),
+          '---',
+          '返信文：',
+          '---',
+          replyPreview,
+          '---',
+          '「送信」：そのまま送信',
+          '「スキップ」：スキップ',
+          '「差し込み：{文章}」：2行目の後に挿入して確認',
         ].join('\n')
       : [
           '【返信確認】',
