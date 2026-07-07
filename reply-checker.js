@@ -612,7 +612,7 @@ async function analyzeMessages(page) {
       }
     }
 
-    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], allKanteishiComments: [], previousKanteishiComments: [], spanCount: 0, userMsgCount: 0, latestUserTime: '', latestUserTexts: [] };
+    const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], allKanteishiComments: [], spanCount: 0, userMsgCount: 0, latestUserTime: '', latestUserTexts: [] };
 
     // 【判定2】最新メッセージチェック（DOM最上位 = 最新）
     if (msgs.length === 0) {
@@ -653,20 +653,12 @@ async function analyzeMessages(page) {
     const allKanteishiComments = msgs.filter(m => m.type === 'kanteishi').flatMap(m => m.comments);
     const latestUserTexts = beforeUser.map(m => m.rowText || '');
 
-    // 前回（1つ前）の鑑定士メッセージのコメントアウト（sinko1のみスキップ判定で使用）
-    let secondKIdx = -1;
-    for (let i = firstKIdx + 1; i < msgs.length; i++) {
-      if (msgs[i].type === 'kanteishi') { secondKIdx = i; break; }
-    }
-    const previousKanteishiComments = secondKIdx !== -1 ? msgs[secondKIdx].comments : [];
-
     const successK = {
       kanteishiHtml: km.html,
       kanteishiTrHtml: km.trHtml,
       kanteishiBodyText: bodyText,
       kanteishiComments: km.comments,
       allKanteishiComments,
-      previousKanteishiComments,
       spanCount,
       userMsgCount: beforeUser.length,
       latestUserTime,
@@ -1589,26 +1581,6 @@ async function processUsers(page) {
       for (const c of sinkoComments) {
         const m = c.match(/^(\d+(?:yu|mu)\d+)/);
         if (m) { charaId = m[1]; break; }
-      }
-
-      // sinko/1スキップ判定: 以下を全て満たす場合のみスキップ（hisコメントは除外）
-      //   ・最新鑑定士メッセージのsinkoがsinko/1のみ
-      //   ・履歴全体（全鑑定士メッセージ）を確認してもsinko/1しかない
-      //   ・前回の鑑定士メッセージにもsinko/1がある
-      // （例: <!--12672mu2/sinko/1--> のようにmu2以降の正当なsinko/1は
-      //   履歴上他のsinko番号が存在するため誤ってスキップされない）
-      const hasHisComment = sinkoComments.some(c => /\/his\w*/.test(c));
-      const historySinkoNums = (analysis.allKanteishiComments || [])
-        .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
-        .filter(n => n !== null);
-      const historyOnlySinko1 = historySinkoNums.length > 0 && historySinkoNums.every(n => n === 1);
-      const previousSinkoNums = (analysis.previousKanteishiComments || [])
-        .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
-        .filter(n => n !== null);
-      const previousHasSinko1 = previousSinkoNums.includes(1);
-      if (!hasHisComment && sinkoNums.length === 1 && sinkoNums[0] === 1 && historyOnlySinko1 && previousHasSinko1) {
-        console.log(`[SKIP] ${userName}: sinko1のみ（履歴全体でsinko1のみ・前回もsinko1）`);
-        continue;
       }
 
       console.log(`[COMMENT] ${userName}: charaId=${charaId} sinkoNums=${JSON.stringify(sinkoNums)}`);
