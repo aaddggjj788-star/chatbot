@@ -1750,7 +1750,6 @@ async function processUsers(page) {
     // ─── LINEに確認メッセージを送信 ─────────────────────────────
     // \n（リテラル）が残っている場合に備えて実際の改行に変換してから表示
     const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
-    const replyPreview = displayReplyText.split('\n').slice(0, 3).join('\n'); // 先頭3行まで表示
     const lineMsg = analysis.hasLongMessage
       ? [
           '【長文メッセージあり】',
@@ -1782,7 +1781,7 @@ async function processUsers(page) {
           '---',
           '返信文：',
           '---',
-          replyPreview,
+          displayReplyText,
           '---',
           '「送信」：そのまま送信',
           '「スキップ」：スキップ',
@@ -1800,7 +1799,7 @@ async function processUsers(page) {
           ] : []),
           '返信文：',
           '---',
-          replyPreview,
+          displayReplyText,
           '---',
           '「送信」：そのまま送信',
           '「スキップ」：スキップ',
