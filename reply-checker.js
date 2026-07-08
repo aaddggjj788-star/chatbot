@@ -577,7 +577,7 @@ async function analyzeMessages(page) {
     return { target: false, reason: 'ope_mainフレームが取得できません', kanteishiHtml: '' };
   }
 
-  const { result, lastKIdx, afterUserCount } = await mainFrame.evaluate(() => {
+  const { result, lastKIdx, afterUserCount, debugLogs } = await mainFrame.evaluate(() => {
     function normStyle(el) {
       return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
     }
@@ -586,6 +586,7 @@ async function analyzeMessages(page) {
     // 上（tr番号小）= 新しいメッセージ、下（tr番号大）= 古いメッセージ。
     // 背景色が tr 自体に設定されている場合も拾うため tr を追加。
     const msgs = [];
+    const debugLogs = [];
     const seen = new Set();
     for (const el of document.querySelectorAll('tr, td, div')) {
       if (seen.has(el)) continue;
@@ -627,6 +628,8 @@ async function analyzeMessages(page) {
         const cre = /<!--([^>]+)-->/g;
         let cm;
         while ((cm = cre.exec(decodedBody)) !== null) { comments.push(cm[1]); }
+        const debugMsg = `kanteishi tr found, bodyInput=${bodyInput ? bodyInput.id : 'null'}, bodyText.length=${bodyText ? bodyText.length : 0}`;
+        debugLogs.push(debugMsg);
         msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, trText, bodyText, comments });
       } else if (bg.includes('aaaaff') || bg.includes('ffaaaa')) {
         const row = el.closest('tr') || el;
@@ -641,10 +644,10 @@ async function analyzeMessages(page) {
 
     // 【判定2】最新メッセージチェック（DOM最上位 = 最新）
     if (msgs.length === 0) {
-      return { result: { target: false, reason: 'メッセージなし', ...emptyK }, lastKIdx: -1, afterUserCount: 0 };
+      return { result: { target: false, reason: 'メッセージなし', ...emptyK }, lastKIdx: -1, afterUserCount: 0, debugLogs };
     }
     if (msgs[0].type === 'kanteishi') {
-      return { result: { target: false, reason: '最新メッセージが鑑定士（返信済み）', ...emptyK }, lastKIdx: 0, afterUserCount: 0 };
+      return { result: { target: false, reason: '最新メッセージが鑑定士（返信済み）', ...emptyK }, lastKIdx: 0, afterUserCount: 0, debugLogs };
     }
 
     // 最新の鑑定士メッセージを探す
@@ -654,12 +657,12 @@ async function analyzeMessages(page) {
     }
 
     if (firstKIdx === -1) {
-      return { result: { target: false, reason: '鑑定士メッセージなし', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: 0 };
+      return { result: { target: false, reason: '鑑定士メッセージなし', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: 0, debugLogs };
     }
 
     // 【判定1.5】最新鑑定士メッセージの既/未チェック（「未」ならスキップ）
     if (!(msgs[firstKIdx].trText || '').includes('既')) {
-      return { result: { target: false, reason: '最新鑑定士メッセージが未読', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: 0 };
+      return { result: { target: false, reason: '最新鑑定士メッセージが未読', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: 0, debugLogs };
     }
 
     // 最新鑑定士より上（新しい）のユーザーメッセージ
@@ -692,11 +695,15 @@ async function analyzeMessages(page) {
 
     // 【判定3】既読チェック
     if (beforeUser.some(m => m.rowText.includes('既'))) {
-      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+      return { result: { target: false, reason: 'ユーザーメッセージに「既」あり', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, debugLogs };
     }
 
-    return { result: { target: true, reason: '', ...successK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length };
+    return { result: { target: true, reason: '', ...successK }, lastKIdx: firstKIdx, afterUserCount: beforeUser.length, debugLogs };
   });
+
+  for (const debugMsg of debugLogs || []) {
+    console.log(`[DEBUG] ${debugMsg}`);
+  }
 
   // div.bodyNaibuのテキストを取得する。tr全体のtextContent（rowText）には
   // 「未」「07月06日 09時37分」「ユーザー」等のメタ情報が混入するため、
