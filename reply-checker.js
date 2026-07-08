@@ -611,10 +611,16 @@ async function analyzeMessages(page) {
             .replace(/&gt;/g, '>')
             .replace(/&amp;/g, '&');
         }
+        // bodyTextにコメントアウトがHTMLエンティティ形式（&lt;!--...--&gt;）で
+        // 入っている場合があるためデコードしてから抽出する
+        const decodedBody = bodyText
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&');
         const comments = [];
         const cre = /<!--([^>]+)-->/g;
         let cm;
-        while ((cm = cre.exec(bodyText)) !== null) { comments.push(cm[1]); }
+        while ((cm = cre.exec(decodedBody)) !== null) { comments.push(cm[1]); }
         msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, trText, bodyText, comments });
       } else if (bg.includes('aaaaff') || bg.includes('ffaaaa')) {
         const row = el.closest('tr') || el;
