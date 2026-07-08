@@ -1262,7 +1262,7 @@ async function processUsers(page) {
     }
 
     // ho系コメントの検出（数値サフィックス・接頭辞付きも含む: ho1, sinkoHo, noresHo, hiruHo1等）
-    const hoComments = allComments.filter(c => /\/[a-zA-Z]*[Hh]o\d*$/.test(c));
+    const hoComments = allComments.filter(c => /\/[a-zA-Z]*[Hh]o\d*(?:\/\w+)*$/.test(c));
     const hasHo = hoComments.length > 0;
 
     // /sinko も /his も /ho も subAction も含まれない → スキップ
