@@ -611,6 +611,9 @@ async function analyzeMessages(page) {
             .replace(/&gt;/g, '>')
             .replace(/&amp;/g, '&');
         }
+        if (bodyText.includes('sinko')) {
+          console.log('[DEBUG] sinko含むbodyText(末尾100):', JSON.stringify(bodyText.slice(-100)));
+        }
         // bodyTextにコメントアウトがHTMLエンティティ形式（&lt;!--...--&gt;）や
         // JavaScriptエスケープ形式（\x3C!--...-->）で入っている場合があるため
         // デコードしてから抽出する
