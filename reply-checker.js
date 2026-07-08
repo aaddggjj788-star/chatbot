@@ -611,12 +611,15 @@ async function analyzeMessages(page) {
             .replace(/&gt;/g, '>')
             .replace(/&amp;/g, '&');
         }
-        // bodyTextにコメントアウトがHTMLエンティティ形式（&lt;!--...--&gt;）で
-        // 入っている場合があるためデコードしてから抽出する
+        // bodyTextにコメントアウトがHTMLエンティティ形式（&lt;!--...--&gt;）や
+        // JavaScriptエスケープ形式（\x3C!--...-->）で入っている場合があるため
+        // デコードしてから抽出する
         const decodedBody = bodyText
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
-          .replace(/&amp;/g, '&');
+          .replace(/&amp;/g, '&')
+          .replace(/\x3C/g, '<')
+          .replace(/\x3E/g, '>');
         const comments = [];
         const cre = /<!--([^>]+)-->/g;
         let cm;
