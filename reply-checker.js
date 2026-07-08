@@ -584,18 +584,17 @@ async function analyzeMessages(page) {
 
     // ── メッセージ収集: DOM順（上=新しい → 下=古い）で走査 ──────
     // 上（tr番号小）= 新しいメッセージ、下（tr番号大）= 古いメッセージ。
-    // 背景色が tr 自体に設定されている場合も拾うため tr を追加。
+    // tr自体またはtr内のtdに背景色が設定されている場合の両方を拾う。
     const msgs = [];
     const debugLogs = [];
-    const seen = new Set();
-    for (const el of document.querySelectorAll('tr, td, div')) {
-      if (seen.has(el)) continue;
-      seen.add(el);
-      const bg = normStyle(el);
+    for (const trEl of document.querySelectorAll('tr')) {
+      const trBg = normStyle(trEl);
+      const tdBg = Array.from(trEl.querySelectorAll('td'))
+        .map(td => normStyle(td)).join('');
+      const bg = trBg + tdBg;
       if (bg.includes('90ee90') || bg.includes('144,238,144')) {
         // コメントアウトは innerHTML だと &lt;!--...--&gt; にエンコードされるため
         // hidden input の value 属性から生テキストを取得して正規表現で抽出する
-        const trEl = el.tagName === 'TR' ? el : (el.closest('tr') || el);
         const trHtml = trEl.innerHTML; // デバッグ用
         const trText = trEl.textContent || ''; // 既/未判定用
         const bodyInput = trEl.querySelector('input[type="hidden"][id^="body_"]');
@@ -630,12 +629,11 @@ async function analyzeMessages(page) {
         while ((cm = cre.exec(decodedBody)) !== null) { comments.push(cm[1]); }
         const debugMsg = `kanteishi tr found, bodyInput=${bodyInput ? bodyInput.id : 'null'}, bodyText.length=${bodyText ? bodyText.length : 0}`;
         debugLogs.push(debugMsg);
-        msgs.push({ type: 'kanteishi', html: el.innerHTML, trHtml, trText, bodyText, comments });
+        msgs.push({ type: 'kanteishi', html: trEl.innerHTML, trHtml, trText, bodyText, comments });
       } else if (bg.includes('aaaaff') || bg.includes('ffaaaa')) {
-        const row = el.closest('tr') || el;
-        const timeTd = row.querySelector('td[style*="width:110px"]');
+        const timeTd = trEl.querySelector('td[style*="width:110px"]');
         const timeText = timeTd ? timeTd.textContent.trim() : '';
-        const fullRowText = row.textContent || '';
+        const fullRowText = trEl.textContent || '';
         msgs.push({ type: 'user', rowText: fullRowText, timeText });
       }
     }
