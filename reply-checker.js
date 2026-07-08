@@ -598,7 +598,19 @@ async function analyzeMessages(page) {
         const trHtml = trEl.innerHTML; // デバッグ用
         const trText = trEl.textContent || ''; // 既/未判定用
         const bodyInput = trEl.querySelector('input[type="hidden"][id^="body_"]');
-        const bodyText = bodyInput ? bodyInput.value : '';
+        let bodyText;
+        if (bodyInput) {
+          bodyText = bodyInput.value;
+        } else {
+          // hidden inputがないページ: div.bodyNaibuのtextContentにHTMLエンティティ
+          // 形式（&lt;!--...--&gt;）でコメントアウトが入っているためデコードする
+          const bodyNaibuEl = trEl.querySelector('div.bodyNaibu');
+          const rawText = bodyNaibuEl ? (bodyNaibuEl.textContent || '') : '';
+          bodyText = rawText
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&');
+        }
         const comments = [];
         const cre = /<!--([^>]+)-->/g;
         let cm;
