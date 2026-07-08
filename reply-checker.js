@@ -1537,6 +1537,8 @@ async function processUsers(page) {
       // 全履歴からsinko/hisコメントを検索してsinko+1を送信
       if (!replyData) {
         const historyComments = analysis.allKanteishiComments || [];
+        console.log(`[DEBUG] allKanteishiComments件数: ${historyComments.length}`);
+        console.log(`[DEBUG] allKanteishiComments:`, JSON.stringify(historyComments.slice(0, 10)));
         const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
 
         if (!charaId) {
