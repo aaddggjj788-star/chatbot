@@ -1,0 +1,10 @@
+{
+  "charaId": "12676",
+  "globalStopTime": { "start": "23:00", "end": "09:00" },
+  "phases": {
+    "mu1": {
+      "do1": { "searchTarget": "12676mu1/do/1", "useCurrentRow": false },
+      "alwaysQuoteUser": true
+    }
+  }
+}

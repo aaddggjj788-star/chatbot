@@ -536,6 +536,18 @@ async function getTargetUsers(page) {
   return results;
 }
 
+// alwaysQuoteUser用: ユーザーメッセージの引用テキストを組み立てる
+// bodyNaibuTextsが複数ある場合は全てを\n\nで結合して1ブロックにする
+// bodyNaibuTextsが取得できない場合は最も文字数の多いメッセージを使用する
+function buildQuoteText(bodyNaibuTexts, analysis) {
+  if (bodyNaibuTexts && bodyNaibuTexts.length > 0) {
+    return bodyNaibuTexts.join('\n\n');
+  }
+  const fallbackTexts = analysis?.latestUserTexts || [];
+  if (fallbackTexts.length === 0) return '';
+  return fallbackTexts.reduce((longest, t) => (t.length > longest.length ? t : longest), fallbackTexts[0]);
+}
+
 // HTML実体参照をデコードする（デバッグ表示用）
 function decodeHtml(text) {
   return String(text)
@@ -1304,6 +1316,7 @@ async function processUsers(page) {
     let charaId = null;
     let replyData;
     let latestComment = null;
+    let alwaysQuoteUser = false;
 
     if (hasSubAction) {
       // ─── subAction処理（requiredMessages判定 + searchTarget）──────
@@ -1318,6 +1331,7 @@ async function processUsers(page) {
           console.log(`[TIME] ${userName}: subAction phase "${phaseResult?.key}" 時間帯制限 → スキップ`);
           phaseCfg = null;
         }
+        if (phaseCfg?.alwaysQuoteUser) alwaysQuoteUser = true;
         let actionCfg = phaseCfg?.[parsed.actionKey] ?? null;
         if (!actionCfg && parsed.actionKey !== 'ho' && phaseCfg) {
           actionCfg = phaseCfg['ho'] ?? null;
@@ -1468,6 +1482,7 @@ async function processUsers(page) {
         console.log(`[TIME] ${userName}: hoPhase "${hoPhaseResult?.key}" 時間帯制限 → フォールバックへ`);
         hoPhaseCfg = null;
       }
+      if (hoPhaseCfg?.alwaysQuoteUser) alwaysQuoteUser = true;
       const hoFileId     = hoPhaseCfg?.fileId ?? null;
 
       // actionCfg決定: 完全一致優先 → 数値サフィックス除去で前方一致
@@ -1632,6 +1647,7 @@ async function processUsers(page) {
         console.log(`[TIME] ${userName}: phase "${phaseResult?.key}" 時間帯制限 → 通常ルールへ`);
         phaseCfg = null;
       }
+      if (phaseCfg?.alwaysQuoteUser) alwaysQuoteUser = true;
       const fileId     = phaseCfg?.fileId ?? null;
       const actionKey  = parsed ? `${parsed.type}${parsed.num}` : null;
       const actionCfg  = (phaseCfg && actionKey) ? (phaseCfg[actionKey] ?? null) : null;
@@ -1819,7 +1835,12 @@ async function processUsers(page) {
           '【返信確認】',
           `ユーザー：${userName}（u_id: ${uid}）`,
           `対象コメントアウト：${latestComment || '（不明）'}`,
-          ...(analysis.hasConsultation ? [
+          ...(alwaysQuoteUser ? [
+            'ユーザーメッセージ：',
+            '---',
+            buildQuoteText(bodyNaibuTexts, analysis),
+            '---',
+          ] : analysis.hasConsultation ? [
             'ユーザーメッセージ：',
             '---',
             (analysis.consultationTexts || []).join('\n'),
