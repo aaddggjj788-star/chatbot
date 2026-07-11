@@ -541,11 +541,13 @@ async function getTargetUsers(page) {
 // bodyNaibuTextsが取得できない場合は最も文字数の多いメッセージを使用する
 function buildQuoteText(bodyNaibuTexts, analysis) {
   if (bodyNaibuTexts && bodyNaibuTexts.length > 0) {
-    return bodyNaibuTexts.join('\n\n');
+    return bodyNaibuTexts.map(userText => userText.slice(0, 500)).join('\n\n');
   }
   const fallbackTexts = analysis?.latestUserTexts || [];
   if (fallbackTexts.length === 0) return '';
-  return fallbackTexts.reduce((longest, t) => (t.length > longest.length ? t : longest), fallbackTexts[0]);
+  const userText = fallbackTexts.reduce((longest, t) => (t.length > longest.length ? t : longest), fallbackTexts[0]);
+  const quotedText = userText.slice(0, 500);
+  return quotedText;
 }
 
 // HTML実体参照をデコードする（デバッグ表示用）
@@ -1829,7 +1831,8 @@ async function processUsers(page) {
           '---',
           '「送信」：そのまま送信',
           '「スキップ」：スキップ',
-          '「差し込み：{文章}」：2行目の後に挿入して確認',
+          '「差し込み#{文章}」：2行目の後に挿入して確認',
+          '「差し替え#{文章}」：返信文を差し替えて確認',
         ].join('\n')
       : [
           '【返信確認】',
@@ -1853,7 +1856,8 @@ async function processUsers(page) {
           '---',
           '「送信」：そのまま送信',
           '「スキップ」：スキップ',
-          '「差し込み：{文章}」：2行目の後に挿入して確認',
+          '「差し込み#{文章}」：2行目の後に挿入して確認',
+          '「差し替え#{文章}」：返信文を差し替えて確認',
         ].join('\n');
     await sendLine(lineMsg);
 
@@ -1888,17 +1892,18 @@ async function processUsers(page) {
       await sendLine(`【送信完了】${uid}へ${kid}からの返信を送信しました`);
     }
 
-    // 「差し込み：{文章}」形式の返信を検出（全角・半角コロンどちらも許容）
-    const isSashikomi = reply.startsWith('差し込み：') || reply.startsWith('差し込み:');
+    // 「差し込み#{文章}」「差し替え#{文章}」形式の返信を検出
+    const isSashikomi = reply.startsWith('差し込み#');
+    const isSashikae  = reply.startsWith('差し替え#');
 
-    // ─── 送信 / スキップ / 差し込み ──────────────────────────────
+    // ─── 送信 / スキップ / 差し込み / 差し替え ────────────────────
     if (reply === '送信') {
       // 返信文 + 次のコメントアウトを末尾に追記（先頭・末尾の余分な改行を除去）
       const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
       await sendReplyText(textToSend);
     } else if (isSashikomi) {
       // 返信文の1行目と2行目の間に差し込み文を挿入した全文を生成
-      const insertText = reply.replace(/^差し込み[：:]/, '').trim();
+      const insertText = reply.replace(/^差し込み#/, '').trim();
       const baseLines = replyData.replyText.replace(/\\n/g, '\n').trim().split('\n');
       const splicedLines = [baseLines[0], insertText, ...baseLines.slice(1)];
       const splicedText = splicedLines.join('\n') + '\n' + replyData.nextComment;
@@ -1926,6 +1931,36 @@ async function processUsers(page) {
         await sendReplyText(splicedText);
       } else {
         console.log(`[SKIP] ${userName} 差し込みをスキップ`);
+      }
+    } else if (isSashikae) {
+      // #以降のテキストを新しい返信文として丸ごと差し替える
+      const replacedText = reply.replace(/^差し替え#/, '').replace(/\\n/g, '\n').trim();
+      const replacedFullText = replacedText + '\n' + replyData.nextComment;
+
+      const confirmMsg = [
+        '【差し替え確認】',
+        '---',
+        replacedText,
+        replyData.nextComment,
+        '---',
+        'この内容で送信しますか？',
+        '「送信」または「スキップ」',
+      ].join('\n');
+      await sendLine(confirmMsg);
+
+      let sashikaeReply;
+      try {
+        sashikaeReply = await waitForLineReply();
+      } catch (e) {
+        console.log(`[TIMEOUT] ${userName}: 差し替え確認 5分タイムアウト → スキップ`);
+        continue;
+      }
+      console.log(`[LINE] 差し替え確認返信: ${sashikaeReply}`);
+
+      if (sashikaeReply === '送信') {
+        await sendReplyText(replacedFullText);
+      } else {
+        console.log(`[SKIP] ${userName} 差し替えをスキップ`);
       }
     } else {
       console.log(`[SKIP] ${userName} スキップ`);
