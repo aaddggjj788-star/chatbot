@@ -7,6 +7,7 @@
       "alwaysQuoteUser": true
     },
     "mu2": {
+      "alwaysQuoteUser": true,
       "fileId": "12676mu2sinko",
       "ho": {
         "searchTarget": "12676mu2/ho/1",
@@ -19,6 +20,7 @@
       }
     },
     "mu2his": {
+      "alwaysQuoteUser": true,
       "fileId": "12676mu2his"
     }
   }
