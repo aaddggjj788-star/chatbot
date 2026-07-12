@@ -299,8 +299,8 @@ function splitAColumn(aContent) {
   };
 }
 
-function getReplyFromCSV(charaId, sinkoNum) {
-  const { csvPath, resolvedCharaId } = resolveCsvPath(charaId);
+function getReplyFromCSV(charaId, sinkoNum, fileId) {
+  const { csvPath, resolvedCharaId } = resolveCsvPath(charaId, fileId);
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
 
   const rows = parseCSV(csvPath);
@@ -311,8 +311,12 @@ function getReplyFromCSV(charaId, sinkoNum) {
   console.log(`[CSV] 1行目A列(件名): "${title}"`);
 
   // sinko/N または his/N の行を特定する（sinko/2・sinko2・sinko/3/A 等に対応）
+  // fileId明示指定時はresolvedCharaIdがfileId自体に置き換わるため、
+  // コメント内のプレフィックス（charaId）とは一致しない。その場合は
+  // 本来のcharaIdをパターンに使う（fileId未指定時は従来通りresolvedCharaIdを使用）
+  const patternCharaId = fileId ? charaId : resolvedCharaId;
   const sinkoPattern = new RegExp(
-    `<!--${resolvedCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:sinko|his)\\/?${sinkoNum}(?:\\/[A-Za-z0-9]+)?-->`
+    `<!--${patternCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:sinko|his)\\/?${sinkoNum}(?:\\/[A-Za-z0-9]+)?-->`
   );
   console.log(`[CSV] 検索パターン: ${sinkoPattern}`);
   const idx = rows.findIndex(r => sinkoPattern.test((r[0] || '').trim()));
@@ -1780,7 +1784,7 @@ async function processUsers(page) {
         } else {
           console.log(`[COMMENT] ${userName}: sinko+1検索モード maxSinko=${maxSinkoNum}`);
           try {
-            replyData = getReplyFromCSV(charaId, maxSinkoNum);
+            replyData = getReplyFromCSV(charaId, maxSinkoNum, fileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
