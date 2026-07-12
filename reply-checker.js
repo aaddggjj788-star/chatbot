@@ -1383,7 +1383,9 @@ async function processUsers(page) {
           }
         }
 
-        const fileId = phaseCfg.fileId ?? null;
+        // actionCfg自身にfileIdがあれば、phase共通のfileIdより優先する
+        // （同一phase内の特定actionだけ別CSVを参照させたいケース用）
+        const fileId = actionCfg.fileId ?? phaseCfg.fileId ?? null;
         console.log(`[JSON] subAction charaId="${parsed.charaId}" fileId="${fileId}" actionKey="${parsed.actionKey}"`);
 
         // specialProcessがある場合はbranch/searchTargetの前に実行

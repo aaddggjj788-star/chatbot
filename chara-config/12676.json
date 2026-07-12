@@ -5,6 +5,21 @@
     "mu1": {
       "do1": { "searchTarget": "12676mu1/do/1", "useCurrentRow": false },
       "alwaysQuoteUser": true
+    },
+    "mu2": {
+      "fileId": "12676mu2sinko",
+      "ho": {
+        "searchTarget": "12676mu2/ho/1",
+        "useCurrentRow": false
+      },
+      "do1": {
+        "fileId": "12676mu2his",
+        "searchTarget": "12676mu2/do/1",
+        "useCurrentRow": false
+      }
+    },
+    "mu2his": {
+      "fileId": "12676mu2his"
     }
   }
 }
