@@ -1322,7 +1322,7 @@ async function processUsers(page) {
     let charaId = null;
     let replyData;
     let latestComment = null;
-    let alwaysQuoteUser = false;
+    let alwaysQuoteUser = true;
 
     if (hasSubAction) {
       // ─── subAction処理（requiredMessages判定 + searchTarget）──────
