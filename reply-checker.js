@@ -1248,8 +1248,8 @@ async function processUsers(page) {
           console.log(`[SKIP] ${userName}: span個数(${spanCount}) < ユーザーメッセージ通数(${userMsgCount})-${minOffset}`);
           continue;
         }
-      } else if (userMsgCount !== spanCount) {
-        console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount})とspan個数(${spanCount})が不一致`);
+      } else if (userMsgCount < spanCount) {
+        console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount})`);
         continue;
       }
     }
