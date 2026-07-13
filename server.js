@@ -30,6 +30,9 @@ try {
   console.warn('reply-checker のロードに失敗しました:', e.message);
 }
 
+// 「返信チェック開始」の多重起動防止
+let isReplyCheckerRunning = false;
+
 // support-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let checkSupport = () => console.warn('support-checker 未ロード');
 try {
@@ -279,7 +282,13 @@ async function handleEvent(event) {
   }
 
   if (text === '返信チェック開始') {
-    checkReplies().catch(err => console.error('[REPLY] エラー:', err.message));
+    if (isReplyCheckerRunning) {
+      return lineReply(replyToken, '【返信チェック】既に動作中です');
+    }
+    isReplyCheckerRunning = true;
+    checkReplies()
+      .catch(err => console.error('[REPLY] エラー:', err.message))
+      .finally(() => { isReplyCheckerRunning = false; });
     return lineReply(replyToken, '返信チェックを開始しました');
   }
   if (text === '返信チェック停止') {
