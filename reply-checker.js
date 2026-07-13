@@ -1581,8 +1581,64 @@ async function processUsers(page) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
           }
+        } else if (hoActionCfg.useCurrentRow) {
+          // searchTarget系の指定がなくuseCurrentRowのみの場合:
+          // hoコメント自身の行（文頭）を取得する
+          let currentRowData;
+          try {
+            currentRowData = getReplyFromCSVByTarget(charaId, hoComment, true, hoFileId);
+          } catch (e) {
+            console.error(`[ERROR] ho useCurrentRow CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+          if (!currentRowData) {
+            console.log(`[SKIP] ${userName}: ho useCurrentRow 対象行が見つかりません`);
+            continue;
+          }
+
+          if (hoActionCfg.workflowMarker && hoActionCfg.useHistorySearch) {
+            // 履歴の最新sinko/hisの次行を取得し、workflowMarker以降を
+            // 工程部分として抽出、文頭テキストと結合する
+            const historyComments = analysis.allKanteishiComments || [];
+            const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+            if (historySinkoComments.length === 0) {
+              console.log(`[SKIP] ${userName}: ho workflowMarker・履歴にsinko/hisコメントなし`);
+              continue;
+            }
+            const histSinkoNums = historySinkoComments
+              .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+              .filter(n => n !== null);
+            const maxSinko = Math.max(...histSinkoNums);
+
+            let historyNextData;
+            try {
+              historyNextData = getReplyFromCSV(charaId, maxSinko, hoFileId);
+            } catch (e) {
+              console.error(`[ERROR] ho workflowMarker 履歴次行取得失敗 (${userName}): ${e.message}`);
+              continue;
+            }
+            if (!historyNextData) {
+              console.log(`[SKIP] ${userName}: ho workflowMarker・履歴次行が取得できません`);
+              continue;
+            }
+
+            const markerIdx = historyNextData.replyText.indexOf(hoActionCfg.workflowMarker);
+            const workflowPart = markerIdx >= 0
+              ? historyNextData.replyText.slice(markerIdx)
+              : historyNextData.replyText;
+            console.log(`[JSON] ho workflowMarker="${hoActionCfg.workflowMarker}" マッチ位置=${markerIdx}`);
+
+            replyData = {
+              title: currentRowData.title,
+              replyText: currentRowData.replyText + '\n\n' + workflowPart,
+              nextComment: historyNextData.nextComment,
+            };
+          } else {
+            // workflowMarker未設定 → 通常のho処理（同行テキストのみ送信）
+            replyData = currentRowData;
+          }
         }
-        // useHistorySearch: true 等はフォールバックに委ねる
+        // useHistorySearch: true 単体（useCurrentRow指定なし）等はフォールバックに委ねる
       }
 
       // ─── フォールバック: JSON設定なし or searchTarget系なし ──────
