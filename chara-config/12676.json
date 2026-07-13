@@ -22,6 +22,19 @@
     "mu2his": {
       "alwaysQuoteUser": true,
       "fileId": "12676mu2his"
+    },
+    "yu1": {
+      "ho": {
+        "useHistorySearch": true,
+        "fallback": {
+          "searchTarget": "12676yu1/sinko/1",
+          "useCurrentRow": true
+        }
+      },
+      "noresHo": {
+        "searchTarget": "12676yu1/sinko/1",
+        "useCurrentRow": true
+      }
     }
   }
 }

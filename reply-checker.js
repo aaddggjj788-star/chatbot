@@ -1657,27 +1657,40 @@ async function processUsers(page) {
         }
 
         if (!charaId || historySinkoComments.length === 0) {
-          console.log(`[SKIP] ${userName}: /hoあり・履歴にsinko/hisコメントなし・JSON設定もなし`);
-          continue;
-        }
+          // hoActionCfg.fallback: 履歴にsinko/hisコメントが見つからない場合の代替searchTarget
+          if (charaId && hoActionCfg?.fallback?.searchTarget) {
+            console.log(`[JSON] ho: 履歴にsinko/hisコメントなし → fallback searchTarget="${hoActionCfg.fallback.searchTarget}"`);
+            const useCurrentRow = hoActionCfg.fallback.useCurrentRow === true;
+            try {
+              replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.fallback.searchTarget, useCurrentRow, hoActionCfg.fallback.fileId ?? hoFileId);
+            } catch (e) {
+              console.error(`[ERROR] ho fallback CSV取得失敗 (${userName}): ${e.message}`);
+              continue;
+            }
+            latestComment = hoComment;
+          } else {
+            console.log(`[SKIP] ${userName}: /hoあり・履歴にsinko/hisコメントなし・JSON設定もなし`);
+            continue;
+          }
+        } else {
+          const histSinkoNums = historySinkoComments
+            .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+            .filter(n => n !== null);
+          const maxSinko = Math.max(...histSinkoNums);
+          if (!latestComment || latestComment === hoComment) {
+            latestComment = historySinkoComments.find(c => {
+              const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+              return m && parseInt(m[1], 10) === maxSinko;
+            }) || hoComment;
+          }
 
-        const histSinkoNums = historySinkoComments
-          .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
-          .filter(n => n !== null);
-        const maxSinko = Math.max(...histSinkoNums);
-        if (!latestComment || latestComment === hoComment) {
-          latestComment = historySinkoComments.find(c => {
-            const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
-            return m && parseInt(m[1], 10) === maxSinko;
-          }) || hoComment;
-        }
-
-        console.log(`[COMMENT] ${userName}: /hoフォールバック sinko+1 charaId=${charaId} maxSinko=${maxSinko}`);
-        try {
-          replyData = getReplyFromCSV(charaId, maxSinko);
-        } catch (e) {
-          console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
-          continue;
+          console.log(`[COMMENT] ${userName}: /hoフォールバック sinko+1 charaId=${charaId} maxSinko=${maxSinko}`);
+          try {
+            replyData = getReplyFromCSV(charaId, maxSinko, hoFileId);
+          } catch (e) {
+            console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
         }
       }
     } else {
