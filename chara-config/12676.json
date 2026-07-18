@@ -35,6 +35,20 @@
         "searchTarget": "12676yu1/sinko/1",
         "useCurrentRow": true
       }
+    },
+    "yu5": {
+      "fileId": "12676yu5sinko",
+      "ho": {
+        "useHistorySearch": true,
+        "fallback": {
+          "searchTarget": "12676yu5/sinko/1",
+          "useCurrentRow": true
+        }
+      },
+      "noresHo": {
+        "searchTarget": "12676yu5/sinko/1",
+        "useCurrentRow": true
+      }
     }
   }
 }
