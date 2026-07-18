@@ -1,0 +1,13 @@
+{
+  "charaId": "12680",
+  "globalStopTime": { "start": "23:00", "end": "09:00" },
+  "phases": {
+    "mu1": {
+      "fileId": "12680mu1sinko",
+      "do1": {
+        "searchTarget": "12680mu1/sinko/1",
+        "useCurrentRow": true
+      }
+    }
+  }
+}
