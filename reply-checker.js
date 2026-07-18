@@ -605,12 +605,16 @@ async function analyzeMessages(page) {
     // tr自体またはtr内のtdに背景色が設定されている場合の両方を拾う。
     const msgs = [];
     const debugLogs = [];
+    let totalTr = 0;
+    let greenTr = 0;
     for (const trEl of document.querySelectorAll('tr')) {
+      totalTr++;
       const trBg = normStyle(trEl);
       const tdBg = Array.from(trEl.querySelectorAll('td'))
         .map(td => normStyle(td)).join('');
       const bg = trBg + tdBg;
       if (bg.includes('90ee90') || bg.includes('144,238,144')) {
+        greenTr++;
         // コメントアウトは innerHTML だと &lt;!--...--&gt; にエンコードされるため
         // hidden input の value 属性から生テキストを取得して正規表現で抽出する
         const trHtml = trEl.innerHTML; // デバッグ用
@@ -655,6 +659,7 @@ async function analyzeMessages(page) {
         msgs.push({ type: 'user', rowText: fullRowText, timeText });
       }
     }
+    debugLogs.push(`totalTr=${totalTr} greenTr=${greenTr}`);
 
     const emptyK = { kanteishiHtml: '', kanteishiTrHtml: '', kanteishiBodyText: '', kanteishiComments: [], allKanteishiComments: [], spanCount: 0, userMsgCount: 0, latestUserTime: '', latestUserTexts: [] };
 
