@@ -1120,6 +1120,98 @@ async function getBodyNaibuTexts(frame) {
   }
 }
 
+// ho履歴フォールバック用: 表示中の履歴（analyzeMessages()のallKanteishiComments）に
+// sinko/hisコメントが見つからない場合、mg_k_rireki.php（履歴100件ページ）を開いて再検索する。
+// ope_mainフレーム内の a[href*="mg_k_rireki.php"] をクリックし、新しいページとして開く。
+// td[style*="90EE90"]（鑑定士行）に続くp要素からコメントアウト（&lt;!--...--&gt;形式）を
+// デコードして抽出し、sinko/hisコメントのうち番号最大のものを最新として返す。
+async function searchSinkoFromRirekiHistory(page) {
+  const mainFrame = page.frame({ name: 'ope_main' });
+  if (!mainFrame) {
+    console.log('[RIREKI] ope_mainフレームが取得できません');
+    return null;
+  }
+
+  const rirekiLink = mainFrame.locator('a[href*="mg_k_rireki.php"]');
+  if (await rirekiLink.count() === 0) {
+    console.log('[RIREKI] mg_k_rireki.phpへのリンクが見つかりません');
+    return null;
+  }
+
+  let rirekiPage;
+  try {
+    [rirekiPage] = await Promise.all([
+      page.context().waitForEvent('page', { timeout: 10000 }),
+      rirekiLink.first().click(),
+    ]);
+    await rirekiPage.waitForLoadState('networkidle').catch(() => {});
+  } catch (e) {
+    console.log(`[RIREKI] 履歴ページを開けませんでした: ${e.message}`);
+    return null;
+  }
+
+  let comments = [];
+  try {
+    const evalResult = await rirekiPage.evaluate(() => {
+      const found = [];
+      const greenTds = Array.from(document.querySelectorAll('td[style*="90EE90"]'));
+      for (const td of greenTds) {
+        const tr = td.closest('tr');
+        let p = tr ? tr.querySelector('p') : null;
+        if (!p) {
+          // 同じtr内にp要素がない場合、DOM上で後続するp要素を探す
+          let node = (tr || td).nextElementSibling;
+          while (node && !p) {
+            if (node.tagName === 'P') { p = node; break; }
+            p = node.querySelector ? node.querySelector('p') : null;
+            node = node.nextElementSibling;
+          }
+        }
+        if (!p) continue;
+        const raw = p.innerHTML || p.textContent || '';
+        const decoded = raw
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&');
+        const cre = /<!--([^>]+)-->/g;
+        let cm;
+        while ((cm = cre.exec(decoded)) !== null) found.push(cm[1]);
+      }
+      return { comments: found };
+    });
+    comments = evalResult.comments;
+  } catch (e) {
+    console.log(`[RIREKI] コメント抽出に失敗: ${e.message}`);
+  } finally {
+    await rirekiPage.close().catch(() => {});
+  }
+
+  console.log(`[RIREKI] 再検索コメント件数: ${comments.length} ${JSON.stringify(comments.slice(0, 10))}`);
+
+  const sinkoComments = comments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+  if (sinkoComments.length === 0) {
+    console.log('[RIREKI] sinko/hisコメントは見つかりませんでした');
+    return null;
+  }
+
+  const nums = sinkoComments
+    .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+    .filter(n => n !== null);
+  const maxSinko = Math.max(...nums);
+  const latestComment = sinkoComments.find(c => {
+    const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+    return m && parseInt(m[1], 10) === maxSinko;
+  }) || sinkoComments[0];
+
+  let charaId = null;
+  for (const c of sinkoComments) {
+    const m = c.match(/^(\d+(?:yu|mu)\d+)/);
+    if (m) { charaId = m[1]; break; }
+  }
+
+  return { comments, sinkoComments, maxSinko, latestComment, charaId };
+}
+
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
 async function processUsers(page) {
@@ -1662,9 +1754,33 @@ async function processUsers(page) {
         }
 
         if (!charaId || historySinkoComments.length === 0) {
-          // hoActionCfg.fallback: 履歴にsinko/hisコメントが見つからない場合の代替searchTarget
-          if (charaId && hoActionCfg?.fallback?.searchTarget) {
-            console.log(`[JSON] ho: 履歴にsinko/hisコメントなし → fallback searchTarget="${hoActionCfg.fallback.searchTarget}"`);
+          // 表示中の履歴にsinko/hisコメントが見つからない場合、
+          // mg_k_rireki.php（履歴100件ページ）を開いて再検索する
+          console.log(`[JSON] ho: 表示中の履歴にsinko/hisコメントなし → mg_k_rireki.php で再検索`);
+          let rirekiResult = null;
+          try {
+            rirekiResult = await searchSinkoFromRirekiHistory(page);
+          } catch (e) {
+            console.error(`[ERROR] ho 履歴再検索失敗 (${userName}): ${e.message}`);
+          }
+
+          if (rirekiResult) {
+            if (!charaId) charaId = rirekiResult.charaId;
+            if (!charaId) {
+              console.log(`[SKIP] ${userName}: 再検索コメントからcharaIdを特定できません`);
+              continue;
+            }
+            console.log(`[JSON] ho: mg_k_rireki.php再検索でsinko/his発見 charaId=${charaId} maxSinko=${rirekiResult.maxSinko}`);
+            latestComment = rirekiResult.latestComment;
+            try {
+              replyData = getReplyFromCSV(charaId, rirekiResult.maxSinko, hoFileId);
+            } catch (e) {
+              console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+              continue;
+            }
+          } else if (charaId && hoActionCfg?.fallback?.searchTarget) {
+            // hoActionCfg.fallback: 再検索でもsinko/hisコメントが見つからない場合の代替searchTarget
+            console.log(`[JSON] ho: 再検索でもsinko/hisコメントなし → fallback searchTarget="${hoActionCfg.fallback.searchTarget}"`);
             const useCurrentRow = hoActionCfg.fallback.useCurrentRow === true;
             try {
               replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.fallback.searchTarget, useCurrentRow, hoActionCfg.fallback.fileId ?? hoFileId);
@@ -1674,7 +1790,7 @@ async function processUsers(page) {
             }
             latestComment = hoComment;
           } else {
-            console.log(`[SKIP] ${userName}: /hoあり・履歴にsinko/hisコメントなし・JSON設定もなし`);
+            console.log(`[SKIP] ${userName}: /hoあり・再検索でもsinko/hisコメントなし・JSON設定もなし`);
             continue;
           }
         } else {
