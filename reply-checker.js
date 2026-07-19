@@ -1160,7 +1160,9 @@ async function getBodyNaibuTexts(frame) {
 // 鑑定士メッセージは td[style*="90EE90"; text-align: right;"] に日時等が入り、
 // その直後（DOM順で最初）に続くp要素のinnerHTMLにメッセージ本文とコメントアウトが
 // &lt;!--...--&gt;形式で入っているため、デコードして抽出する。
-async function searchSinkoFromRirekiHistory(page) {
+// charaIdが指定されている場合、フェーズ違いのsinko/hisコメント（例: mu2/sinko）を
+// 拾わないよう、そのcharaIdに一致するコメントのみに絞り込む。
+async function searchSinkoFromRirekiHistory(page, charaId) {
   const mainFrame = page.frame({ name: 'ope_main' });
   if (!mainFrame) {
     console.log('[RIREKI] ope_mainフレームが取得できません');
@@ -1228,7 +1230,12 @@ async function searchSinkoFromRirekiHistory(page) {
 
   console.log(`[RIREKI] 再検索コメント件数: ${comments.length} ${JSON.stringify(comments.slice(0, 10))}`);
 
-  const sinkoComments = comments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+  // charaIdが指定されている場合は、そのcharaIdに一致するコメントのみを検索する
+  // （フェーズ違いのsinko/his、例: mu2/sinkoの誤検出を防ぐ）
+  const sinkoComments = comments.filter(c => {
+    if (charaId && !c.startsWith(charaId + '/')) return false;
+    return /(?:sinko|his\w*)\/?(\d+)/.test(c);
+  });
   if (sinkoComments.length === 0) {
     console.log('[RIREKI] sinko/hisコメントは見つかりませんでした');
     return null;
@@ -1243,13 +1250,15 @@ async function searchSinkoFromRirekiHistory(page) {
     return m && parseInt(m[1], 10) === maxSinko;
   }) || sinkoComments[0];
 
-  let charaId = null;
-  for (const c of sinkoComments) {
-    const m = c.match(/^(\d+(?:yu|mu)\d+)/);
-    if (m) { charaId = m[1]; break; }
+  let resolvedCharaId = charaId;
+  if (!resolvedCharaId) {
+    for (const c of sinkoComments) {
+      const m = c.match(/^(\d+(?:yu|mu)\d+)/);
+      if (m) { resolvedCharaId = m[1]; break; }
+    }
   }
 
-  return { comments, sinkoComments, maxSinko, latestComment, charaId };
+  return { comments, sinkoComments, maxSinko, latestComment, charaId: resolvedCharaId };
 }
 
 // ─── 返信処理メインループ ─────────────────────────────────────────
@@ -1823,7 +1832,7 @@ async function processUsers(page) {
           console.log(`[JSON] ho: 表示中の履歴にsinko/hisコメントなし → mg_k_rireki.php で再検索`);
           let rirekiResult = null;
           try {
-            rirekiResult = await searchSinkoFromRirekiHistory(page);
+            rirekiResult = await searchSinkoFromRirekiHistory(page, charaId);
           } catch (e) {
             console.error(`[ERROR] ho 履歴再検索失敗 (${userName}): ${e.message}`);
           }
