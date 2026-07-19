@@ -520,9 +520,9 @@ function formatCampaignDisplay(c) {
 }
 
 // ─── 入金額から期待ポイントを計算する ───────────────────────────────
-// 通常付与 = 入金額÷10、サービスポイント = 入金額×0.5%（mail-checker.jsの
-// calcPoints()と同じ計算式）に加え、キャンペーン条件（campaigns、全メール
-// 分をまとめて渡す）から補助分を加算する。
+// 通常付与 = 入金額（1pt = 1円）、サービスポイント = 入金額×0.5%
+// に加え、キャンペーン条件（campaigns、全メール分をまとめて渡す）から
+// 補助分を加算する。
 //
 // ・fixed/rate/percentは、入金額が閾値(amount)以上のもののうち
 //   最も有利な条件のみを採用する（複数条件の合算はしない）
@@ -533,7 +533,7 @@ function formatCampaignDisplay(c) {
 //
 // ※ 複数キャンペーンの組み合わせルールは実際の運用に合わせて要調整
 function calcExpectedPoints(amount, campaigns) {
-  const normalPt = Math.floor(amount / 10);
+  const normalPt = Math.floor(amount);
   const servicePt = Math.floor(amount * 0.005);
 
   let campaignBonus = 0;
@@ -778,7 +778,7 @@ async function checkSupport() {
       // 通常+サービスポイントの合計と合算した上で実際のポイント合計と比較する
       const totalAmount = parsedBankRows.reduce((sum, r) => sum + r.amount, 0);
       const totalActual = parsedBankRows.reduce((sum, r) => sum + r.point, 0);
-      const totalExpected = parsedBankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10) + Math.floor(r.amount * 0.005), 0);
+      const totalExpected = parsedBankRows.reduce((sum, r) => sum + Math.floor(r.amount) + Math.floor(r.amount * 0.005), 0);
       const campaignBonus = calcExpectedPoints(totalAmount, allCampaigns).campaignBonus;
       const grandTotal = totalExpected + campaignBonus;
       const diff = totalActual - grandTotal;
