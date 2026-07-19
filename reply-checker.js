@@ -233,6 +233,27 @@ function resolveHoPhase(charaCfg, typeNum, hoType) {
   return { key: prefixMatches[0][0], cfg: prefixMatches[0][1] };
 }
 
+// fileIdからcharaId部分を抽出する（例: "12676yu5sinko" → "12676yu5"、"12680mu2his" → "12680mu2"）
+// 抽出できない場合はnullを返す
+function charaIdFromFileId(fileId) {
+  if (!fileId) return null;
+  const m = fileId.match(/^(\d+(?:yu|mu)\d+)/);
+  return m ? m[1] : null;
+}
+
+// fileId指定時、検索対象文字列(target)先頭のcharaId部分を実行時charaIdから
+// fileId由来のcharaIdに置き換える。
+// minPhaseNumberでyu7がyu5の設定・CSV（fileId="12676yu5sinko"）を流用する場合、
+// 実際のコメントは"12676yu7/..."だがCSV内は"12676yu5/..."で書かれているため、
+// 検索前に置換しないとヒットしない（charaId・fileId由来charaIdが一致する場合や
+// targetがcharaIdで始まらない場合はそのまま返す）
+function rewriteTargetCharaId(target, charaId, fileId) {
+  const fileCharaId = charaIdFromFileId(fileId);
+  if (!fileCharaId || !charaId || fileCharaId === charaId) return target;
+  if (!target.startsWith(charaId + '/')) return target;
+  return fileCharaId + target.slice(charaId.length);
+}
+
 // charaIdをプレフィックスとしてCSVファイルを検索する
 // fileIdが指定された場合はそのファイルを優先する
 // sinkoを含むファイルを優先し、なければ数値が対象以下の最大ファイルにフォールバック
@@ -313,8 +334,12 @@ function getReplyFromCSV(charaId, sinkoNum, fileId) {
   // sinko/N または his/N の行を特定する（sinko/2・sinko2・sinko/3/A 等に対応）
   // fileId明示指定時はresolvedCharaIdがfileId自体に置き換わるため、
   // コメント内のプレフィックス（charaId）とは一致しない。その場合は
-  // 本来のcharaIdをパターンに使う（fileId未指定時は従来通りresolvedCharaIdを使用）
-  const patternCharaId = fileId ? charaId : resolvedCharaId;
+  // fileIdから抽出したcharaIdをパターンに使う（例: fileId="12676yu5sinko"
+  // → "12676yu5"。minPhaseNumberでyu7がyu5のCSVを流用する場合、CSV内の
+  // コメントは"12676yu5/..."で書かれているため、実行時charaId="12676yu7"を
+  // そのまま使うとヒットしない）。抽出できなければ従来通りcharaIdにフォールバック。
+  // fileId未指定時は従来通りresolvedCharaIdを使用する。
+  const patternCharaId = fileId ? (charaIdFromFileId(fileId) ?? charaId) : resolvedCharaId;
   const sinkoPattern = new RegExp(
     `<!--${patternCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:sinko|his)\\/?${sinkoNum}(?:\\/[A-Za-z0-9]+)?-->`
   );
@@ -357,17 +382,25 @@ function getReplyFromCSVByTarget(charaId, searchTarget, useCurrentRow, fileId) {
   const rows = parseCSV(csvPath);
   const title = rows[0] ? (rows[0][0] || '') : '';
 
+  // fileId指定時、searchTarget先頭のcharaIdが実行時charaIdのままだと
+  // fileId由来のCSV（例: minPhaseNumberでyu7がyu5のCSVを流用するケース）内の
+  // "12676yu5/..."と一致しないため、fileIdから抽出したcharaIdに書き換える
+  const effectiveTarget = fileId ? rewriteTargetCharaId(searchTarget, charaId, fileId) : searchTarget;
+  if (effectiveTarget !== searchTarget) {
+    console.log(`[CSV-TARGET] fileId="${fileId}" のためcharaIdを書き換え: "${searchTarget}" → "${effectiveTarget}"`);
+  }
+
   // 特殊文字をエスケープしつつ、数字の直前スラッシュは省略形も許容（his/2 ↔ his2）
-  const escaped = searchTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escaped = effectiveTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const flexEscaped = escaped.replace(/\/(\d)/g, '\\/?$1');
   const pattern = new RegExp(`<!--${flexEscaped}-->`);
 
-  console.log(`[CSV-TARGET] 検索: "${searchTarget}" pattern=${pattern}`);
+  console.log(`[CSV-TARGET] 検索: "${effectiveTarget}" pattern=${pattern}`);
 
   const idx = rows.findIndex(r => pattern.test((r[0] || '').trim()));
   if (idx === -1) {
     const sample = rows.slice(0, 10).map((r, i) => `  row[${i}]: "${(r[0] || '').trim().slice(0, 60)}"`).join('\n');
-    throw new Error(`searchTarget "${searchTarget}" がCSVに未発見\nCSV先頭10行:\n${sample}`);
+    throw new Error(`searchTarget "${effectiveTarget}" がCSVに未発見\nCSV先頭10行:\n${sample}`);
   }
 
   console.log(`[CSV-TARGET] マッチ: row[${idx}] A="${(rows[idx][0] || '').trim().slice(0, 60)}"`);
