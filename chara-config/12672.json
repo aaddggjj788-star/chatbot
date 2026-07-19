@@ -44,7 +44,16 @@
       "ho1": { "searchTarget": "12672yu4/ho1", "useCurrentRow": false }
     },
     "yu9": {
-      "ho1": { "searchTarget": "12672yu9/ho/1", "useCurrentRow": false }
+      "minPhaseNumber": 9,
+      "fileId": "12672yu9sinko",
+      "ho1": { "searchTarget": "12672yu9/ho/1", "useCurrentRow": false },
+      "ho": {
+        "useHistorySearch": true,
+        "fallback": {
+          "searchTarget": "12672yu9/sinko/1",
+          "useCurrentRow": true
+        }
+      }
     }
   }
 }
