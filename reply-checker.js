@@ -1122,9 +1122,11 @@ async function getBodyNaibuTexts(frame) {
 
 // ho履歴フォールバック用: 表示中の履歴（analyzeMessages()のallKanteishiComments）に
 // sinko/hisコメントが見つからない場合、mg_k_rireki.php（履歴100件ページ）を開いて再検索する。
-// ope_mainフレーム内の a[href*="mg_k_rireki.php"] をクリックし、新しいページとして開く。
-// td[style*="90EE90"]（鑑定士行）に続くp要素からコメントアウト（&lt;!--...--&gt;形式）を
-// デコードして抽出し、sinko/hisコメントのうち番号最大のものを最新として返す。
+// ope_mainフレーム内の a[href*="mg_k_rireki.php"]（「別ウィンドウで見る」リンク）を
+// クリックし、target="_blank"で開く新しいページを取得する。
+// 鑑定士メッセージは td[style*="90EE90"; text-align: right;"] に日時等が入り、
+// その直後（DOM順で最初）に続くp要素のinnerHTMLにメッセージ本文とコメントアウトが
+// &lt;!--...--&gt;形式で入っているため、デコードして抽出する。
 async function searchSinkoFromRirekiHistory(page) {
   const mainFrame = page.frame({ name: 'ope_main' });
   if (!mainFrame) {
@@ -1132,8 +1134,7 @@ async function searchSinkoFromRirekiHistory(page) {
     return null;
   }
 
-  const rirekiLink = mainFrame.locator('a[href*="mg_k_rireki.php"]');
-  if (await rirekiLink.count() === 0) {
+  if (await mainFrame.locator('a[href*="mg_k_rireki.php"]').count() === 0) {
     console.log('[RIREKI] mg_k_rireki.phpへのリンクが見つかりません');
     return null;
   }
@@ -1142,9 +1143,9 @@ async function searchSinkoFromRirekiHistory(page) {
   try {
     [rirekiPage] = await Promise.all([
       page.context().waitForEvent('page', { timeout: 10000 }),
-      rirekiLink.first().click(),
+      mainFrame.click('a[href*="mg_k_rireki.php"]'),
     ]);
-    await rirekiPage.waitForLoadState('networkidle').catch(() => {});
+    await rirekiPage.waitForLoadState('load');
   } catch (e) {
     console.log(`[RIREKI] 履歴ページを開けませんでした: ${e.message}`);
     return null;
@@ -1153,20 +1154,26 @@ async function searchSinkoFromRirekiHistory(page) {
   let comments = [];
   try {
     const evalResult = await rirekiPage.evaluate(() => {
+      // elの後、DOM順で最初に現れるp要素を探す（兄弟になければ親の兄弟へと辿る）
+      function findNextP(el) {
+        let node = el;
+        while (node) {
+          let sibling = node.nextElementSibling;
+          while (sibling) {
+            if (sibling.tagName === 'P') return sibling;
+            const nested = sibling.querySelector && sibling.querySelector('p');
+            if (nested) return nested;
+            sibling = sibling.nextElementSibling;
+          }
+          node = node.parentElement;
+        }
+        return null;
+      }
+
       const found = [];
       const greenTds = Array.from(document.querySelectorAll('td[style*="90EE90"]'));
       for (const td of greenTds) {
-        const tr = td.closest('tr');
-        let p = tr ? tr.querySelector('p') : null;
-        if (!p) {
-          // 同じtr内にp要素がない場合、DOM上で後続するp要素を探す
-          let node = (tr || td).nextElementSibling;
-          while (node && !p) {
-            if (node.tagName === 'P') { p = node; break; }
-            p = node.querySelector ? node.querySelector('p') : null;
-            node = node.nextElementSibling;
-          }
-        }
+        const p = findNextP(td);
         if (!p) continue;
         const raw = p.innerHTML || p.textContent || '';
         const decoded = raw
