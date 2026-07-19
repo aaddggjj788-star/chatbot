@@ -1533,7 +1533,11 @@ async function processUsers(page) {
         if (!replyData && !skipUser && actionCfg.useHistorySearch) {
           const historyComments = analysis.allKanteishiComments || [];
           console.log(`[DEBUG] useHistorySearch historyComments:`, JSON.stringify(historyComments));
-          const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+          // フェーズ違いのsinko/hisコメントを拾わないよう、現在のcharaIdに一致するもののみ検索する
+          const historySinkoComments = historyComments.filter(c => {
+            if (!c.startsWith(parsed.charaId + '/')) return false;
+            return /(?:sinko|his\w*)\/?(\d+)/.test(c);
+          });
 
           if (historySinkoComments.length === 0) {
             console.log(`[SKIP] ${userName}: subAction useHistorySearch・履歴にsinko/hisコメントなし (${parsed.actionKey})`);
@@ -1715,7 +1719,11 @@ async function processUsers(page) {
             // 履歴の最新sinko/hisの次行を取得し、workflowMarker以降を
             // 工程部分として抽出、文頭テキストと結合する
             const historyComments = analysis.allKanteishiComments || [];
-            const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+            // フェーズ違いのsinko/hisコメントを拾わないよう、現在のcharaIdに一致するもののみ検索する
+            const historySinkoComments = historyComments.filter(c => {
+              if (!c.startsWith(charaId + '/')) return false;
+              return /(?:sinko|his\w*)\/?(\d+)/.test(c);
+            });
             if (historySinkoComments.length === 0) {
               console.log(`[SKIP] ${userName}: ho workflowMarker・履歴にsinko/hisコメントなし`);
               continue;
@@ -1762,7 +1770,12 @@ async function processUsers(page) {
         const historyComments = analysis.allKanteishiComments || [];
         console.log(`[DEBUG] allKanteishiComments件数: ${historyComments.length}`);
         console.log(`[DEBUG] allKanteishiComments:`, JSON.stringify(historyComments.slice(0, 10)));
-        const historySinkoComments = historyComments.filter(c => /(?:sinko|his\w*)\/?(\d+)/.test(c));
+        // フェーズ違いのsinko/hisコメントを拾わないよう、charaIdが判明していれば
+        // 現在のcharaIdに一致するもののみに絞り込む（未判明時は下でhistorySinkoCommentsから抽出する）
+        const historySinkoComments = historyComments.filter(c => {
+          if (charaId && !c.startsWith(charaId + '/')) return false;
+          return /(?:sinko|his\w*)\/?(\d+)/.test(c);
+        });
 
         if (!charaId) {
           for (const c of historySinkoComments) {
