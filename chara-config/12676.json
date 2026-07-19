@@ -37,6 +37,7 @@
       }
     },
     "yu5": {
+      "minPhaseNumber": 5,
       "fileId": "12676yu5sinko",
       "ho": {
         "useHistorySearch": true,
