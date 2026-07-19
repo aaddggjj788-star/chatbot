@@ -520,7 +520,7 @@ function formatCampaignDisplay(c) {
 }
 
 // ─── 入金額から期待ポイントを計算する ───────────────────────────────
-// 通常付与 = 入金額（1pt = 1円）、サービスポイント = 入金額×0.5%
+// 通常付与 = 入金額÷10（10円 = 1pt）、サービスポイント = 入金額×0.5%
 // に加え、キャンペーン条件（campaigns、全メール分をまとめて渡す）から
 // 補助分を加算する。
 //
@@ -528,19 +528,22 @@ function formatCampaignDisplay(c) {
 //   最も有利な条件のみを採用する（複数条件の合算はしない）
 // ・discount（pt割引）は鑑定料金の割引であり入金ポイント付与とは
 //   無関係なため、この計算には含めない
+// ・fixed（固定補助）・percentのbonusキー/割合は円単位のため、÷10してpt換算する
 // ・rateは「通常ポイントの○.○倍」を意味するため、通常付与分
 //   （サービスポイントは含まない）に対する増加分のみを補助として計上する
+//   （既にpt単位のため÷10は不要）
 //
 // ※ 複数キャンペーンの組み合わせルールは実際の運用に合わせて要調整
 function calcExpectedPoints(amount, campaigns) {
-  const normalPt = Math.floor(amount);
+  const normalPt = Math.floor(amount / 10);
   const servicePt = Math.floor(amount * 0.005);
 
   let campaignBonus = 0;
 
   const fixedApplicable = campaigns.filter(c => c.type === 'fixed' && amount >= c.amount);
   if (fixedApplicable.length > 0) {
-    campaignBonus += Math.max(...fixedApplicable.map(c => c.bonus));
+    // bonusは円単位なので÷10してptに変換
+    campaignBonus += Math.max(...fixedApplicable.map(c => Math.floor(c.bonus / 10)));
   }
 
   const rateApplicable = campaigns.filter(c => c.type === 'rate' && amount >= c.amount);
@@ -555,9 +558,10 @@ function calcExpectedPoints(amount, campaigns) {
   const percentApplicable = campaigns.filter(c => c.type === 'percent' && amount >= c.amount);
   if (percentApplicable.length > 0) {
     const bestPercent = Math.max(...percentApplicable.map(c => c.rate));
-    // 同様の理由で「amount * (bestPercent / 100)」ではなく
-    // 「amount * bestPercent」を先に計算してから100で割る
-    campaignBonus += Math.floor((amount * bestPercent) / 100);
+    // 購入金額の○%分が補助（円単位）なので、同様の理由で
+    // 「amount * (bestPercent / 100)」ではなく「amount * bestPercent」を
+    // 先に計算してから100で割り、さらに÷10してptに変換する
+    campaignBonus += Math.floor((amount * bestPercent) / 100 / 10);
   }
 
   const total = normalPt + servicePt + campaignBonus;
@@ -778,7 +782,7 @@ async function checkSupport() {
       // 通常+サービスポイントの合計と合算した上で実際のポイント合計と比較する
       const totalAmount = parsedBankRows.reduce((sum, r) => sum + r.amount, 0);
       const totalActual = parsedBankRows.reduce((sum, r) => sum + r.point, 0);
-      const totalExpected = parsedBankRows.reduce((sum, r) => sum + Math.floor(r.amount) + Math.floor(r.amount * 0.005), 0);
+      const totalExpected = parsedBankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10) + Math.floor(r.amount * 0.005), 0);
       const campaignBonus = calcExpectedPoints(totalAmount, allCampaigns).campaignBonus;
       const grandTotal = totalExpected + campaignBonus;
       const diff = totalActual - grandTotal;
