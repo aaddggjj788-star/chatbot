@@ -771,60 +771,64 @@ async function checkSupport() {
       }).filter(r => !Number.isNaN(r.point) && r.amount > 0);
       console.log(`[STEP14] 時間・ポイント・金額の抽出成功: ${parsedBankRows.length}件`);
 
-      console.log('[STEP15] ポイント計算と照合');
-      for (const row of parsedBankRows) {
-        const expected = calcExpectedPoints(row.amount, allCampaigns);
-        const diff = row.point - expected.total;
-        console.log(`[STEP15] 時間=${row.time} 入金額=${row.amount}円 期待値=${expected.total}pt（通常${expected.normalPt}+サービス${expected.servicePt}+補助${expected.campaignBonus}） 実際=${row.point}pt 差異=${diff}`);
+      console.log('[STEP15] ポイント計算と照合（当日の入金合計で判定）');
+      // キャンペーン補助（fixed/rate/percent）は入金額の閾値判定を伴うため、
+      // 各入金を個別に判定すると同一日の合計では閾値を超えるケースを
+      // 取りこぼす。当日の入金合計に対して1回だけ補助を計算し、
+      // 通常+サービスポイントの合計と合算した上で実際のポイント合計と比較する
+      const totalAmount = parsedBankRows.reduce((sum, r) => sum + r.amount, 0);
+      const totalActual = parsedBankRows.reduce((sum, r) => sum + r.point, 0);
+      const totalExpected = parsedBankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10) + Math.floor(r.amount * 0.005), 0);
+      const campaignBonus = calcExpectedPoints(totalAmount, allCampaigns).campaignBonus;
+      const grandTotal = totalExpected + campaignBonus;
+      const diff = totalActual - grandTotal;
+      console.log(`[STEP15] 入金合計=${totalAmount}円 期待値合計=${grandTotal}pt（通常+サービス${totalExpected}+補助${campaignBonus}） 実際合計=${totalActual}pt 差異=${diff}`);
 
-        if (diff === 0) {
-          console.log('[STEP15] 一致 → 問題なし');
-          continue;
-        }
-
+      if (diff === 0) {
+        console.log('[STEP15] 一致 → 問題なし');
+      } else {
         const diffLabel = diff < 0 ? '不足' : '過剰';
         const diffAbs = Math.abs(diff);
 
         console.log('[STEP16] 差異ありのためLINEに確認通知');
         await sendLine(`【ポイント確認】
 ユーザー：${target.userName}
-入金金額：${formatNumber(row.amount)}円
-期待ポイント：${expected.total}pt
-実際のポイント：${row.point}pt
+入金合計：${formatNumber(totalAmount)}円
+期待ポイント合計：${grandTotal}pt
+実際のポイント合計：${totalActual}pt
 差異：${diffAbs}pt（${diffLabel}）
 調整しますか？「調整する」または「スキップ」`);
 
-        let reply;
+        let reply = null;
         try {
           reply = await waitForLineReply();
         } catch (e) {
           console.log('[STEP16] LINE返信待ちタイムアウト → スキップ扱い:', e.message);
-          continue;
         }
-        console.log(`[STEP16] LINE返信: ${reply}`);
 
-        if (reply !== '調整する') {
+        if (reply === '調整する') {
+          console.log(`[STEP16] LINE返信: ${reply}`);
+          console.log('[STEP17] 会員詳細ページに戻りポイントを調整');
+          if (historyPage !== mainFrame) {
+            await historyPage.close().catch(() => {});
+          } else {
+            await mainFrame.evaluate(() => window.history.back());
+            await new Promise(r => setTimeout(r, 2000));
+          }
+
+          const sign = diff < 0 ? '+' : '-';
+          // pointMark: value="1"が+（加算）、value="2"が-（減算・要確認）
+          const pointMarkValue = sign === '+' ? '1' : '2';
+          console.log(`[STEP17] ${sign}${diffAbs}pt を調整（pointMark value=${pointMarkValue}）`);
+          await mainFrame.click(`input[name="pointMark"][value="${pointMarkValue}"]`);
+          await mainFrame.fill('input[name="pointOut"]', String(diffAbs));
+          await mainFrame.click('input[name="user_henko"]');
+          await new Promise(r => setTimeout(r, 3000));
+          await sendLine(`【調整完了】${target.userName}のポイントを${sign}${diffAbs}pt調整しました`);
+        } else if (reply !== null) {
+          console.log(`[STEP16] LINE返信: ${reply}`);
           console.log('[STEP16] スキップが選択されました');
-          continue;
         }
-
-        console.log('[STEP17] 会員詳細ページに戻りポイントを調整');
-        if (historyPage !== mainFrame) {
-          await historyPage.close().catch(() => {});
-        } else {
-          await mainFrame.evaluate(() => window.history.back());
-          await new Promise(r => setTimeout(r, 2000));
-        }
-
-        const sign = diff < 0 ? '+' : '-';
-        // pointMark: value="1"が+（加算）、value="2"が-（減算・要確認）
-        const pointMarkValue = sign === '+' ? '1' : '2';
-        console.log(`[STEP17] ${sign}${diffAbs}pt を調整（pointMark value=${pointMarkValue}）`);
-        await mainFrame.click(`input[name="pointMark"][value="${pointMarkValue}"]`);
-        await mainFrame.fill('input[name="pointOut"]', String(diffAbs));
-        await mainFrame.click('input[name="user_henko"]');
-        await new Promise(r => setTimeout(r, 3000));
-        await sendLine(`【調整完了】${target.userName}のポイントを${sign}${diffAbs}pt調整しました`);
       }
     }
 
