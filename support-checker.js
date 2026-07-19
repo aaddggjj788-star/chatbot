@@ -703,6 +703,7 @@ async function checkSupport() {
       console.log('[DRY RUN] ポイント履歴確認・調整処理（STEP10-17）をスキップ');
     } else {
       const allCampaigns = mails.flatMap(m => m.campaigns);
+      console.log('[DEBUG] allCampaigns:', JSON.stringify(allCampaigns));
 
       console.log('[STEP10] ブラウザバックで会員詳細ページに戻る');
       await mailPage.evaluate(() => window.history.back());
