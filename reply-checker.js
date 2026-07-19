@@ -1567,6 +1567,7 @@ async function processUsers(page) {
       // 例: "12668yu3/ho"        → baseId=12668, typeNum=yu3,      hoType=ho
       // 例: "12668mu2zenhan/ho1" → baseId=12668, typeNum=mu2zenhan, hoType=ho1
       // 例: "12673yu1/sinko/ho"  → baseId=12673, typeNum=yu1,      hoType=ho（sinko挟み込み形式）
+      // 例: "12680mu2/ho/1"      → baseId=12680, typeNum=mu2,      hoType=ho1（スラッシュ区切り形式）
       const hoMatch = hoComment.match(/^(\d+)((?:yu|mu)\d+\w*)\/(?:sinko\/)?(\w+)(?:\/\w+)*$/);
 
       let hoBaseId = null;
@@ -1577,6 +1578,16 @@ async function processUsers(page) {
         hoTypeNum = hoMatch[2];
         hoType    = hoMatch[3];
         charaId   = hoBaseId + hoTypeNum;
+
+        // "ho/1"のようにho種別と数字がスラッシュで区切られている場合、
+        // JSON側のho1・ho2等の数字付きキーに一致するよう数字を結合する
+        // （"ho1"のような数字直結形式は既にhoMatch[3]で捕捉済みのため対象外）
+        if (!/\d$/.test(hoType)) {
+          const numSuffixMatch = hoComment.match(/\/(\d+)$/);
+          if (numSuffixMatch) {
+            hoType = hoType + numSuffixMatch[1];
+          }
+        }
       }
 
       // JSON設定の読み込みとphase解決

@@ -305,7 +305,15 @@ function resolveAction(charaCfg, commentStr) {
     if (!hoMatch) {
       return { kind: 'ho', error: `hoコメントの形式を解析できません: "${commentStr}"` };
     }
-    const [, hoBaseId, hoTypeNum, hoType] = hoMatch;
+    const [, hoBaseId, hoTypeNum] = hoMatch;
+    let hoType = hoMatch[3];
+    // "ho/1"のようにho種別と数字がスラッシュで区切られている場合、
+    // JSON側のho1・ho2等の数字付きキーに一致するよう数字を結合する
+    // （reply-checker.js のho解決ロジックと同じ）
+    if (!/\d$/.test(hoType)) {
+      const numSuffixMatch = commentStr.match(/\/(\d+)$/);
+      if (numSuffixMatch) hoType = hoType + numSuffixMatch[1];
+    }
     const resolvedCharaId = hoBaseId + hoTypeNum;
     const phaseResult = resolveHoPhase(charaCfg, hoTypeNum, hoType);
     const phaseCfg = phaseResult?.cfg ?? null;
