@@ -1,6 +1,11 @@
 {
   "charaId": "12680",
   "globalStopTime": { "start": "23:00", "end": "09:00" },
+  "spanMatchExclude": [
+    "12680mu2/ho/3",
+    "12680mu2/sinko/3",
+    "12680mu2/sinko/6"
+  ],
   "phases": {
     "mu1": {
       "fileId": "12680mu1sinko",
