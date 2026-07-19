@@ -21,6 +21,28 @@
       "ho3": { "searchTarget": "12680mu2/sinko/4", "useCurrentRow": true },
       "ho4": { "searchTarget": "12680mu2/sinko/3", "useCurrentRow": true },
       "do1": { "searchTarget": "12680mu2/sinko/1", "useCurrentRow": true }
+    },
+    "yu1": {
+      "fileId": "12680yu1sinko",
+      "ho": {
+        "searchTarget": "12680yu1/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu2": {
+      "minPhaseNumber": 2,
+      "fileId": "12680yu1sinko",
+      "ho": {
+        "useHistorySearch": true,
+        "fallback": {
+          "searchTarget": "12680yu1/sinko/1",
+          "useCurrentRow": true
+        }
+      },
+      "noresHo": {
+        "searchTarget": "12680yu1/sinko/1",
+        "useCurrentRow": true
+      }
     }
   }
 }
