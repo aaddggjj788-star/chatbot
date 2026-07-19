@@ -378,7 +378,27 @@ function runJsonMode(charaId, commentStr) {
   console.log(`適用されたJSON設定:\n${JSON.stringify(resolved.actionCfg, null, 2)}`);
 
   if (!resolved.actionCfg) {
-    console.log('→ 該当するJSON設定(action)が見つかりませんでした。');
+    if (resolved.kind !== 'sinkoHis') {
+      console.log('→ 該当するJSON設定(action)が見つかりませんでした。');
+      return;
+    }
+
+    // reply-checker.js の「デフォルト動作」と同じsinko+1フォールバック:
+    // 現在のsinko/hisコメント自身を検索し、その次の行（次のsinko/hisへ
+    // 遷移する内容）を表示する（例: sinko/2 → 次行=sinko/3への内容）
+    console.log('→ 該当するJSON設定(action)なし → sinko+1の通常ルールにフォールバック');
+    let found;
+    try {
+      found = findByTarget(resolved.resolvedCharaId, commentStr, false, resolved.fileId);
+    } catch (e) {
+      console.error(e.message);
+      process.exit(1);
+    }
+    if (!found) {
+      console.error('対象行の次行が取得できませんでした（末尾到達等）');
+      process.exit(1);
+    }
+    printResult(found.csvPath, found.rowIdx, found.row);
     return;
   }
 
