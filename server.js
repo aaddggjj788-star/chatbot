@@ -42,6 +42,20 @@ try {
   console.warn('support-checker のロードに失敗しました:', e.message);
 }
 
+// contact-checker は依存パッケージが別環境にある場合があるため安全に読み込む
+let checkContacts = () => console.warn('contact-checker 未ロード');
+let stopContacts  = () => console.warn('contact-checker 未ロード');
+try {
+  const cc = require('./contact-checker');
+  checkContacts = cc.checkContacts;
+  stopContacts  = cc.stopContacts;
+} catch (e) {
+  console.warn('contact-checker のロードに失敗しました:', e.message);
+}
+
+// 「コンタクトチェック開始」の多重起動防止
+let isContactCheckerRunning = false;
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const INQUIRY_POST_URL = ''; // 後で設定
@@ -268,10 +282,12 @@ async function handleEvent(event) {
 
   console.log('[LINE] 受信:', JSON.stringify(text));
 
-  // reply-checker.js が返信待ち中なら「送信」「スキップ」「調整する」「差し込み#〜」「差し替え#〜」をstate fileに書き込んで終了
-  if ((text === '送信' || text === 'スキップ' || text === '調整する' ||
-       text.startsWith('差し込み#') || text.startsWith('差し替え#'))
-      && fs.existsSync(REPLY_STATE_FILE)) {
+  // reply-checker.js/support-checker.js/contact-checker.js が返信待ち中なら
+  // 受信テキストをそのままstate fileに書き込んで終了する。
+  // 固定コマンド（送信/スキップ/調整する/差し込み#〜/差し替え#〜）に加え、
+  // contact-checker.js のSTEP6（返答内容の自由入力）にも対応するため、
+  // waiting状態であれば内容を問わず転送する
+  if (fs.existsSync(REPLY_STATE_FILE)) {
     try {
       const state = JSON.parse(fs.readFileSync(REPLY_STATE_FILE, 'utf8'));
       if (state.status === 'waiting') {
@@ -299,6 +315,21 @@ async function handleEvent(event) {
   if (text === 'サポートチェック開始') {
     checkSupport().catch(err => console.error('[SUPPORT] エラー:', err.message));
     return lineReply(replyToken, 'サポートチェックを開始しました');
+  }
+
+  if (text === 'コンタクトチェック開始') {
+    if (isContactCheckerRunning) {
+      return lineReply(replyToken, '【コンタクトチェック】既に動作中です');
+    }
+    isContactCheckerRunning = true;
+    checkContacts()
+      .catch(err => console.error('[CONTACT] エラー:', err.message))
+      .finally(() => { isContactCheckerRunning = false; });
+    return lineReply(replyToken, 'コンタクトチェックを開始しました');
+  }
+  if (text === 'コンタクトチェック停止') {
+    stopContacts();
+    return lineReply(replyToken, 'コンタクトチェックを停止しました');
   }
 
   if (text === 'ステータス') {
