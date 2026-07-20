@@ -130,25 +130,13 @@ async function login(page) {
 }
 
 // ─── STEP1: mg_contactMail.php を開く ───────────────────────────────
-// メインページのリンク a[href*="mg_contactMail.php"] をクリックする。
-// target="_blank"で新しいページとして開かれる場合にも対応する
+// リンクのクリックは不安定なため、直接URLへ遷移する
 
 async function openContactMailPage(page) {
-  console.log('[STEP1] mg_contactMail.php を開く');
-  const popupPromise = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
-  await page.click('a[href*="mg_contactMail.php"]');
-  const popup = await popupPromise;
-
-  let contactPage = page;
-  if (popup) {
-    console.log('[STEP1] 新しいページ(popup)で開かれました:', popup.url());
-    await popup.waitForLoadState('networkidle').catch(() => {});
-    contactPage = popup;
-  } else {
-    await page.waitForLoadState('networkidle').catch(() => {});
-    console.log('[STEP1] 既存ページ内で遷移しました:', page.url());
-  }
-  return contactPage;
+  const url = BASE_URL + 'mg_contactMail.php';
+  console.log(`[STEP1] mg_contactMail.php を開く: ${url}`);
+  await page.goto(url, { waitUntil: 'networkidle' });
+  return page;
 }
 
 // ─── STEP2: 「実行」ボタンをクリック ─────────────────────────────────
