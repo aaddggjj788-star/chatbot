@@ -1813,27 +1813,25 @@ async function processUsers(page) {
 
       // ─── フォールバック: JSON設定なし or searchTarget系なし ──────
       // 【根底ルール】JSON側にsearchTarget等の明示的な上書き設定がない
-      // 場合は、fileId・minPhaseNumberのJSON設定には依存せず以下の
-      // 3ステップで処理する:
-      //   STEP1: resolveCsvPath(charaId) で一番近い既存CSVファイルを解決し
+      // 場合（STEP1）は、fileId・minPhaseNumber・useHistorySearch・
+      // fallback等のJSON設定には一切依存せず以下の3ステップで処理する:
+      //   STEP2: resolveCsvPath(charaId) で一番近い既存CSVファイルを解決し
       //          resolvedCharaIdを得る（例: 12676yu7 → 12676yu5）
-      //   STEP2: resolvedCharaIdのsinko/hisコメントを履歴から検索する
+      //   STEP3: resolvedCharaIdのsinko/hisコメントを履歴から検索する
       //          （表示中の履歴になければmg_k_rireki.phpで100件から再検索）
-      //   STEP3: 見つかれば最新sinko+1を送信、見つからなければ
+      //   STEP4: 見つかれば最新sinko+1を送信、見つからなければ
       //          resolvedCharaId/sinko/1 を送信する
-      // hoActionCfg.fallback.searchTargetが明示設定されている場合のみ、
-      // STEP3の「見つからない場合」をJSON側の値で上書きする
       if (!replyData) {
         if (!charaId) {
           console.log(`[SKIP] ${userName}: /hoあり・charaIdを特定できません`);
           continue;
         }
 
-        // STEP1
+        // STEP2
         const { resolvedCharaId } = resolveCsvPath(charaId);
         console.log(`[JSON] ho 根底ルール: charaId=${charaId} → resolvedCharaId=${resolvedCharaId}`);
 
-        // STEP2
+        // STEP3
         const historyComments = analysis.allKanteishiComments || [];
         let historySinkoComments = historyComments.filter(c => {
           if (!c.startsWith(resolvedCharaId + '/')) return false;
@@ -1856,7 +1854,7 @@ async function processUsers(page) {
           }
         }
 
-        // STEP3
+        // STEP4
         if (historySinkoComments.length > 0) {
           const histSinkoNums = historySinkoComments
             .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
@@ -1874,17 +1872,6 @@ async function processUsers(page) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
           }
-        } else if (hoActionCfg?.fallback?.searchTarget) {
-          // JSON側の明示的な上書き設定（根底ルールを上書き）
-          console.log(`[JSON] ho: 履歴になし → fallback searchTarget="${hoActionCfg.fallback.searchTarget}"（JSON上書き）`);
-          const useCurrentRow = hoActionCfg.fallback.useCurrentRow === true;
-          try {
-            replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.fallback.searchTarget, useCurrentRow, hoActionCfg.fallback.fileId ?? hoFileId);
-          } catch (e) {
-            console.error(`[ERROR] ho fallback CSV取得失敗 (${userName}): ${e.message}`);
-            continue;
-          }
-          latestComment = hoComment;
         } else {
           console.log(`[COMMENT] ${userName}: /ho 根底ルール 履歴になし → ${resolvedCharaId}/sinko/1 を送信`);
           try {
