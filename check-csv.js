@@ -331,7 +331,12 @@ function resolveAction(charaCfg, commentStr) {
       phaseKey: phaseResult?.key ?? null,
       actionKey: usedActionKey,
       actionCfg,
-      fileId: actionCfg?.fileId ?? phaseCfg?.fileId ?? null,
+      // phaseCfg.fileIdは使わない: minPhaseNumberでphase設定を流用している
+      // 場合、phaseCfg.fileIdは流用元（例: yu5）のCSVを指しているため、
+      // それをそのまま使うと実際のresolvedCharaId（例: yu8）のCSVが
+      // 検索されなくなる。resolveCsvPath(resolvedCharaId)自身の
+      // カスケード解決に任せるため、actionCfg自身のfileIdのみを使う
+      fileId: actionCfg?.fileId ?? null,
       resolvedCharaId,
     };
   }

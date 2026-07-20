@@ -1652,7 +1652,6 @@ async function processUsers(page) {
         hoPhaseCfg = null;
       }
       if (hoPhaseCfg?.alwaysQuoteUser) alwaysQuoteUser = true;
-      const hoFileId     = hoPhaseCfg?.fileId ?? null;
 
       // actionCfg決定: 完全一致優先 → 数値サフィックス除去で前方一致
       let hoActionCfg = null;
@@ -1674,6 +1673,12 @@ async function processUsers(page) {
         console.log(`[TIME] ${userName}: hoAction "${hoType}" 時間帯制限 → フォールバックへ`);
         hoActionCfg = null;
       }
+
+      // hoFileIdはactionCfg自身のfileIdのみを使う（phaseCfg.fileIdは使わない）。
+      // minPhaseNumberでphase設定を流用している場合、phaseCfg.fileIdは
+      // 流用元（例: yu5）のCSVを指しているため、それをそのままsearchTarget系の
+      // 検索に使うと実際のcharaId（例: yu8）のCSVが検索されなくなる
+      const hoFileId = hoActionCfg?.fileId ?? null;
 
       console.log(`[COMMENT] ${userName}: /hoモード comment="${hoComment}" hoType="${hoType}" phase=${hoPhaseResult?.key} actionCfg=${JSON.stringify(hoActionCfg)}`);
 
