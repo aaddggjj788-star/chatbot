@@ -221,6 +221,25 @@ async function getLatestThreadMessage(page, previewText) {
   return previewText;
 }
 
+// STEP8用: 指定した候補セレクターを順に試し、最初に見つかった要素に入力する。
+// input#messTempTitleがタイムアウトするケースに備え、代替セレクターへ
+// フォールバックする。1候補あたりの待機は短めにして無駄なタイムアウトの
+// 積み重ねを防ぐ
+async function fillFirstAvailable(page, selectors, value, timeoutPerSelector = 5000) {
+  for (const sel of selectors) {
+    try {
+      const locator = page.locator(sel).first();
+      await locator.waitFor({ state: 'visible', timeout: timeoutPerSelector });
+      await locator.fill(value);
+      console.log(`[STEP8] セレクター "${sel}" に入力成功`);
+      return true;
+    } catch (e) {
+      console.log(`[STEP8] セレクター "${sel}" が見つからずタイムアウト → 次候補`);
+    }
+  }
+  return false;
+}
+
 // ─── STEP7で使う送信本文の組み立て ────────────────────────────────
 
 function buildContactReplyBody(answerText) {
@@ -254,6 +273,9 @@ async function processContacts(page) {
     console.log(`[CONTACT] 確認中: uid=${contact.uid} username=${contact.username}`);
 
     // ─── STEP4 ──────────────────────────────────────────────────
+    // openContactThread() は新しいページを開かず、渡されたcontactPageを
+    // そのまま遷移させて返す（同一のPlaywright Pageオブジェクト）。
+    // そのためthreadPageはSTEP8の送信処理でも同じcontactPageを指す
     const threadPage = await openContactThread(contactPage, contact.threadHref);
     const content = await getLatestThreadMessage(threadPage, contact.preview);
 
@@ -319,7 +341,22 @@ async function processContacts(page) {
       continue;
     }
 
-    await threadPage.fill('input#messTempTitle', 'RUNEインフォメーションです。');
+    // threadPage === contactPage（STEP4で開いたページと同一オブジェクト）であることを
+    // 前提に送信処理を行う。タイムアウト調査用に現在のURLをログ出力する
+    console.log('[DEBUG] 送信前URL:', threadPage.url());
+    console.log('[DEBUG] threadPage === contactPage:', threadPage === contactPage);
+
+    const titleFilled = await fillFirstAvailable(
+      threadPage,
+      ['input#messTempTitle', 'input[name="title"]', '#messTempTitle'],
+      'RUNEインフォメーションです。'
+    );
+    if (!titleFilled) {
+      console.log(`[ERROR] uid=${contact.uid}: 件名入力欄が見つかりません（現在URL: ${threadPage.url()}）`);
+      await sendLine(`【エラー】uid=${contact.uid}: 件名入力欄が見つからず送信できませんでした`);
+      continue;
+    }
+
     await threadPage.fill('textarea#messTempBody', bodyText);
     await threadPage.click('input#gotoHeaven');
     await threadPage.waitForLoadState('networkidle').catch(() => {});
