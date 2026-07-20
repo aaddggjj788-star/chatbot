@@ -197,31 +197,27 @@ async function openContactThread(page, threadHref) {
   return page;
 }
 
-// mg_contact_edit.php のスレッド内容から最新メッセージ本文を取得する。
-// ※実際のページHTML構造が未確認のため、ある程度長いテキストを持つ要素
-//   （子要素がテキスト/<br>のみ）のうち最後に出現するものを推定抽出する
-//   ベストエフォート実装。取得できない/短すぎる場合は一覧の問い合わせ
-//   文頭（previewText）にフォールバックする。要検証。
+// mg_contact_edit.php のスレッド内容から全メッセージ本文を取得する。
+// background-color: #aaaaffのtr内のtextarea（name="mess[...]"）から
+// 各メッセージの本文を取得し、"---"区切りで連結する
 async function getLatestThreadMessage(page, previewText) {
   try {
-    const text = await page.evaluate(() => {
-      const isTextOnly = el => Array.from(el.childNodes).every(
-        n => n.nodeType === Node.TEXT_NODE || n.nodeName === 'BR'
-      );
-      const blocks = Array.from(document.querySelectorAll('td, div, p'))
-        .filter(el => isTextOnly(el))
-        .map(el => (el.textContent || '').trim())
-        .filter(t => t.length > 5);
-      return blocks.length > 0 ? blocks[blocks.length - 1] : '';
+    const inquiries = await page.evaluate(() => {
+      const rows = document.querySelectorAll('tr[style*="aaaaff"]');
+      return Array.from(rows).map(tr => {
+        const textarea = tr.querySelector('textarea[name^="mess["]');
+        return textarea ? textarea.value.trim() : '';
+      }).filter(t => t.length > 0);
     });
-    if (text && text.length >= (previewText || '').length) {
-      console.log(`[STEP4] スレッド本文取得: "${text.slice(0, 60)}..."`);
-      return text;
+    if (inquiries.length > 0) {
+      const fullText = inquiries.join('\n---\n');
+      console.log(`[STEP4] スレッド本文取得: ${inquiries.length}件 "${fullText.slice(0, 60)}..."`);
+      return fullText;
     }
   } catch (e) {
     console.log('[STEP4] 問い合わせ内容の取得に失敗:', e.message);
   }
-  console.log('[STEP4] 本文取得に失敗/不十分 → 一覧の問い合わせ文頭にフォールバック');
+  console.log('[STEP4] 本文取得に失敗/0件 → 一覧の問い合わせ文頭にフォールバック');
   return previewText;
 }
 
@@ -294,9 +290,8 @@ async function processContacts(page) {
     await sendLine([
       '【送信確認】',
       '---',
-      'RUNEインフォメーションです。',
-      '',
       '件名：RUNEインフォメーションです。',
+      '',
       '本文：',
       bodyText,
       '---',
