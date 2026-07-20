@@ -1807,84 +1807,88 @@ async function processUsers(page) {
       }
 
       // ─── フォールバック: JSON設定なし or searchTarget系なし ──────
-      // 全履歴からsinko/hisコメントを検索してsinko+1を送信
+      // 【根底ルール】JSON側にsearchTarget等の明示的な上書き設定がない
+      // 場合は、fileId・minPhaseNumberのJSON設定には依存せず以下の
+      // 3ステップで処理する:
+      //   STEP1: resolveCsvPath(charaId) で一番近い既存CSVファイルを解決し
+      //          resolvedCharaIdを得る（例: 12676yu7 → 12676yu5）
+      //   STEP2: resolvedCharaIdのsinko/hisコメントを履歴から検索する
+      //          （表示中の履歴になければmg_k_rireki.phpで100件から再検索）
+      //   STEP3: 見つかれば最新sinko+1を送信、見つからなければ
+      //          resolvedCharaId/sinko/1 を送信する
+      // hoActionCfg.fallback.searchTargetが明示設定されている場合のみ、
+      // STEP3の「見つからない場合」をJSON側の値で上書きする
       if (!replyData) {
-        const historyComments = analysis.allKanteishiComments || [];
-        console.log(`[DEBUG] allKanteishiComments件数: ${historyComments.length}`);
-        console.log(`[DEBUG] allKanteishiComments:`, JSON.stringify(historyComments.slice(0, 10)));
-        // フェーズ違いのsinko/hisコメントを拾わないよう、charaIdが判明していれば
-        // 現在のcharaIdに一致するもののみに絞り込む（未判明時は下でhistorySinkoCommentsから抽出する）
-        const historySinkoComments = historyComments.filter(c => {
-          if (charaId && !c.startsWith(charaId + '/')) return false;
-          return /(?:sinko|his\w*)\/?(\d+)/.test(c);
-        });
-
         if (!charaId) {
-          for (const c of historySinkoComments) {
-            const m = c.match(/^(\d+(?:yu|mu)\d+)/);
-            if (m) { charaId = m[1]; break; }
-          }
+          console.log(`[SKIP] ${userName}: /hoあり・charaIdを特定できません`);
+          continue;
         }
 
-        if (!charaId || historySinkoComments.length === 0) {
+        // STEP1
+        const { resolvedCharaId } = resolveCsvPath(charaId);
+        console.log(`[JSON] ho 根底ルール: charaId=${charaId} → resolvedCharaId=${resolvedCharaId}`);
+
+        // STEP2
+        const historyComments = analysis.allKanteishiComments || [];
+        let historySinkoComments = historyComments.filter(c => {
+          if (!c.startsWith(resolvedCharaId + '/')) return false;
+          return /(?:sinko|his\w*)\/?(\d+)/.test(c);
+        });
+        console.log(`[DEBUG] resolvedCharaId=${resolvedCharaId} のsinko/hisコメント件数(表示中履歴): ${historySinkoComments.length}`);
+
+        if (historySinkoComments.length === 0) {
           // 表示中の履歴にsinko/hisコメントが見つからない場合、
           // mg_k_rireki.php（履歴100件ページ）を開いて再検索する
-          console.log(`[JSON] ho: 表示中の履歴にsinko/hisコメントなし → mg_k_rireki.php で再検索`);
+          console.log(`[JSON] ho: 表示中の履歴に${resolvedCharaId}のsinko/hisコメントなし → mg_k_rireki.php で再検索`);
           let rirekiResult = null;
           try {
-            rirekiResult = await searchSinkoFromRirekiHistory(page, charaId);
+            rirekiResult = await searchSinkoFromRirekiHistory(page, resolvedCharaId);
           } catch (e) {
             console.error(`[ERROR] ho 履歴再検索失敗 (${userName}): ${e.message}`);
           }
-
           if (rirekiResult) {
-            if (!charaId) charaId = rirekiResult.charaId;
-            if (!charaId) {
-              console.log(`[SKIP] ${userName}: 再検索コメントからcharaIdを特定できません`);
-              continue;
-            }
-            console.log(`[JSON] ho: mg_k_rireki.php再検索でsinko/his発見 charaId=${charaId} maxSinko=${rirekiResult.maxSinko}`);
-            latestComment = rirekiResult.latestComment;
-            try {
-              replyData = getReplyFromCSV(charaId, rirekiResult.maxSinko, hoFileId);
-            } catch (e) {
-              console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
-              continue;
-            }
-          } else if (charaId && hoActionCfg?.fallback?.searchTarget) {
-            // hoActionCfg.fallback: 再検索でもsinko/hisコメントが見つからない場合の代替searchTarget
-            console.log(`[JSON] ho: 再検索でもsinko/hisコメントなし → fallback searchTarget="${hoActionCfg.fallback.searchTarget}"`);
-            const useCurrentRow = hoActionCfg.fallback.useCurrentRow === true;
-            try {
-              replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.fallback.searchTarget, useCurrentRow, hoActionCfg.fallback.fileId ?? hoFileId);
-            } catch (e) {
-              console.error(`[ERROR] ho fallback CSV取得失敗 (${userName}): ${e.message}`);
-              continue;
-            }
-            latestComment = hoComment;
-          } else {
-            console.log(`[SKIP] ${userName}: /hoあり・再検索でもsinko/hisコメントなし・JSON設定もなし`);
-            continue;
+            historySinkoComments = rirekiResult.sinkoComments;
           }
-        } else {
+        }
+
+        // STEP3
+        if (historySinkoComments.length > 0) {
           const histSinkoNums = historySinkoComments
             .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
             .filter(n => n !== null);
           const maxSinko = Math.max(...histSinkoNums);
-          if (!latestComment || latestComment === hoComment) {
-            latestComment = historySinkoComments.find(c => {
-              const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
-              return m && parseInt(m[1], 10) === maxSinko;
-            }) || hoComment;
-          }
+          latestComment = historySinkoComments.find(c => {
+            const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+            return m && parseInt(m[1], 10) === maxSinko;
+          }) || hoComment;
 
-          console.log(`[COMMENT] ${userName}: /hoフォールバック sinko+1 charaId=${charaId} maxSinko=${maxSinko}`);
+          console.log(`[COMMENT] ${userName}: /ho 根底ルール sinko+1 resolvedCharaId=${resolvedCharaId} maxSinko=${maxSinko}`);
           try {
-            replyData = getReplyFromCSV(charaId, maxSinko, hoFileId);
+            replyData = getReplyFromCSV(resolvedCharaId, maxSinko);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
           }
+        } else if (hoActionCfg?.fallback?.searchTarget) {
+          // JSON側の明示的な上書き設定（根底ルールを上書き）
+          console.log(`[JSON] ho: 履歴になし → fallback searchTarget="${hoActionCfg.fallback.searchTarget}"（JSON上書き）`);
+          const useCurrentRow = hoActionCfg.fallback.useCurrentRow === true;
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.fallback.searchTarget, useCurrentRow, hoActionCfg.fallback.fileId ?? hoFileId);
+          } catch (e) {
+            console.error(`[ERROR] ho fallback CSV取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+          latestComment = hoComment;
+        } else {
+          console.log(`[COMMENT] ${userName}: /ho 根底ルール 履歴になし → ${resolvedCharaId}/sinko/1 を送信`);
+          try {
+            replyData = getReplyFromCSVByTarget(resolvedCharaId, `${resolvedCharaId}/sinko/1`, true);
+          } catch (e) {
+            console.error(`[ERROR] ho 根底ルール sinko/1取得失敗 (${userName}): ${e.message}`);
+            continue;
+          }
+          latestComment = hoComment;
         }
       }
     } else {
