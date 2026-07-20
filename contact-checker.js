@@ -12,14 +12,13 @@
  *   STEP1: mg_contactMail.php を開く（メインページのリンクをクリック）
  *   STEP2: 「実行」ボタンをクリックして一覧を表示
  *   STEP3: background-color: #ffaaaa の行を未処理として取得
- *   STEP4: 「スレッド確認」リンクを実際にクリックして開いた先
- *          （mg_contact_edit.phpのはずがmg_mail_contact.php等へ遷移する
- *          ことがあるため、遷移後の実URLを都度確認する）から
+ *   STEP4: mg_mail_contact.php?u_mail=&uid={uid}（「スレッド確認」の
+ *          実際の遷移先）を新しいページとして開き、
  *          スレッド内の最新メッセージを取得
  *   STEP5: LINEに問い合わせ内容を通知し、返答内容の入力を依頼
  *   STEP6: LINEからの返答を受け取る（5分タイムアウト、「スキップ」で次へ）
  *   STEP7: テンプレートに差し込んだ送信内容をLINEで確認
- *   STEP8: 「送信」の場合、STEP4で遷移した実際のページのフォーム
+ *   STEP8: 「送信」の場合、STEP4で開いたthreadPageのフォーム
  *          （input#messTempTitle等）に入力して送信
  *
  * 【LINE返信待ちの仕組み】
@@ -189,45 +188,24 @@ async function getUnprocessedContacts(contactPage) {
   return contacts;
 }
 
-// ─── STEP4: 「スレッド確認」リンクを開き最新メッセージを取得 ─────────────
-// hrefへ直接goto()すると、実際にリンクをクリックした場合とは異なる
-// ページ（例: mg_contact_edit.phpのはずがmg_mail_contact.phpへ遷移する）
-// になることがあるため、リンク要素を実際にクリックして遷移させる。
-// target="_blank"等で新しいページ（popup）として開かれる場合にも対応し、
-// 遷移後の実URLを必ずログ出力して確認する
+// ─── STEP4: mg_mail_contact.php を新しいページとして開き最新メッセージを取得 ──
+// 「スレッド確認」リンクの実際の遷移先は mg_mail_contact.php?u_mail=&uid={uid}
+// であることが判明したため、そのURLを直接新しいページとして開く
 
-async function openContactThread(contactPage, threadHref) {
-  console.log(`[STEP4] スレッド確認リンクをクリック: ${threadHref}`);
+async function openContactThread(contactPage, uid) {
+  const url = `${BASE_URL}mg_mail_contact.php?u_mail=&uid=${encodeURIComponent(uid)}`;
+  console.log(`[STEP4] mg_mail_contact.php を新しいページで開く: ${url}`);
 
-  const linkSelector = `a[href="${threadHref}"]`;
-  const popupPromise = contactPage.waitForEvent('popup', { timeout: 10000 }).catch(() => null);
-  try {
-    await contactPage.click(linkSelector);
-  } catch (e) {
-    console.log(`[STEP4] リンククリックに失敗（${linkSelector}）: ${e.message} → hrefへ直接遷移`);
-    const url = new URL(threadHref, BASE_URL).toString();
-    await contactPage.goto(url, { waitUntil: 'networkidle' }).catch(() => {});
-    console.log('[STEP4] 遷移後URL:', contactPage.url());
-    return contactPage;
-  }
-
-  const popup = await popupPromise;
-  let threadPage = contactPage;
-  if (popup) {
-    console.log('[STEP4] 新しいページ(popup)で開かれました');
-    await popup.waitForLoadState('networkidle').catch(() => {});
-    threadPage = popup;
-  } else {
-    await contactPage.waitForLoadState('networkidle').catch(() => {});
-    console.log('[STEP4] 既存ページ内で遷移しました');
-  }
+  const threadPage = await contactPage.context().newPage();
+  await threadPage.goto(url, { waitUntil: 'networkidle' }).catch(async () => {
+    await threadPage.goto(url).catch(() => {});
+  });
 
   console.log('[STEP4] 遷移後URL:', threadPage.url());
   return threadPage;
 }
 
-// STEP4で開いたスレッドページ（mg_contact_edit.php または実際の遷移先の
-// mg_mail_contact.php等）から全メッセージ本文を取得する。
+// STEP4で開いたthreadPage（mg_mail_contact.php）から全メッセージ本文を取得する。
 // background-color: #aaaaffのtr内のtextarea（name="mess[...]"）から
 // 各メッセージの本文を取得し、"---"区切りで連結する
 async function getLatestThreadMessage(page, previewText) {
@@ -303,97 +281,94 @@ async function processContacts(page) {
     console.log(`[CONTACT] 確認中: uid=${contact.uid} username=${contact.username}`);
 
     // ─── STEP4 ──────────────────────────────────────────────────
-    // openContactThread() はリンクを実際にクリックして遷移させる。
-    // popupとして新しいページが開いた場合はthreadPageがcontactPageとは
-    // 別オブジェクトになる（同じページ内遷移ならthreadPage===contactPage）
-    const threadPage = await openContactThread(contactPage, contact.threadHref);
-    const content = await getLatestThreadMessage(threadPage, contact.preview);
-
-    // ─── STEP5 ──────────────────────────────────────────────────
-    await sendLine([
-      '【コンタクトメール】',
-      `会員ID：${contact.uid}`,
-      `ユーザー：${contact.username}`,
-      `受信日時：${contact.datetime}`,
-      '---',
-      content,
-      '---',
-      '返答内容を入力してください',
-      '（スキップする場合は「スキップ」）',
-    ].join('\n'));
-
-    // ─── STEP6 ──────────────────────────────────────────────────
-    let answer;
+    // 新しいページとして開くため、処理後は必ずclose()する（try/finally）
+    const threadPage = await openContactThread(contactPage, contact.uid);
     try {
-      answer = await waitForLineReply();
-    } catch (e) {
-      console.log(`[TIMEOUT] uid=${contact.uid}: 5分タイムアウト → スキップ`);
-      continue;
+      const content = await getLatestThreadMessage(threadPage, contact.preview);
+
+      // ─── STEP5 ────────────────────────────────────────────────
+      await sendLine([
+        '【コンタクトメール】',
+        `会員ID：${contact.uid}`,
+        `ユーザー：${contact.username}`,
+        `受信日時：${contact.datetime}`,
+        '---',
+        content,
+        '---',
+        '返答内容を入力してください',
+        '（スキップする場合は「スキップ」）',
+      ].join('\n'));
+
+      // ─── STEP6 ────────────────────────────────────────────────
+      let answer;
+      try {
+        answer = await waitForLineReply();
+      } catch (e) {
+        console.log(`[TIMEOUT] uid=${contact.uid}: 5分タイムアウト → スキップ`);
+        continue;
+      }
+      console.log(`[LINE] 返答内容: ${answer}`);
+
+      if (answer === 'スキップ') {
+        console.log(`[SKIP] uid=${contact.uid} スキップ`);
+        continue;
+      }
+
+      // ─── STEP7 ────────────────────────────────────────────────
+      const bodyText = buildContactReplyBody(answer);
+      await sendLine([
+        '【送信確認】',
+        '---',
+        '件名：RUNEインフォメーションです。',
+        '',
+        '本文：',
+        bodyText,
+        '---',
+        '「送信」または「スキップ」',
+      ].join('\n'));
+
+      let confirmReply;
+      try {
+        confirmReply = await waitForLineReply();
+      } catch (e) {
+        console.log(`[TIMEOUT] uid=${contact.uid}: 送信確認 5分タイムアウト → スキップ`);
+        continue;
+      }
+      console.log(`[LINE] 送信確認返信: ${confirmReply}`);
+
+      if (confirmReply !== '送信') {
+        console.log(`[SKIP] uid=${contact.uid} 送信確認でスキップ`);
+        continue;
+      }
+
+      // ─── STEP8 ────────────────────────────────────────────────
+      if (DRY_RUN) {
+        console.log(`[DRY RUN] 送信をスキップ: uid=${contact.uid}`);
+        await sendLine(`【DRY RUN】uid=${contact.uid}への送信をスキップしました`);
+        continue;
+      }
+
+      console.log('[DEBUG] 送信前URL:', threadPage.url());
+
+      const titleFilled = await fillFirstAvailable(
+        threadPage,
+        ['input#messTempTitle', 'input[name="title"]', '#messTempTitle'],
+        'RUNEインフォメーションです。'
+      );
+      if (!titleFilled) {
+        console.log(`[ERROR] uid=${contact.uid}: 件名入力欄が見つかりません（現在URL: ${threadPage.url()}）`);
+        await sendLine(`【エラー】uid=${contact.uid}: 件名入力欄が見つからず送信できませんでした`);
+        continue;
+      }
+
+      await threadPage.fill('textarea#messTempBody', bodyText);
+      await threadPage.click('input#gotoHeaven');
+      await threadPage.waitForLoadState('networkidle').catch(() => {});
+      console.log(`[SEND] uid=${contact.uid} 送信完了`);
+      await sendLine(`【送信完了】uid=${contact.uid}へ返答を送信しました`);
+    } finally {
+      await threadPage.close().catch(() => {});
     }
-    console.log(`[LINE] 返答内容: ${answer}`);
-
-    if (answer === 'スキップ') {
-      console.log(`[SKIP] uid=${contact.uid} スキップ`);
-      continue;
-    }
-
-    // ─── STEP7 ──────────────────────────────────────────────────
-    const bodyText = buildContactReplyBody(answer);
-    await sendLine([
-      '【送信確認】',
-      '---',
-      '件名：RUNEインフォメーションです。',
-      '',
-      '本文：',
-      bodyText,
-      '---',
-      '「送信」または「スキップ」',
-    ].join('\n'));
-
-    let confirmReply;
-    try {
-      confirmReply = await waitForLineReply();
-    } catch (e) {
-      console.log(`[TIMEOUT] uid=${contact.uid}: 送信確認 5分タイムアウト → スキップ`);
-      continue;
-    }
-    console.log(`[LINE] 送信確認返信: ${confirmReply}`);
-
-    if (confirmReply !== '送信') {
-      console.log(`[SKIP] uid=${contact.uid} 送信確認でスキップ`);
-      continue;
-    }
-
-    // ─── STEP8 ──────────────────────────────────────────────────
-    if (DRY_RUN) {
-      console.log(`[DRY RUN] 送信をスキップ: uid=${contact.uid}`);
-      await sendLine(`【DRY RUN】uid=${contact.uid}への送信をスキップしました`);
-      continue;
-    }
-
-    // threadPageはSTEP4でリンクをクリックした結果、実際に遷移した先の
-    // ページ（popupの場合はcontactPageとは別オブジェクト）。
-    // mg_contact_edit.php・mg_mail_contact.phpのどちらであっても
-    // 同じセレクター候補で入力できるか、URLとあわせて確認する
-    console.log('[DEBUG] 送信前URL:', threadPage.url());
-    console.log('[DEBUG] threadPage === contactPage:', threadPage === contactPage);
-
-    const titleFilled = await fillFirstAvailable(
-      threadPage,
-      ['input#messTempTitle', 'input[name="title"]', '#messTempTitle'],
-      'RUNEインフォメーションです。'
-    );
-    if (!titleFilled) {
-      console.log(`[ERROR] uid=${contact.uid}: 件名入力欄が見つかりません（現在URL: ${threadPage.url()}）`);
-      await sendLine(`【エラー】uid=${contact.uid}: 件名入力欄が見つからず送信できませんでした`);
-      continue;
-    }
-
-    await threadPage.fill('textarea#messTempBody', bodyText);
-    await threadPage.click('input#gotoHeaven');
-    await threadPage.waitForLoadState('networkidle').catch(() => {});
-    console.log(`[SEND] uid=${contact.uid} 送信完了`);
-    await sendLine(`【送信完了】uid=${contact.uid}へ返答を送信しました`);
   }
 }
 
