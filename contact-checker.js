@@ -24,6 +24,9 @@
  *          自動マッチングを試みる。一致すればLINEで送信確認のみ行い、
  *          「送信」ならそのまま送信して次のコンタクトへ
  *          （「スキップ」・未一致・タイムアウトなら手動対応フローへ）
+ *   STEP4.7: テンプレート該当なし（templateId=null）の場合、Claude APIで
+ *          返答文を自動生成しLINEで確認。「送信」でそのまま送信、
+ *          「差し替え#文章」で内容を変更して送信、それ以外は手動対応フローへ
  *   STEP5: LINEに問い合わせ内容を通知し、返答内容の入力を依頼
  *   STEP6: LINEからの返答を受け取る（5分タイムアウト、「スキップ」で次へ）
  *   STEP7: テンプレートに差し込んだ送信内容をLINEで確認
@@ -429,6 +432,25 @@ async function checkCampaignAndPoints(page, contact) {
   }
 }
 
+// ─── STEP4.7: テンプレート該当なし時、Claude APIで返答文を自動生成する ──
+// 生成失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
+async function generateReplyWithClaude(inquiryText) {
+  const response = await claudeClient.messages.create({
+    model: 'claude-sonnet-5',
+    max_tokens: 1024,
+    system: 'あなたはRUNEというサービスのサポートセンタースタッフです。\n' +
+      '丁寧な敬語でユーザーへの返答文を生成してください。\n' +
+      '{ulv[サイトネーム]}お問い合わせ窓口という署名を最後に入れてください。',
+    messages: [{
+      role: 'user',
+      content: `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`,
+    }],
+  });
+
+  const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
+  return text || null;
+}
+
 // ─── STEP4.6: contact-templates.json からテンプレートIDをClaude APIで判定 ──
 // 該当なし・判定失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
 async function matchTemplate(inquiryText) {
@@ -576,6 +598,46 @@ async function processContacts(page) {
             continue;
           }
           console.log(`[TEMPLATE] uid=${contact.uid}: 自動返答をスキップ → 手動対応フローへ`);
+        }
+      }
+
+      // ─── STEP4.7: テンプレート該当なし → Claude APIで返答文を自動生成 ──
+      if (!templateId) {
+        let aiReplyText = null;
+        try {
+          aiReplyText = await generateReplyWithClaude(content);
+        } catch (e) {
+          console.log(`[AI-REPLY] uid=${contact.uid}: 返答文生成に失敗: ${e.message}`);
+        }
+
+        if (aiReplyText) {
+          await sendLine([
+            '【AI生成返答】',
+            '---',
+            aiReplyText,
+            '---',
+            '「送信」：そのまま送信',
+            '「スキップ」：手動対応へ',
+            '「差し替え#文章」：内容を変更して送信',
+          ].join('\n'));
+
+          let aiReply = null;
+          try {
+            aiReply = await waitForLineReply();
+          } catch (e) {
+            console.log(`[TIMEOUT] uid=${contact.uid}: AI生成返答確認 5分タイムアウト → 手動対応へ`);
+          }
+          console.log(`[LINE] AI生成返答確認返信: ${aiReply}`);
+
+          if (aiReply === '送信') {
+            await submitContactReply(threadPage, aiReplyText, contact.uid, 'AI生成返答');
+            continue;
+          } else if (aiReply && aiReply.startsWith('差し替え#')) {
+            const replacedText = aiReply.replace(/^差し替え#/, '').trim();
+            await submitContactReply(threadPage, replacedText, contact.uid, 'AI生成返答（差し替え）');
+            continue;
+          }
+          console.log(`[AI-REPLY] uid=${contact.uid}: AI生成返答をスキップ → 手動対応フローへ`);
         }
       }
 
