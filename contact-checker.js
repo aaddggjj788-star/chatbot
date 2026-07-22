@@ -15,6 +15,10 @@
  *   STEP4: mg_mail_contact.php?u_mail=&uid={uid}（「スレッド確認」の
  *          実際の遷移先）を新しいページとして開き、
  *          スレッド内の最新メッセージを取得
+ *   STEP4.5: contact-templates.json のテンプレートにClaude APIで
+ *          自動マッチングを試みる。一致すればLINEで送信確認のみ行い、
+ *          「送信」ならそのまま送信して次のコンタクトへ
+ *          （「スキップ」・未一致・タイムアウトなら手動対応フローへ）
  *   STEP5: LINEに問い合わせ内容を通知し、返答内容の入力を依頼
  *   STEP6: LINEからの返答を受け取る（5分タイムアウト、「スキップ」で次へ）
  *   STEP7: テンプレートに差し込んだ送信内容をLINEで確認
@@ -29,13 +33,18 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const { chromium } = require('playwright');
+const Anthropic = require('@anthropic-ai/sdk').default;
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const BASE_URL   = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const DRY_RUN    = process.env.DRY_RUN === 'true';
+
+const CONTACT_TEMPLATES_PATH = path.join(__dirname, 'contact-templates.json');
+const claudeClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // reply-checker.js と同じstate fileを共有する（同時稼働はしない前提）
 const STATE_FILE = '/tmp/rune-reply-state.json';
@@ -259,6 +268,62 @@ function buildContactReplyBody(answerText) {
   ].join('\n');
 }
 
+// ─── STEP4.5: contact-templates.json からテンプレートIDをClaude APIで判定 ──
+// 該当なし・判定失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
+async function matchTemplate(inquiryText) {
+  const response = await claudeClient.messages.create({
+    model: 'claude-sonnet-5',
+    max_tokens: 100,
+    system: 'テンプレートIDのみをJSON形式で返してください。',
+    messages: [{
+      role: 'user',
+      content: `以下の問い合わせに最も近いテンプレートIDを返してください。
+該当なしの場合はnullを返してください。
+
+テンプレートID一覧：
+withdraw/mail_open/no_reply/unclear/message_to_teacher/login/point_purchase/free_period/discount_ticket
+
+問い合わせ内容：${inquiryText}
+
+{"templateId": "ID"} の形式で返してください。`,
+    }],
+  });
+
+  const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
+  const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+  return parsed.templateId || null;
+}
+
+// STEP8 / 自動返答で共通の送信処理（件名・本文を入力してgotoHeavenをクリック）
+// 成功時はtrue、失敗時はfalseを返す
+async function submitContactReply(threadPage, bodyText, uid, label) {
+  if (DRY_RUN) {
+    console.log(`[DRY RUN] ${label}送信をスキップ: uid=${uid}`);
+    await sendLine(`【DRY RUN】uid=${uid}への${label}送信をスキップしました`);
+    return true;
+  }
+
+  console.log('[DEBUG] 送信前URL:', threadPage.url());
+
+  const titleFilled = await fillFirstAvailable(
+    threadPage,
+    ['input#messTempTitle', 'input[name="title"]', '#messTempTitle'],
+    'RUNEインフォメーションです。'
+  );
+  if (!titleFilled) {
+    console.log(`[ERROR] uid=${uid}: 件名入力欄が見つかりません（現在URL: ${threadPage.url()}）`);
+    await sendLine(`【エラー】uid=${uid}: 件名入力欄が見つからず送信できませんでした`);
+    return false;
+  }
+
+  await threadPage.fill('textarea#messTempBody', bodyText);
+  await threadPage.click('input#gotoHeaven');
+  await threadPage.waitForLoadState('networkidle').catch(() => {});
+  console.log(`[SEND] uid=${uid} ${label}送信完了`);
+  await sendLine(`【送信完了】uid=${uid}へ${label}を送信しました`);
+  return true;
+}
+
 // ─── コンタクト処理メインループ ───────────────────────────────────
 
 async function processContacts(page) {
@@ -285,6 +350,47 @@ async function processContacts(page) {
     const threadPage = await openContactThread(contactPage, contact.uid);
     try {
       const content = await getLatestThreadMessage(threadPage, contact.preview);
+
+      // ─── STEP4.5: テンプレート自動判定 ─────────────────────────
+      let templateId = null;
+      try {
+        templateId = await matchTemplate(content);
+      } catch (e) {
+        console.log(`[TEMPLATE] uid=${contact.uid}: テンプレート判定に失敗: ${e.message}`);
+      }
+      console.log(`[TEMPLATE] uid=${contact.uid}: templateId=${templateId}`);
+
+      if (templateId) {
+        const templates = JSON.parse(fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')).templates;
+        const template = templates.find(t => t.id === templateId);
+        if (!template) {
+          console.log(`[TEMPLATE] uid=${contact.uid}: templateId="${templateId}" に一致するテンプレートが見つかりません`);
+        } else {
+          await sendLine([
+            '【自動返答候補】',
+            `テンプレート：${template.id}`,
+            '---',
+            template.response,
+            '---',
+            '「送信」：そのまま送信',
+            '「スキップ」：手動対応へ',
+          ].join('\n'));
+
+          let autoReply = null;
+          try {
+            autoReply = await waitForLineReply();
+          } catch (e) {
+            console.log(`[TIMEOUT] uid=${contact.uid}: 自動返答確認 5分タイムアウト → 手動対応へ`);
+          }
+          console.log(`[LINE] 自動返答確認返信: ${autoReply}`);
+
+          if (autoReply === '送信') {
+            await submitContactReply(threadPage, template.response, contact.uid, `自動返答（${template.id}）`);
+            continue;
+          }
+          console.log(`[TEMPLATE] uid=${contact.uid}: 自動返答をスキップ → 手動対応フローへ`);
+        }
+      }
 
       // ─── STEP5 ────────────────────────────────────────────────
       await sendLine([
@@ -342,30 +448,7 @@ async function processContacts(page) {
       }
 
       // ─── STEP8 ────────────────────────────────────────────────
-      if (DRY_RUN) {
-        console.log(`[DRY RUN] 送信をスキップ: uid=${contact.uid}`);
-        await sendLine(`【DRY RUN】uid=${contact.uid}への送信をスキップしました`);
-        continue;
-      }
-
-      console.log('[DEBUG] 送信前URL:', threadPage.url());
-
-      const titleFilled = await fillFirstAvailable(
-        threadPage,
-        ['input#messTempTitle', 'input[name="title"]', '#messTempTitle'],
-        'RUNEインフォメーションです。'
-      );
-      if (!titleFilled) {
-        console.log(`[ERROR] uid=${contact.uid}: 件名入力欄が見つかりません（現在URL: ${threadPage.url()}）`);
-        await sendLine(`【エラー】uid=${contact.uid}: 件名入力欄が見つからず送信できませんでした`);
-        continue;
-      }
-
-      await threadPage.fill('textarea#messTempBody', bodyText);
-      await threadPage.click('input#gotoHeaven');
-      await threadPage.waitForLoadState('networkidle').catch(() => {});
-      console.log(`[SEND] uid=${contact.uid} 送信完了`);
-      await sendLine(`【送信完了】uid=${contact.uid}へ返答を送信しました`);
+      await submitContactReply(threadPage, bodyText, contact.uid, '返答');
     } finally {
       await threadPage.close().catch(() => {});
     }

@@ -27,6 +27,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const { chromium } = require('playwright');
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 
 const anthropic = new Anthropic();
@@ -35,6 +36,8 @@ const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/m
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const DRY_RUN    = process.env.DRY_RUN === 'true';
 const SUPPORT_CHECK_TEST_MODE = process.env.SUPPORT_CHECK_TEST_MODE === 'true';
+
+const CONTACT_TEMPLATES_PATH = path.join(__dirname, 'contact-templates.json');
 
 // reply-checker.jsと同じLINE返信待ちファイルを共有する（server.jsのLINE
 // webhookが「調整する」「スキップ」等の返信テキストをここに書き込む想定）
@@ -273,6 +276,33 @@ function isPointRelatedInquiry(text) {
   const hasNegative = NEGATIVE_KEYWORDS.some(k => text.includes(k));
   const hasPoint = POINT_KEYWORDS.some(k => text.includes(k));
   return hasNegative && hasPoint;
+}
+
+// ─── contact-templates.json からテンプレートIDをClaude APIで判定 ──────
+// （contact-checker.js の matchTemplate と同じロジック）
+// 該当なし・判定失敗時はnullを返す
+async function matchTemplate(inquiryText) {
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-5',
+    max_tokens: 100,
+    system: 'テンプレートIDのみをJSON形式で返してください。',
+    messages: [{
+      role: 'user',
+      content: `以下の問い合わせに最も近いテンプレートIDを返してください。
+該当なしの場合はnullを返してください。
+
+テンプレートID一覧：
+withdraw/mail_open/no_reply/unclear/message_to_teacher/login/point_purchase/free_period/discount_ticket
+
+問い合わせ内容：${inquiryText}
+
+{"templateId": "ID"} の形式で返してください。`,
+    }],
+  });
+
+  const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
+  const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+  return parsed.templateId || null;
 }
 
 // ─── ope_mainフレーム内のユーザー名リンクをクリックし会員詳細へ ─────
@@ -627,6 +657,37 @@ async function checkSupport() {
       console.log(`[STEP3] ${candidate.userName} の最新メッセージ: "${latestMessage.slice(0, 80)}"`);
 
       if (!isPointRelatedInquiry(latestMessage)) {
+        console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせではない → テンプレート自動判定を試行`);
+
+        let templateId = null;
+        try {
+          templateId = await matchTemplate(latestMessage);
+        } catch (e) {
+          console.log(`[TEMPLATE] ${candidate.userName}: テンプレート判定に失敗: ${e.message}`);
+        }
+        console.log(`[TEMPLATE] ${candidate.userName}: templateId=${templateId}`);
+
+        if (templateId) {
+          const templates = JSON.parse(fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')).templates;
+          const template = templates.find(t => t.id === templateId);
+          if (template) {
+            // NOTE: support-checker.jsにはこの画面から実際に返信を送信する
+            // UI・セレクターが未調査のため、現時点ではLINE通知のみ行い
+            // 実送信は行わない（手動でcontact-checker.js等から対応する）
+            await sendLine([
+              '【自動返答候補（要手動送信）】',
+              `ユーザー：${candidate.userName}`,
+              `テンプレート：${template.id}`,
+              '---',
+              template.response,
+              '---',
+              '※ support-checker.jsからの自動送信は未実装のため、上記内容で手動対応をお願いします',
+            ].join('\n'));
+          } else {
+            console.log(`[TEMPLATE] ${candidate.userName}: templateId="${templateId}" に一致するテンプレートが見つかりません`);
+          }
+        }
+
         console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせではないためスキップ`);
         continue;
       }
