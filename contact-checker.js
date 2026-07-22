@@ -15,7 +15,11 @@
  *   STEP4: mg_mail_contact.php?u_mail=&uid={uid}（「スレッド確認」の
  *          実際の遷移先）を新しいページとして開き、
  *          スレッド内の最新メッセージを取得
- *   STEP4.5: contact-templates.json のテンプレートにClaude APIで
+ *   STEP4.5: uidの本日配信メールからキャンペーンを解析し、割引率チェック
+ *          （utils.jsのcheckAndApplyDiscount）と入金額に対するポイント差異
+ *          チェック（utils.jsのcheckPointDiff、差異があれば「調整する」で
+ *          調整）を行う（support-checker.jsのSTEP4-6・11-15相当）
+ *   STEP4.6: contact-templates.json のテンプレートにClaude APIで
  *          自動マッチングを試みる。一致すればLINEで送信確認のみ行い、
  *          「送信」ならそのまま送信して次のコンタクトへ
  *          （「スキップ」・未一致・タイムアウトなら手動対応フローへ）
@@ -37,7 +41,10 @@ const Anthropic = require('@anthropic-ai/sdk').default;
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const { openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, checkAndApplyDiscount } = require('./utils');
+const {
+  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, checkAndApplyDiscount,
+  getMailRows, getBankHistory, checkPointDiff,
+} = require('./utils');
 
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const BASE_URL   = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
@@ -269,7 +276,159 @@ function buildContactReplyBody(answerText) {
   ].join('\n');
 }
 
-// ─── STEP4.5: contact-templates.json からテンプレートIDをClaude APIで判定 ──
+// ─── HTML本文からキャンペーン内容を抽出・解析（support-checker.js の ────
+// parseCampaignWithClaude と同じロジック、claudeClientを使用）
+const CAMPAIGN_SYSTEM_PROMPT =
+  'あなたはメール本文からキャンペーン情報を抽出するアシスタントです。JSONのみで回答してください。';
+
+const CAMPAIGN_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    campaigns: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['fixed', 'rate', 'percent', 'discount'] },
+          amount: { type: 'integer' },
+          bonus: { type: 'integer' },
+          rate: { type: 'number' },
+          discount: { type: 'integer' },
+          unit: { type: 'string' },
+        },
+        required: ['type', 'amount', 'unit'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['campaigns'],
+  additionalProperties: false,
+};
+
+function buildCampaignUserPrompt(bodyHtml) {
+  return `以下のメール本文からキャンペーン内容を抽出してください。
+購入金額と付与ポイント/倍率/割引の対応表をJSON形式で返してください。
+
+購入金額によって補助率が異なる場合は、条件ごとに分けてください。
+例：100,000円購入時は100%、それ以下は50%の場合は別々に記載してください。
+
+ボーナスくじ、ボーナスルーレット、MAXボーナスルーレットなど
+抽選形式の特典は除外してください。
+
+同じ購入金額帯が複数ある場合は最も有利な条件のみ残してください。
+
+${bodyHtml}
+
+以下のJSON形式で返してください：
+{
+  "campaigns": [
+    {"type": "fixed", "amount": 10000, "bonus": 5000, "unit": "円分"},
+    {"type": "rate", "amount": 3000, "rate": 1.2, "unit": "倍"},
+    {"type": "percent", "amount": 0, "rate": 50, "unit": "%"},
+    {"type": "discount", "amount": 0, "discount": 30, "unit": "pt"}
+  ]
+}`;
+}
+
+async function parseCampaignWithClaude(bodyHtml) {
+  if (!bodyHtml) return [];
+
+  try {
+    const response = await claudeClient.messages.create({
+      model: 'claude-opus-4-8',
+      max_tokens: 8192,
+      thinking: { type: 'adaptive' },
+      system: CAMPAIGN_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildCampaignUserPrompt(bodyHtml) }],
+      output_config: {
+        effort: 'high',
+        format: { type: 'json_schema', schema: CAMPAIGN_JSON_SCHEMA },
+      },
+    });
+
+    const textBlock = response.content.find(b => b.type === 'text');
+    if (!textBlock) {
+      console.log('[CAMPAIGN] Claude APIレスポンスにテキストブロックがありません');
+      return [];
+    }
+
+    const parsed = JSON.parse(textBlock.text);
+    const campaigns = Array.isArray(parsed.campaigns) ? parsed.campaigns : [];
+    console.log(`[CAMPAIGN] Claude API解析結果: ${campaigns.length}件`);
+    return campaigns;
+  } catch (e) {
+    console.error('[ERROR] Claude APIキャンペーン解析失敗:', e.message);
+    return [];
+  }
+}
+
+// ─── STEP4.5: uidのキャンペーン・入金状況を確認し割引率/ポイント差異をチェック ──
+// support-checker.jsのSTEP4-6(お知らせメール取得)・STEP11-14(銀行振込履歴取得)・
+// STEP15(ポイント差異チェック)・checkAndApplyDiscountと同じ処理をuidベースで行う。
+// 実在ユーザーの所持ポイントを変更する処理を含むため、DRY_RUN=trueの間は
+// 銀行振込履歴取得（+1加算を含む）以降を一切実行しない
+async function checkCampaignAndPoints(page, contact) {
+  let kyouseiPage;
+  try {
+    kyouseiPage = await openKyouseitaikai(page, contact.uid);
+  } catch (e) {
+    console.log(`[CAMPAIGN] uid=${contact.uid}: 会員詳細ページを開けませんでした: ${e.message}`);
+    return;
+  }
+
+  try {
+    const mailRows = await getMailRows(kyouseiPage);
+    console.log(`[CAMPAIGN] uid=${contact.uid}: 本日配信メール ${mailRows.length}件`);
+    if (mailRows.length === 0) return;
+
+    const mails = [];
+    for (let i = 0; i < mailRows.length; i++) {
+      const row = mailRows[i];
+      const campaigns = await parseCampaignWithClaude(row.bodyHtml);
+      console.log(`[CAMPAIGN] uid=${contact.uid} メール${i + 1} "${row.title}": ${campaigns.length}件検出`);
+      mails.push({ title: row.title || `メール${i + 1}`, campaigns });
+    }
+    const allCampaigns = mails.flatMap(m => m.campaigns);
+    if (allCampaigns.length === 0) return;
+
+    if (DRY_RUN) {
+      console.log(`[DRY RUN] uid=${contact.uid}: 銀行振込履歴取得・割引/ポイント差異チェックをスキップ`);
+      return;
+    }
+
+    const { bankRows, historyPage } = await getBankHistory(page, kyouseiPage);
+    console.log(`[CAMPAIGN] uid=${contact.uid}: 銀行振込履歴 ${bankRows.length}件`);
+    if (bankRows.length === 0) return;
+
+    const totalAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
+
+    try {
+      await checkAndApplyDiscount(page, contact.uid, allCampaigns, totalAmount, sendLine, waitForLineReply, DRY_RUN);
+    } catch (e) {
+      console.log(`[DISCOUNT] uid=${contact.uid}: 割引率チェックに失敗: ${e.message}`);
+    }
+
+    const { diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN);
+    if (diff !== 0 && reply === '調整する') {
+      if (historyPage !== kyouseiPage) {
+        await historyPage.close().catch(() => {});
+      } else {
+        await kyouseiPage.evaluate(() => window.history.back());
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      const sign = diff < 0 ? '+' : '-';
+      const diffAbs = Math.abs(diff);
+      await adjustPoint(kyouseiPage, diffAbs, sign);
+      await sendLine(`【調整完了】uid=${contact.uid}のポイントを${sign}${diffAbs}pt調整しました`);
+    }
+  } catch (e) {
+    console.log(`[CAMPAIGN] uid=${contact.uid}: キャンペーン/ポイントチェックに失敗: ${e.message}`);
+  } finally {
+    await kyouseiPage.close().catch(() => {});
+  }
+}
+
+// ─── STEP4.6: contact-templates.json からテンプレートIDをClaude APIで判定 ──
 // 該当なし・判定失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
 async function matchTemplate(inquiryText) {
   const response = await claudeClient.messages.create({
@@ -363,7 +522,14 @@ async function processContacts(page) {
     try {
       const content = await getLatestThreadMessage(threadPage, contact.preview);
 
-      // ─── STEP4.5: テンプレート自動判定 ─────────────────────────
+      // ─── STEP4.5: キャンペーン・ポイント確認（割引率チェック含む） ──
+      try {
+        await checkCampaignAndPoints(page, contact);
+      } catch (e) {
+        console.log(`[CAMPAIGN] uid=${contact.uid}: STEP4.5に失敗: ${e.message}`);
+      }
+
+      // ─── STEP4.6: テンプレート自動判定 ─────────────────────────
       let templateId = null;
       try {
         templateId = await matchTemplate(content);

@@ -29,7 +29,10 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
-const { openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, checkAndApplyDiscount } = require('./utils');
+const {
+  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, checkAndApplyDiscount,
+  calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
+} = require('./utils');
 
 const anthropic = new Anthropic();
 
@@ -372,106 +375,7 @@ async function openMemberDetail(page) {
   return mainFrame;
 }
 
-// ─── 一覧テーブルから本日8:00以降の行を取得（3列目=送信(予定)日時）──
-// target: Page または Frame
-
-// 2段階で処理する:
-//   1) 3列目（送信(予定)日時）のテキストのみを解析し、本日8:00以降かどうかを判定する
-//      （この時点では「HTMLメールとしてみる」ボタンはクリックしない）
-//   2) 条件を満たした行についてのみ、本文を取得する
-//      本文は input[name="body"] を最優先に探し、無ければ「HTMLメールとしてみる」
-//      ボタンと同じform内のhidden input・textareaを順に探す
-async function getTodayCampaignRows(target) {
-  const testMode = SUPPORT_CHECK_TEST_MODE;
-  const { matched, debugRows } = await target.evaluate((testMode) => {
-    // 日時テキストを month/day/hour/minute に分解する
-    // 対応形式: "2026/07/03 09:15" ・ "2026-07-03 09:15" ・ "07月03日 09時15分"（年なし可）
-    function parseDateCell(text) {
-      let m = text.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[^\d]+(\d{1,2})[:時](\d{1,2})/);
-      if (m) {
-        return { month: parseInt(m[2], 10), day: parseInt(m[3], 10), hour: parseInt(m[4], 10), minute: parseInt(m[5], 10) };
-      }
-      m = text.match(/(?:\d{4}年)?(\d{1,2})月(\d{1,2})日[^\d]*(\d{1,2})時(\d{1,2})分/);
-      if (m) {
-        return { month: parseInt(m[1], 10), day: parseInt(m[2], 10), hour: parseInt(m[3], 10), minute: parseInt(m[4], 10) };
-      }
-      return null;
-    }
-
-    // 「HTMLメールとしてみる」ボタンを持つ行だけを「一覧テーブルの行」とみなす
-    const candidateRows = Array.from(document.querySelectorAll('tr'))
-      .filter(tr => tr.querySelector('input[value="HTMLメールとしてみる"]'));
-
-    // ボタンをクリックせず、同じform内のhidden input／textareaから本文を取得する
-    function extractBody(tr, htmlButton) {
-      const scope = (htmlButton && htmlButton.closest('form')) || tr;
-
-      const bodyInput = scope.querySelector('input[name="body"]');
-      if (bodyInput) {
-        return { source: 'input[name="body"]', value: bodyInput.getAttribute('value') || bodyInput.value || '' };
-      }
-
-      const hiddenInputs = Array.from(scope.querySelectorAll('input[type="hidden"]'));
-      const hiddenBody = hiddenInputs.find(el => el !== htmlButton && (el.getAttribute('value') || el.value || '').length > 0);
-      if (hiddenBody) {
-        return { source: `input[type="hidden"][name="${hiddenBody.name}"]`, value: hiddenBody.getAttribute('value') || hiddenBody.value || '' };
-      }
-
-      const textarea = scope.querySelector('textarea');
-      if (textarea) {
-        return { source: 'textarea', value: textarea.value || textarea.textContent || '' };
-      }
-
-      return { source: 'none', value: '' };
-    }
-
-    const now = new Date();
-    const nowMonth = now.getMonth() + 1;
-    const nowDay = now.getDate();
-
-    const debugRows = [];
-    const matched = [];
-
-    for (const tr of candidateRows) {
-      const cells = Array.from(tr.querySelectorAll('td'));
-      const dateCellText = cells[2] ? (cells[2].textContent || '').trim() : ''; // 3列目 = 送信(予定)日時
-      const parsed = parseDateCell(dateCellText);
-      debugRows.push({ dateCellText, parsed });
-
-      // ─── 1) 日時判定（本文はまだ読まない）───────────────────────
-      if (!parsed) continue;
-      const isToday = parsed.month === nowMonth && parsed.day === nowDay;
-      const isAfter8 = testMode ? true : (parsed.hour * 60 + parsed.minute) >= 8 * 60;
-      if (!isToday || !isAfter8) continue;
-
-      // ─── 2) 条件を満たした行のみ本文を取得 ────────────────────
-      const htmlButton = tr.querySelector('input[value="HTMLメールとしてみる"]');
-      const body = extractBody(tr, htmlButton);
-
-      // タイトルは4列目（cells[3]）
-      const title = cells[3] ? (cells[3].textContent || '').trim() : '';
-
-      matched.push({ dateText: dateCellText, title, bodyHtml: body.value, bodySource: body.source });
-    }
-
-    return { matched, debugRows };
-  }, testMode);
-
-  console.log(`[STEP6] 「HTMLメールとしてみる」保有行: ${debugRows.length}件`);
-  for (const r of debugRows) {
-    console.log(`[STEP6]   日時列="${r.dateCellText}" → 解析=${JSON.stringify(r.parsed)}`);
-  }
-  if (testMode) {
-    console.log(`[STEP6] テストモード: 本日の全時間帯が対象 → ${matched.length}件`);
-  } else {
-    console.log(`[STEP6] 本日8時以降に該当: ${matched.length}件`);
-  }
-  for (const m of matched) {
-    console.log(`[STEP6]   本文取得元: ${m.bodySource}`);
-  }
-
-  return matched;
-}
+// getTodayCampaignRows は utils.js に移動（重複ロジックのため）
 
 // ─── HTML本文からキャンペーン内容を抽出・解析（Claude API使用） ─────
 // 正規表現／DOM解析ベースでは複雑なHTML構造のキャンペーンメールに
@@ -600,54 +504,7 @@ function formatCampaignDisplay(c) {
   }
 }
 
-// ─── 入金額から期待ポイントを計算する ───────────────────────────────
-// 通常付与 = 入金額÷10（10円 = 1pt）、サービスポイント = 入金額×0.5%
-// に加え、キャンペーン条件（campaigns、全メール分をまとめて渡す）から
-// 補助分を加算する。
-//
-// ・fixed/rate/percentは、入金額が閾値(amount)以上のもののうち
-//   最も有利な条件のみを採用する（複数条件の合算はしない）
-// ・discount（pt割引）は鑑定料金の割引であり入金ポイント付与とは
-//   無関係なため、この計算には含めない
-// ・fixed（固定補助）・percentのbonusキー/割合は円単位のため、÷10してpt換算する
-// ・rateは「通常ポイントの○.○倍」を意味するため、通常付与分
-//   （サービスポイントは含まない）に対する増加分のみを補助として計上する
-//   （既にpt単位のため÷10は不要）
-//
-// ※ 複数キャンペーンの組み合わせルールは実際の運用に合わせて要調整
-function calcExpectedPoints(amount, campaigns) {
-  const normalPt = Math.floor(amount / 10);
-  const servicePt = Math.floor(amount * 0.005);
-
-  let campaignBonus = 0;
-
-  const fixedApplicable = campaigns.filter(c => c.type === 'fixed' && amount >= c.amount);
-  if (fixedApplicable.length > 0) {
-    // bonusは円単位なので÷10してptに変換
-    campaignBonus += Math.max(...fixedApplicable.map(c => Math.floor(c.bonus / 10)));
-  }
-
-  const rateApplicable = campaigns.filter(c => c.type === 'rate' && amount >= c.amount);
-  if (rateApplicable.length > 0) {
-    const bestRate = Math.max(...rateApplicable.map(c => c.rate));
-    // (bestRate - 1)を先に計算すると浮動小数点誤差で1pt程度ずれることが
-    // あるため（例: 1.2 - 1 = 0.19999999999999996）、乗算を先に行い
-    // 丸めてから通常付与分を差し引く
-    campaignBonus += Math.round(normalPt * bestRate) - normalPt;
-  }
-
-  const percentApplicable = campaigns.filter(c => c.type === 'percent' && amount >= c.amount);
-  if (percentApplicable.length > 0) {
-    const bestPercent = Math.max(...percentApplicable.map(c => c.rate));
-    // 購入金額の○%分が補助（円単位）なので、同様の理由で
-    // 「amount * (bestPercent / 100)」ではなく「amount * bestPercent」を
-    // 先に計算してから100で割り、さらに÷10してptに変換する
-    campaignBonus += Math.floor((amount * bestPercent) / 100 / 10);
-  }
-
-  const total = normalPt + servicePt + campaignBonus;
-  return { normalPt, servicePt, campaignBonus, total };
-}
+// calcExpectedPoints は utils.js に移動（重複ロジックのため）
 
 function buildResultMessage(userName, mails) {
   const lines = ['【キャンペーン解析結果】', `ユーザー：${userName}`, `配信メール数：${mails.length}件`, ''];
@@ -777,32 +634,10 @@ async function checkSupport() {
     console.log('[STEP4] ope_main内のユーザー名リンクをクリックし、会員詳細ページの表示を待機');
     const mainFrame = await openMemberDetail(page);
 
-    const infoMessCount = await mainFrame.locator('input[name="info_mess"]').count();
-    console.log('[DEBUG] info_mess件数:', infoMessCount);
-
-    // info_messボタンはope_mainフレーム内にあるため、遷移後のURLも
-    // page.url()ではなくmainFrame.url()で確認する必要がある
-    console.log('[STEP5] 「お知らせメッセージ編集」ボタンをクリック');
-    console.log('[DEBUG] クリック前URL:', mainFrame.url());
-    await mainFrame.click('input[name="info_mess"]');
-    await new Promise(r => setTimeout(r, 3000));
-
-    const frameUrl = mainFrame.url();
-    console.log('[STEP5] フレームURL:', frameUrl);
-
-    // frameUrlにmg_mail_editが含まれていればmainFrameをmailPageとして使用
-    const mailPage = frameUrl.includes('mg_mail_edit') ? mainFrame : null;
-
-    if (!mailPage) {
-      console.log('[STEP5] mg_mail_edit.phpへの遷移が確認できませんでした');
-      return;
-    }
-
     console.log(SUPPORT_CHECK_TEST_MODE
-      ? '[STEP6] mg_mail_edit.phpのtableから本日の配信メール一覧を取得（テストモード：時間制限なし）'
-      : '[STEP6] mg_mail_edit.phpのtableから本日8時以降の配信メール一覧を取得');
-    await mailPage.waitForSelector('table', { timeout: 10000 });
-    const mailRows = await getTodayCampaignRows(mailPage);
+      ? '[STEP5-6] 「お知らせメッセージ編集」→mg_mail_edit.phpから本日の配信メール一覧を取得（テストモード：時間制限なし）'
+      : '[STEP5-6] 「お知らせメッセージ編集」→mg_mail_edit.phpから本日8時以降の配信メール一覧を取得');
+    const mailRows = await getMailRows(mainFrame, SUPPORT_CHECK_TEST_MODE);
     console.log(`[STEP6] 対象件数: ${mailRows.length}件`);
     if (mailRows.length > 0) {
       console.log(`[STEP6] 1行目 送信日時: "${mailRows[0].dateText}"`);
@@ -839,109 +674,15 @@ async function checkSupport() {
       const allCampaigns = mails.flatMap(m => m.campaigns);
       console.log('[DEBUG] allCampaigns:', JSON.stringify(allCampaigns));
 
-      console.log('[STEP10] ブラウザバックで会員詳細ページに戻る');
-      await mailPage.evaluate(() => window.history.back());
-      await new Promise(r => setTimeout(r, 2000));
-      console.log('[DEBUG] STEP10後のフレームURL:', mainFrame.url());
-
-      console.log('[STEP11] 所持ポイントに1を加算');
-      // pointMark: value="1"が+（加算）、value="2"が-（減算）
-      // pointOut: 増減量そのものを入力する欄（現在値+1を入れるのではない）
-      await mainFrame.click('input[name="pointMark"][value="1"]');
-      await mainFrame.fill('input[name="pointOut"]', '1');
-      await mainFrame.click('input[name="user_henko"]');
-      await new Promise(r => setTimeout(r, 3000));
-      console.log('[STEP11] ページ更新待機完了');
-
-      // ポイント増減履歴ページの構造（新規ページ/frame内遷移のどちらか）が
-      // 未確認のため、popupイベントの有無で判定しデバッグログを残す
-      console.log('[STEP12] 「ポイント増減履歴」を開く');
-      console.log('[DEBUG] クリック前フレームURL:', mainFrame.url());
-      const popupPromise = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
-      await mainFrame.click('input[value="ポイント増減履歴"]');
-      const popup = await popupPromise;
-
-      let historyPage;
-      if (popup) {
-        console.log('[STEP12] 新しいページ(popup)で開かれました:', popup.url());
-        await popup.waitForLoadState('networkidle').catch(() => {});
-        historyPage = popup;
-      } else {
-        await new Promise(r => setTimeout(r, 3000));
-        console.log('[STEP12] 既存フレーム内で遷移しました:', mainFrame.url());
-        historyPage = mainFrame;
-      }
-
-      console.log('[STEP13] 「表示」ボタンをクリック');
-      await historyPage.click('input[name="search"][value="表示"]');
-      await new Promise(r => setTimeout(r, 3000));
-
-      console.log('[STEP14] 当日の銀行振込履歴を取得');
-      const bankRows = await historyPage.evaluate(() => {
-        const rows = Array.from(document.querySelectorAll('tr'));
-        const results = [];
-        for (const tr of rows) {
-          const cells = Array.from(tr.querySelectorAll('td')).map(td => (td.textContent || '').trim());
-          if (cells.length === 0) continue;
-          const rowText = cells.join(' | ');
-          if (!rowText.includes('銀行振込')) continue;
-          results.push({ cells, rowText });
-        }
-        return results;
-      });
-      console.log(`[STEP14] 銀行振込行数: ${bankRows.length}`);
-      bankRows.forEach((r, i) => console.log(`[DEBUG] 銀行振込行[${i}]: ${r.rowText}`));
-
-      // 実データ形式: "2026/07/06 14:11:22 | 銀行振込 | 315 | 決済 | 決済金額 : 3,000円 | 備考 : | 98216"
-      // パイプ区切りで分割し、parts[0]=時間、parts[2]=増減ポイント、
-      // parts[4]（"決済金額 : 3,000円"）から決済金額（円）を抽出する
-      const parsedBankRows = bankRows.map(r => {
-        const parts = r.rowText.split('|').map(s => s.trim());
-        const time = parts[0];
-        const point = parseInt(parts[2], 10);
-        const amountMatch = (parts[4] || '').match(/([\d,]+)円/);
-        const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
-        return { time, point, amount, raw: r.rowText };
-      }).filter(r => !Number.isNaN(r.point) && r.amount > 0);
-      console.log(`[STEP14] 時間・ポイント・金額の抽出成功: ${parsedBankRows.length}件`);
+      console.log('[STEP10-14] ブラウザバック→ポイント+1加算→ポイント増減履歴から当日の銀行振込履歴を取得');
+      const { bankRows, historyPage } = await getBankHistory(page, mainFrame);
+      console.log(`[STEP14] 時間・ポイント・金額の抽出成功: ${bankRows.length}件`);
 
       console.log('[STEP15] ポイント計算と照合（当日の入金合計で判定）');
-      // キャンペーン補助（fixed/rate/percent）は入金額の閾値判定を伴うため、
-      // 各入金を個別に判定すると同一日の合計では閾値を超えるケースを
-      // 取りこぼす。当日の入金合計に対して1回だけ補助を計算し、
-      // 通常+サービスポイントの合計と合算した上で実際のポイント合計と比較する
-      const totalAmount = parsedBankRows.reduce((sum, r) => sum + r.amount, 0);
-      const totalActual = parsedBankRows.reduce((sum, r) => sum + r.point, 0);
-      const totalExpected = parsedBankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10) + Math.floor(r.amount * 0.005), 0);
-      const campaignBonus = calcExpectedPoints(totalAmount, allCampaigns).campaignBonus;
-      const grandTotal = totalExpected + campaignBonus;
-      const diff = totalActual - grandTotal;
-      console.log(`[STEP15] 入金合計=${totalAmount}円 期待値合計=${grandTotal}pt（通常+サービス${totalExpected}+補助${campaignBonus}） 実際合計=${totalActual}pt 差異=${diff}`);
+      const { totalAmount, diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN);
 
-      if (diff === 0) {
-        console.log('[STEP15] 一致 → 問題なし');
-      } else {
-        const diffLabel = diff < 0 ? '不足' : '過剰';
-        const diffAbs = Math.abs(diff);
-
-        console.log('[STEP16] 差異ありのためLINEに確認通知');
-        await sendLine(`【ポイント確認】
-ユーザー：${target.userName}
-入金合計：${formatNumber(totalAmount)}円
-期待ポイント合計：${grandTotal}pt
-実際のポイント合計：${totalActual}pt
-差異：${diffAbs}pt（${diffLabel}）
-調整しますか？「調整する」または「スキップ」`);
-
-        let reply = null;
-        try {
-          reply = await waitForLineReply();
-        } catch (e) {
-          console.log('[STEP16] LINE返信待ちタイムアウト → スキップ扱い:', e.message);
-        }
-
+      if (diff !== 0) {
         if (reply === '調整する') {
-          console.log(`[STEP16] LINE返信: ${reply}`);
           console.log('[STEP17] 会員詳細ページに戻りポイントを調整');
           if (historyPage !== mainFrame) {
             await historyPage.close().catch(() => {});
@@ -951,16 +692,11 @@ async function checkSupport() {
           }
 
           const sign = diff < 0 ? '+' : '-';
-          // pointMark: value="1"が+（加算）、value="2"が-（減算・要確認）
-          const pointMarkValue = sign === '+' ? '1' : '2';
-          console.log(`[STEP17] ${sign}${diffAbs}pt を調整（pointMark value=${pointMarkValue}）`);
-          await mainFrame.click(`input[name="pointMark"][value="${pointMarkValue}"]`);
-          await mainFrame.fill('input[name="pointOut"]', String(diffAbs));
-          await mainFrame.click('input[name="user_henko"]');
-          await new Promise(r => setTimeout(r, 3000));
+          const diffAbs = Math.abs(diff);
+          console.log(`[STEP17] ${sign}${diffAbs}pt を調整`);
+          await adjustPoint(mainFrame, diffAbs, sign);
           await sendLine(`【調整完了】${target.userName}のポイントを${sign}${diffAbs}pt調整しました`);
         } else if (reply !== null) {
-          console.log(`[STEP16] LINE返信: ${reply}`);
           console.log('[STEP16] スキップが選択されました');
         }
       }
