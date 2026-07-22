@@ -313,6 +313,27 @@ withdraw/mail_open/no_reply/unclear/message_to_teacher/login/point_purchase/free
   return parsed.templateId || null;
 }
 
+// テンプレート自動返答の送信処理（reply-checker.js の sendReplyText と同じ
+// ロジック: ope_mainフレーム内の textarea#mess_body に入力して #chara_mail_send をクリック）
+async function sendSupportReplyText(page, userName, textToSend) {
+  console.log(`[SEND-TEXT] 送信内容: "${textToSend.slice(0, 80)}..."`);
+  if (DRY_RUN) {
+    console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
+    await sendLine(`【DRY RUN】${userName}への自動返答送信をスキップしました`);
+    return;
+  }
+  const sendFrame = page.frame({ name: 'ope_main' });
+  if (!sendFrame) {
+    console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
+    return;
+  }
+  await sendFrame.fill('textarea#mess_body', textToSend);
+  await sendFrame.click('#chara_mail_send');
+  await sendFrame.waitForLoadState('networkidle').catch(() => {});
+  console.log(`[SEND] ${userName} 自動返答送信完了`);
+  await sendLine(`【送信完了】${userName}へ自動返答を送信しました`);
+}
+
 // ─── ope_mainフレーム内のユーザー名リンクをクリックし会員詳細へ ─────
 // a[href*="mg_kyoseitaikai.php"]をクリックするとope_mainフレームのsrcが
 // mg_kyoseitaikai.phpに切り替わる（popupや親ページ遷移は発生しない）
@@ -684,21 +705,33 @@ async function checkSupport() {
         if (templateId) {
           const templates = JSON.parse(fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')).templates;
           const template = templates.find(t => t.id === templateId);
-          if (template) {
-            // NOTE: support-checker.jsにはこの画面から実際に返信を送信する
-            // UI・セレクターが未調査のため、現時点ではLINE通知のみ行い
-            // 実送信は行わない（手動でcontact-checker.js等から対応する）
+          if (!template) {
+            console.log(`[TEMPLATE] ${candidate.userName}: templateId="${templateId}" に一致するテンプレートが見つかりません`);
+          } else {
             await sendLine([
-              '【自動返答候補（要手動送信）】',
+              '【自動返答候補】',
               `ユーザー：${candidate.userName}`,
               `テンプレート：${template.id}`,
               '---',
               template.response,
               '---',
-              '※ support-checker.jsからの自動送信は未実装のため、上記内容で手動対応をお願いします',
+              '「送信」：そのまま送信',
+              '「スキップ」：手動対応へ',
             ].join('\n'));
-          } else {
-            console.log(`[TEMPLATE] ${candidate.userName}: templateId="${templateId}" に一致するテンプレートが見つかりません`);
+
+            let autoReply = null;
+            try {
+              autoReply = await waitForLineReply();
+            } catch (e) {
+              console.log(`[TIMEOUT] ${candidate.userName}: 自動返答確認 5分タイムアウト → 手動対応へ`);
+            }
+            console.log(`[LINE] 自動返答確認返信: ${autoReply}`);
+
+            if (autoReply === '送信') {
+              await sendSupportReplyText(page, candidate.userName, template.response);
+            } else {
+              console.log(`[TEMPLATE] ${candidate.userName}: 自動返答をスキップ → 手動対応`);
+            }
           }
         }
 
