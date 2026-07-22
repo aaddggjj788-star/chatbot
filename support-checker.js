@@ -29,6 +29,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const { openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, checkAndApplyDiscount } = require('./utils');
 
 const anthropic = new Anthropic();
 
@@ -178,7 +179,17 @@ async function getFfffe0Candidates(page) {
       const link = row.querySelector('a');
       const userName = (link ? link.textContent : onclickEl.textContent).trim();
 
-      results.push({ userName, stringID: m[1] });
+      // formのaction属性からk_idとu_idを抽出する（reply-checker.jsのgetTargetUsersと同じ方法）
+      const form = row.querySelector('form[action*="k_id="]');
+      const action = form ? (form.getAttribute('action') || '') : '';
+      const km = action.match(/k_id=(\d+)&(?:amp;)?u_id=(\d+)/);
+
+      results.push({
+        userName,
+        stringID: m[1],
+        kid: km ? km[1] : '',
+        uid: km ? km[2] : '',
+      });
     }
     return results;
   });
@@ -952,6 +963,17 @@ async function checkSupport() {
           console.log(`[STEP16] LINE返信: ${reply}`);
           console.log('[STEP16] スキップが選択されました');
         }
+      }
+
+      // ─── 割引率チェック・適用（utils.js） ──────────────────────
+      if (target.uid) {
+        try {
+          await checkAndApplyDiscount(page, target.uid, allCampaigns, totalAmount, sendLine, waitForLineReply, DRY_RUN);
+        } catch (e) {
+          console.log(`[DISCOUNT] ${target.userName}: 割引率チェックに失敗: ${e.message}`);
+        }
+      } else {
+        console.log(`[DISCOUNT] ${target.userName}: uidが取得できないため割引率チェックをスキップ`);
       }
     }
 

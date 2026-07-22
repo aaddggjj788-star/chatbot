@@ -302,7 +302,7 @@ async function handleEvent(event) {
 
   // reply-checker.js/support-checker.js/contact-checker.js が返信待ち中なら
   // 受信テキストをそのままstate fileに書き込んで終了する。
-  // 固定コマンド（送信/スキップ/調整する/差し込み#〜/差し替え#〜）に加え、
+  // 固定コマンド（送信/スキップ/調整する/変更する/差し込み#〜/差し替え#〜）に加え、
   // contact-checker.js のSTEP6（返答内容の自由入力）にも対応するため、
   // waiting状態であれば内容を問わず転送する
   if (fs.existsSync(REPLY_STATE_FILE)) {
