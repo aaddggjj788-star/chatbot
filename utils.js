@@ -64,9 +64,17 @@ async function checkAndApplyDiscount(page, uid, campaigns, totalAmount, sendLine
   const bestDiscount = Math.max(...discountCampaigns.map(c => c.discount));
 
   // 割引ptからポイントレベルのvalue値を決定
+  // ポイントレベルは送信コストpt（通常150pt）の表記のため、
+  // 割引pt数ではなく「150 - 割引pt = 送信コストpt」に対応するレベルで引く
   const discountToLevel = {
-    120: 10, 100: 11, 80: 22, 75: 12, 60: 24,
-    50: 13, 40: 25, 30: 14, 25: 15, 20: 26, 10: 16, 1: 17
+    30: 10,   // 30pt割引 → 送信120pt
+    50: 11,   // 50pt割引 → 送信100pt
+    75: 12,   // 75pt割引 → 送信75pt
+    100: 13,  // 100pt割引 → 送信50pt
+    120: 14,  // 120pt割引 → 送信30pt
+    125: 15,  // 125pt割引 → 送信25pt
+    140: 16,  // 140pt割引 → 送信10pt
+    149: 17,  // 149pt割引 → 送信1pt
   };
   const targetLevel = discountToLevel[bestDiscount];
   if (!targetLevel) return;
