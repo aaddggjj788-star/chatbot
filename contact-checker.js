@@ -15,7 +15,8 @@
  *   STEP4: mg_mail_contact.php?u_mail=&uid={uid}（「スレッド確認」の
  *          実際の遷移先）を新しいページとして開き、
  *          スレッド内の最新メッセージを取得
- *   STEP4.5: uidの本日配信メールからキャンペーンを解析し、割引率チェック
+ *   STEP4.5: 問い合わせ内容にポイント関連キーワードが含まれる場合のみ、
+ *          uidの本日配信メールからキャンペーンを解析し、割引率チェック
  *          （utils.jsのcheckAndApplyDiscount）と入金額に対するポイント差異
  *          チェック（utils.jsのcheckPointDiff、差異があれば「調整する」で
  *          調整）を行う（support-checker.jsのSTEP4-6・11-15相当）
@@ -523,10 +524,18 @@ async function processContacts(page) {
       const content = await getLatestThreadMessage(threadPage, contact.preview);
 
       // ─── STEP4.5: キャンペーン・ポイント確認（割引率チェック含む） ──
-      try {
-        await checkCampaignAndPoints(page, contact);
-      } catch (e) {
-        console.log(`[CAMPAIGN] uid=${contact.uid}: STEP4.5に失敗: ${e.message}`);
+      // 問い合わせ内容にポイント関連キーワードが含まれる場合のみ実行する
+      const pointKeywords = ['ポイント', 'pt', 'PT', '割引', 'キャンペーン', '入金', '購入', '反映'];
+      const hasPointRelated = pointKeywords.some(k => content.includes(k));
+      if (hasPointRelated) {
+        console.log(`[CAMPAIGN] uid=${contact.uid}: ポイント関連キーワード検出 → STEP4.5を実行`);
+        try {
+          await checkCampaignAndPoints(page, contact);
+        } catch (e) {
+          console.log(`[CAMPAIGN] uid=${contact.uid}: STEP4.5に失敗: ${e.message}`);
+        }
+      } else {
+        console.log(`[CAMPAIGN] uid=${contact.uid}: ポイント関連キーワードなし → STEP4.5をスキップ`);
       }
 
       // ─── STEP4.6: テンプレート自動判定 ─────────────────────────
