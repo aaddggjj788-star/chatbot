@@ -35,9 +35,11 @@ let isReplyCheckerRunning = false;
 
 // support-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let checkSupport = () => console.warn('support-checker 未ロード');
+let stopSupport  = () => console.warn('support-checker 未ロード');
 try {
   const sc = require('./support-checker');
   checkSupport = sc.checkSupport;
+  stopSupport  = sc.stopSupport;
 } catch (e) {
   console.warn('support-checker のロードに失敗しました:', e.message);
 }
@@ -282,6 +284,22 @@ async function handleEvent(event) {
 
   console.log('[LINE] 受信:', JSON.stringify(text));
 
+  // 停止コマンドはLINE返信待ち中でも即座に効くよう、state file転送より先に判定する
+  if (text === '停止') {
+    stopReplies();
+    stopContacts();
+    stopSupport();
+    return lineReply(replyToken, '全チェック処理を停止しました');
+  }
+  if (text === '返信チェック停止') {
+    stopReplies();
+    return lineReply(replyToken, '返信チェックを停止しました');
+  }
+  if (text === 'コンタクトチェック停止') {
+    stopContacts();
+    return lineReply(replyToken, 'コンタクトチェックを停止しました');
+  }
+
   // reply-checker.js/support-checker.js/contact-checker.js が返信待ち中なら
   // 受信テキストをそのままstate fileに書き込んで終了する。
   // 固定コマンド（送信/スキップ/調整する/差し込み#〜/差し替え#〜）に加え、
@@ -307,10 +325,6 @@ async function handleEvent(event) {
       .finally(() => { isReplyCheckerRunning = false; });
     return lineReply(replyToken, '返信チェックを開始しました');
   }
-  if (text === '返信チェック停止') {
-    stopReplies();
-    return lineReply(replyToken, '返信チェックを停止しました');
-  }
 
   if (text === 'サポートチェック開始') {
     checkSupport().catch(err => console.error('[SUPPORT] エラー:', err.message));
@@ -326,10 +340,6 @@ async function handleEvent(event) {
       .catch(err => console.error('[CONTACT] エラー:', err.message))
       .finally(() => { isContactCheckerRunning = false; });
     return lineReply(replyToken, 'コンタクトチェックを開始しました');
-  }
-  if (text === 'コンタクトチェック停止') {
-    stopContacts();
-    return lineReply(replyToken, 'コンタクトチェックを停止しました');
   }
 
   if (text === 'ステータス') {

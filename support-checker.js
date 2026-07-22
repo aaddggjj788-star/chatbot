@@ -44,6 +44,8 @@ const CONTACT_TEMPLATES_PATH = path.join(__dirname, 'contact-templates.json');
 const STATE_FILE = '/tmp/rune-reply-state.json';
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
+let _shouldStop = false;
+
 // ─── LINE 送信 ────────────────────────────────────────────────────
 
 async function sendLine(message) {
@@ -85,6 +87,12 @@ function waitForLineReply() {
     setWaiting();
     const start = Date.now();
     const timer = setInterval(() => {
+      if (_shouldStop) {
+        clearInterval(timer);
+        clearState();
+        reject(new Error('停止要求'));
+        return;
+      }
       try {
         if (!fs.existsSync(STATE_FILE)) return;
         const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
@@ -620,6 +628,7 @@ function buildResultMessage(userName, mails) {
 // ─── エントリポイント ─────────────────────────────────────────────
 
 async function checkSupport() {
+  _shouldStop = false;
   console.log('=== support-checker 起動 ===');
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
@@ -650,6 +659,11 @@ async function checkSupport() {
     // 該当しない候補はスキップし、次の#ffffe0行を確認する
     let target = null;
     for (const candidate of candidates) {
+      if (_shouldStop) {
+        console.log('[STOP] 停止要求により中断');
+        break;
+      }
+
       const clicked = await clickTargetUserByStringID(page, candidate.stringID);
       if (!clicked) continue;
 
@@ -906,8 +920,13 @@ async function checkSupport() {
   }
 }
 
+function stopSupport() {
+  _shouldStop = true;
+  console.log('=== support-checker 停止要求 ===');
+}
+
 if (require.main === module) {
   checkSupport();
 }
 
-module.exports = { checkSupport };
+module.exports = { checkSupport, stopSupport };
