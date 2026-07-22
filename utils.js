@@ -55,11 +55,12 @@ async function getPointLevel(kyouseiPage) {
  * campaigns: support-checker.jsで取得したキャンペーン情報
  * totalAmount: 当日の購入累計金額
  * uid: 会員ID
+ * 戻り値: { changed: boolean, fromLevel?, toLevel? }
  */
 async function checkAndApplyDiscount(page, uid, campaigns, totalAmount, sendLine, waitForLineReply, DRY_RUN) {
   // 割引キャンペーンを取得
   const discountCampaigns = campaigns.filter(c => c.type === 'discount' && totalAmount >= c.amount);
-  if (discountCampaigns.length === 0) return;
+  if (discountCampaigns.length === 0) return { changed: false };
 
   const bestDiscount = Math.max(...discountCampaigns.map(c => c.discount));
 
@@ -77,7 +78,7 @@ async function checkAndApplyDiscount(page, uid, campaigns, totalAmount, sendLine
     149: 17,  // 149pt割引 → 送信1pt
   };
   const targetLevel = discountToLevel[bestDiscount];
-  if (!targetLevel) return;
+  if (!targetLevel) return { changed: false };
 
   // 会員詳細ページを開いて現在のレベルを確認
   const kyouseiPage = await openKyouseitaikai(page, uid);
@@ -86,7 +87,7 @@ async function checkAndApplyDiscount(page, uid, campaigns, totalAmount, sendLine
   if (currentLevel === targetLevel) {
     console.log(`[DISCOUNT] uid=${uid}: 既に正しい割引レベル(${targetLevel})が適用済み`);
     await kyouseiPage.close();
-    return;
+    return { changed: false };
   }
 
   // LINEに確認通知
@@ -102,9 +103,12 @@ async function checkAndApplyDiscount(page, uid, campaigns, totalAmount, sendLine
   if (reply === '変更する' && !DRY_RUN) {
     await setPointLevel(kyouseiPage, targetLevel);
     await sendLine(`【割引率変更完了】uid=${uid} レベル${currentLevel}→${targetLevel}（${bestDiscount}pt割引）`);
+    await kyouseiPage.close();
+    return { changed: true, fromLevel: currentLevel, toLevel: targetLevel };
   }
 
   await kyouseiPage.close();
+  return { changed: false };
 }
 
 // ─── 入金額から期待ポイントを計算する（support-checker.js から移動） ───────

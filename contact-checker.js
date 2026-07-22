@@ -14,19 +14,23 @@
  *   STEP3: background-color: #ffaaaa の行を未処理として取得
  *   STEP4: mg_mail_contact.php?u_mail=&uid={uid}（「スレッド確認」の
  *          実際の遷移先）を新しいページとして開き、
- *          スレッド内の最新メッセージを取得
+ *          スレッド内の最新メッセージを取得。取得した内容をまず
+ *          「【コンタクトメール受信】」としてLINEに表示する
  *   STEP4.5: 問い合わせ内容にポイント関連キーワードが含まれる場合のみ、
- *          uidの本日配信メールからキャンペーンを解析し、割引率チェック
- *          （utils.jsのcheckAndApplyDiscount）と入金額に対するポイント差異
- *          チェック（utils.jsのcheckPointDiff、差異があれば「調整する」で
- *          調整）を行う（support-checker.jsのSTEP4-6・11-15相当）
+ *          uidの本日配信メールからキャンペーンを解析し、
+ *          1) 割引率調整（utils.jsのcheckAndApplyDiscount）
+ *          2) ポイント差異調整（utils.jsのcheckPointDiff、差異があれば
+ *             「調整する」で調整）の順で実行する
+ *          （support-checker.jsのSTEP4-6・11-15相当）
  *   STEP4.6: contact-templates.json のテンプレートにClaude APIで
  *          自動マッチングを試みる。一致すればLINEで送信確認のみ行い、
  *          「送信」ならそのまま送信して次のコンタクトへ
  *          （「スキップ」・未一致・タイムアウトなら手動対応フローへ）
- *   STEP4.7: テンプレート該当なし（templateId=null）の場合、Claude APIで
- *          返答文を自動生成しLINEで確認。「送信」でそのまま送信、
- *          「差し替え#文章」で内容を変更して送信、それ以外は手動対応フローへ
+ *   STEP4.7: テンプレート該当なし（templateId=null）の場合、STEP4.5で
+ *          実施した割引率・ポイント調整の内容をプロンプトに含めた上で
+ *          Claude APIで返答文を自動生成しLINEで確認。「送信」でそのまま
+ *          送信、「差し替え#文章」で内容を変更して送信、それ以外は
+ *          手動対応フローへ
  *   STEP5: LINEに問い合わせ内容を通知し、返答内容の入力を依頼
  *   STEP6: LINEからの返答を受け取る（5分タイムアウト、「スキップ」で次へ）
  *   STEP7: テンプレートに差し込んだ送信内容をLINEで確認
@@ -371,19 +375,26 @@ async function parseCampaignWithClaude(bodyHtml) {
 // STEP15(ポイント差異チェック)・checkAndApplyDiscountと同じ処理をuidベースで行う。
 // 実在ユーザーの所持ポイントを変更する処理を含むため、DRY_RUN=trueの間は
 // 銀行振込履歴取得（+1加算を含む）以降を一切実行しない
+// 戻り値: { discountChanged, fromLevel, toLevel, pointAdjusted, pointAmount, pointSign }
+// （AI返答生成プロンプトに実施した対応を反映するために使う）
 async function checkCampaignAndPoints(page, contact) {
+  const result = {
+    discountChanged: false, fromLevel: null, toLevel: null,
+    pointAdjusted: false, pointAmount: 0, pointSign: null,
+  };
+
   let kyouseiPage;
   try {
     kyouseiPage = await openKyouseitaikai(page, contact.uid);
   } catch (e) {
     console.log(`[CAMPAIGN] uid=${contact.uid}: 会員詳細ページを開けませんでした: ${e.message}`);
-    return;
+    return result;
   }
 
   try {
     const mailRows = await getMailRows(kyouseiPage);
     console.log(`[CAMPAIGN] uid=${contact.uid}: 本日配信メール ${mailRows.length}件`);
-    if (mailRows.length === 0) return;
+    if (mailRows.length === 0) return result;
 
     const mails = [];
     for (let i = 0; i < mailRows.length; i++) {
@@ -393,25 +404,32 @@ async function checkCampaignAndPoints(page, contact) {
       mails.push({ title: row.title || `メール${i + 1}`, campaigns });
     }
     const allCampaigns = mails.flatMap(m => m.campaigns);
-    if (allCampaigns.length === 0) return;
+    if (allCampaigns.length === 0) return result;
 
     if (DRY_RUN) {
       console.log(`[DRY RUN] uid=${contact.uid}: 銀行振込履歴取得・割引/ポイント差異チェックをスキップ`);
-      return;
+      return result;
     }
 
     const { bankRows, historyPage } = await getBankHistory(page, kyouseiPage);
     console.log(`[CAMPAIGN] uid=${contact.uid}: 銀行振込履歴 ${bankRows.length}件`);
-    if (bankRows.length === 0) return;
+    if (bankRows.length === 0) return result;
 
     const totalAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
 
+    // ─── 割引率調整 ──────────────────────────────────────────
     try {
-      await checkAndApplyDiscount(page, contact.uid, allCampaigns, totalAmount, sendLine, waitForLineReply, DRY_RUN);
+      const discountResult = await checkAndApplyDiscount(page, contact.uid, allCampaigns, totalAmount, sendLine, waitForLineReply, DRY_RUN);
+      if (discountResult?.changed) {
+        result.discountChanged = true;
+        result.fromLevel = discountResult.fromLevel;
+        result.toLevel = discountResult.toLevel;
+      }
     } catch (e) {
       console.log(`[DISCOUNT] uid=${contact.uid}: 割引率チェックに失敗: ${e.message}`);
     }
 
+    // ─── ポイント調整 ────────────────────────────────────────
     const { diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN);
     if (diff !== 0 && reply === '調整する') {
       if (historyPage !== kyouseiPage) {
@@ -424,27 +442,51 @@ async function checkCampaignAndPoints(page, contact) {
       const diffAbs = Math.abs(diff);
       await adjustPoint(kyouseiPage, diffAbs, sign);
       await sendLine(`【調整完了】uid=${contact.uid}のポイントを${sign}${diffAbs}pt調整しました`);
+      result.pointAdjusted = true;
+      result.pointAmount = diffAbs;
+      result.pointSign = sign;
     }
   } catch (e) {
     console.log(`[CAMPAIGN] uid=${contact.uid}: キャンペーン/ポイントチェックに失敗: ${e.message}`);
   } finally {
     await kyouseiPage.close().catch(() => {});
   }
+
+  return result;
 }
 
 // ─── STEP4.7: テンプレート該当なし時、Claude APIで返答文を自動生成する ──
 // 生成失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
-async function generateReplyWithClaude(inquiryText) {
+// adjustments: checkCampaignAndPoints()の戻り値。割引率・ポイント調整を
+// 実施済みの場合、その内容をプロンプトに含めて返答文に反映させる
+async function generateReplyWithClaude(inquiryText, adjustments) {
+  const actionLines = [];
+  if (adjustments?.discountChanged) {
+    actionLines.push(`・割引率を${adjustments.fromLevel}→${adjustments.toLevel}に変更しました`);
+  }
+  if (adjustments?.pointAdjusted) {
+    actionLines.push(`・${adjustments.pointAmount}ptを追加しました`);
+  }
+
+  const userPrompt = actionLines.length > 0
+    ? `以下のユーザーからの問い合わせに対して返答文を生成してください。
+
+問い合わせ内容：${inquiryText}
+
+実施した対応：
+${actionLines.join('\n')}
+
+上記の対応を踏まえた上で、ユーザーへの返答文を生成してください。
+対応済みの内容を反映した文章にしてください。`
+    : `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`;
+
   const response = await claudeClient.messages.create({
     model: 'claude-sonnet-5',
     max_tokens: 1024,
     system: 'あなたはRUNEというサービスのサポートセンタースタッフです。\n' +
       '丁寧な敬語でユーザーへの返答文を生成してください。\n' +
       '{ulv[サイトネーム]}お問い合わせ窓口という署名を最後に入れてください。',
-    messages: [{
-      role: 'user',
-      content: `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`,
-    }],
+    messages: [{ role: 'user', content: userPrompt }],
   });
 
   const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
@@ -545,14 +587,27 @@ async function processContacts(page) {
     try {
       const content = await getLatestThreadMessage(threadPage, contact.preview);
 
-      // ─── STEP4.5: キャンペーン・ポイント確認（割引率チェック含む） ──
+      // ─── 問い合わせ内容を先にLINEへ表示 ─────────────────────────
+      await sendLine([
+        '【コンタクトメール受信】',
+        `会員ID：${contact.uid}`,
+        `ユーザー：${contact.username}`,
+        `受信日時：${contact.datetime}`,
+        '---',
+        content,
+        '---',
+        '処理を開始します...',
+      ].join('\n'));
+
+      // ─── STEP4.5: キャンペーン・ポイント確認（割引率調整→ポイント調整） ──
       // 問い合わせ内容にポイント関連キーワードが含まれる場合のみ実行する
+      let campaignResult = null;
       const pointKeywords = ['ポイント', 'pt', 'PT', '割引', 'キャンペーン', '入金', '購入', '反映'];
       const hasPointRelated = pointKeywords.some(k => content.includes(k));
       if (hasPointRelated) {
         console.log(`[CAMPAIGN] uid=${contact.uid}: ポイント関連キーワード検出 → STEP4.5を実行`);
         try {
-          await checkCampaignAndPoints(page, contact);
+          campaignResult = await checkCampaignAndPoints(page, contact);
         } catch (e) {
           console.log(`[CAMPAIGN] uid=${contact.uid}: STEP4.5に失敗: ${e.message}`);
         }
@@ -605,7 +660,7 @@ async function processContacts(page) {
       if (!templateId) {
         let aiReplyText = null;
         try {
-          aiReplyText = await generateReplyWithClaude(content);
+          aiReplyText = await generateReplyWithClaude(content, campaignResult);
         } catch (e) {
           console.log(`[AI-REPLY] uid=${contact.uid}: 返答文生成に失敗: ${e.message}`);
         }
