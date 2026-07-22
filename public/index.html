@@ -126,11 +126,15 @@
   }
   const raw = getRawParams();
   const userInfo = {
-    user_id:    decodeParam(raw.user_id),
-    user_name:  decodeParam(raw.user_name),
-    user_point: decodeParam(raw.user_point),
-    user_token: decodeParam(raw.user_token),
+    user_id:    decodeParam(raw.user_id) || localStorage.getItem('rune_user_id'),
+    user_name:  decodeParam(raw.user_name) || localStorage.getItem('rune_user_name'),
+    user_point: decodeParam(raw.user_point) || localStorage.getItem('rune_user_point'),
+    user_token: decodeParam(raw.user_token) || localStorage.getItem('rune_user_token'),
   };
+  localStorage.setItem('rune_user_id', userInfo.user_id);
+  localStorage.setItem('rune_user_name', userInfo.user_name);
+  localStorage.setItem('rune_user_point', userInfo.user_point);
+  localStorage.setItem('rune_user_token', userInfo.user_token);
   console.log('【GETパラメータ取得】', userInfo);
 
   // --- 時間帯別挨拶 ---
