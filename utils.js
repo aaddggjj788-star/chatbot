@@ -23,7 +23,10 @@ async function openKyouseitaikai(page, uid) {
  * sign: '+' または '-'
  */
 async function adjustPoint(kyouseiPage, amount, sign = '+') {
+  console.log(`[UTILS] adjustPoint: sign=${sign} amount=${amount}`);
   const markValue = sign === '+' ? '1' : '2';
+  const el = await kyouseiPage.$('input[name="pointMark"][value="1"]');
+  console.log(`[UTILS] pointMark要素: ${el ? '存在' : '存在しない'}`);
   await kyouseiPage.click(`input[name="pointMark"][value="${markValue}"]`);
   await kyouseiPage.fill('input[name="pointOut"]', String(amount));
   await kyouseiPage.click('input[name="user_henko"]');
@@ -256,10 +259,13 @@ async function getMailRows(target, testMode = false) {
 //   （popupで開いた場合はtargetと異なるオブジェクトになるため呼び出し側で
 //   close/戻る操作を行い分ける必要がある）
 async function getBankHistory(topPage, target) {
+  console.log(`[UTILS] kyouseiPage URL: ${target.url()}`);
+
   console.log('[UTILS] ブラウザバックで会員詳細ページに戻る');
   await target.evaluate(() => window.history.back());
   await new Promise(r => setTimeout(r, 2000));
 
+  console.log(`[UTILS] adjustPoint前URL: ${target.url()}`);
   console.log('[UTILS] 所持ポイントに1を加算');
   await target.click('input[name="pointMark"][value="1"]');
   await target.fill('input[name="pointOut"]', '1');
