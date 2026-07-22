@@ -281,7 +281,18 @@ async function matchTemplate(inquiryText) {
 該当なしの場合はnullを返してください。
 
 テンプレートID一覧：
-withdraw/mail_open/no_reply/unclear/message_to_teacher/login/point_purchase/free_period/discount_ticket
+withdraw: 退会したい・退会申請
+mail_open: メールが開けない・メールが見れない・メールボックスが開かない
+no_reply: 先生から返事が来ない・返信がない・連絡がない
+unclear: 問い合わせ内容が意味不明・何を聞いているかわからない
+message_to_teacher: 先生への伝言・先生に伝えてほしい
+login: ログインできない・サイトに入れない
+point_purchase: ポイントの買い方・購入方法・決済方法を知りたい
+free_period: 無料期間はいつまでか・無料はどのくらいか
+discount_ticket: 割引チケット・ガチャチケット・クーポンの使い方
+
+ポイントの残高・計算・反映などに関する問い合わせはnullを返してください。
+購入方法を聞いている場合のみpoint_purchaseを選択してください。
 
 問い合わせ内容：${inquiryText}
 
