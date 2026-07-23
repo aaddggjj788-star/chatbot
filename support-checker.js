@@ -751,7 +751,7 @@ async function checkSupport() {
       const { totalAmount, diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN);
 
       if (diff !== 0) {
-        if (reply === '調整する') {
+        if (reply === '調整する' && !DRY_RUN) {
           console.log('[STEP17] 会員詳細ページに戻りポイントを調整');
           if (historyPage !== mainFrame) {
             await historyPage.close().catch(() => {});
@@ -763,10 +763,10 @@ async function checkSupport() {
           const sign = diff < 0 ? '+' : '-';
           const diffAbs = Math.abs(diff);
           console.log(`[STEP17] ${sign}${diffAbs}pt を調整`);
-          const kyouseiPage = await openKyouseitaikai(page, target.uid);
-          await adjustPoint(kyouseiPage, diffAbs, sign);
-          await kyouseiPage.close();
-          await sendLine(`【調整完了】${target.userName}のポイントを${sign}${diffAbs}pt調整しました`);
+          const adjustPage = await openKyouseitaikai(page, target.uid);
+          await adjustPoint(adjustPage, diffAbs, sign);
+          await adjustPage.close();
+          await sendLine(`【ポイント調整完了】${diffAbs}ptを${sign === '+' ? '追加' : '減算'}しました`);
         } else if (reply !== null) {
           console.log('[STEP16] スキップが選択されました');
         }
