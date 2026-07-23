@@ -128,12 +128,12 @@ function parseCSV(filePath) {
 //           "12668mu1/hisu/2"    → { ..., type:"his", num:2 }（his*はhisに正規化）
 // 複合形式: "12668mu2/zenhan/sinko/1" → { baseId:"12668", typeNum:"mu2", sub:"zenhan", type:"sinko", num:1 }
 function parseCommentStr(commentStr) {
-  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+)\/(sinko|his\w*)\/?(\d+)$/);
+  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/(sinko|his\w*)\/?(\d+)$/);
   if (m) {
     const type = m[3].startsWith('his') ? 'his' : m[3];
     return { baseId: m[1], typeNum: m[2], sub: null, type, num: parseInt(m[4], 10) };
   }
-  m = commentStr.match(/^(\d+)((?:yu|mu)\d+)\/([a-z]+)\/(sinko|his\w*)\/?(\d+)$/);
+  m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-z]+)\/(sinko|his\w*)\/?(\d+)$/);
   if (m) {
     const type = m[4].startsWith('his') ? 'his' : m[4];
     return { baseId: m[1], typeNum: m[2], sub: m[3], type, num: parseInt(m[5], 10) };
