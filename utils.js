@@ -304,7 +304,7 @@ async function getBankHistory(topPage, target) {
       const cells = Array.from(tr.querySelectorAll('td')).map(td => (td.textContent || '').trim());
       if (cells.length === 0) continue;
       const rowText = cells.join(' | ');
-      if (!rowText.includes('銀行振込')) continue;
+      if (!rowText.includes('決済金額')) continue;
       results.push({ cells, rowText });
     }
     return results;
@@ -316,7 +316,8 @@ async function getBankHistory(topPage, target) {
     const point = parseInt(parts[2], 10);
     const amountMatch = (parts[4] || '').match(/([\d,]+)円/);
     const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
-    return { time, point, amount, raw: r.rowText };
+    const isBankTransfer = r.rowText.includes('銀行振込');
+    return { time, point, amount, isBankTransfer, raw: r.rowText };
   }).filter(r => !Number.isNaN(r.point) && r.amount > 0);
 
   console.log(`[UTILS] 銀行振込履歴取得: ${parsedBankRows.length}件`);
@@ -329,7 +330,11 @@ async function getBankHistory(topPage, target) {
 async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, DRY_RUN) {
   const totalAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
   const totalActual = bankRows.reduce((sum, r) => sum + r.point, 0);
-  const totalExpected = bankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10) + Math.floor(r.amount * 0.005), 0);
+  const totalExpected = bankRows.reduce((sum, r) => {
+    const normalPt = Math.floor(r.amount / 10);
+    const servicePt = r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0;
+    return sum + normalPt + servicePt;
+  }, 0);
   const campaignBonus = calcExpectedPoints(totalAmount, campaigns).campaignBonus;
   const grandTotal = totalExpected + campaignBonus;
   const diff = totalActual - grandTotal;
