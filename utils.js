@@ -15,6 +15,7 @@ async function openKyouseitaikai(page, uid) {
   const kyouseiPage = await page.context().newPage();
   await kyouseiPage.goto(`http://manager.x7j4l2p9m1.com/mg/mg_kyoseitaikai.php?ken=1&ken_id=${uid}`);
   await kyouseiPage.waitForLoadState('networkidle');
+  console.log(`[UTILS] openKyouseitaikai後のURL: ${kyouseiPage.url()}`);
   return kyouseiPage;
 }
 
