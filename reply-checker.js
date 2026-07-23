@@ -237,7 +237,7 @@ function resolveHoPhase(charaCfg, typeNum, hoType) {
 // 抽出できない場合はnullを返す
 function charaIdFromFileId(fileId) {
   if (!fileId) return null;
-  const m = fileId.match(/^(\d+(?:yu|mu)\d+)/);
+  const m = fileId.match(/^(\d+(?:yu|mu)\d+\w*?)(?:sinko|his\w*)$/);
   return m ? m[1] : null;
 }
 
@@ -1253,7 +1253,7 @@ async function searchSinkoFromRirekiHistory(page, charaId) {
   let resolvedCharaId = charaId;
   if (!resolvedCharaId) {
     for (const c of sinkoComments) {
-      const m = c.match(/^(\d+(?:yu|mu)\d+)/);
+      const m = c.match(/^(\d+(?:yu|mu)\d+\w*)\//);
       if (m) { resolvedCharaId = m[1]; break; }
     }
   }
@@ -1893,7 +1893,7 @@ async function processUsers(page) {
 
       // charaId を抽出（複合コメント形式にも対応）
       for (const c of sinkoComments) {
-        const m = c.match(/^(\d+(?:yu|mu)\d+)/);
+        const m = c.match(/^(\d+(?:yu|mu)\d+\w*)\//);
         if (m) { charaId = m[1]; break; }
       }
 
@@ -1999,7 +1999,7 @@ async function processUsers(page) {
       // charaId から typeNum を抽出してフォールバック解決する
       if (!replyData && latestComment && charaCfg) {
         const ovPhase = phaseCfg ?? (() => {
-          const tn = charaId?.match(/(?:yu|mu)\d+/)?.[0];
+          const tn = charaId?.match(/(?:yu|mu)\d+\w*/)?.[0];
           return tn ? (charaCfg.phases?.[tn] ?? null) : null;
         })();
         const ovFileId = fileId ?? ovPhase?.fileId ?? null;
