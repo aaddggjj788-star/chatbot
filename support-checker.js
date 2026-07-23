@@ -338,6 +338,36 @@ discount_ticket: 割引チケット・ガチャチケット・クーポンの使
   return parsed.templateId || null;
 }
 
+// ─── テンプレート該当なし時、Claude APIで返答文を自動生成する ──────────
+// （contact-checker.js の generateReplyWithClaude と同じロジック）
+// 生成失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
+async function generateReplyWithClaude(inquiryText) {
+  const userPrompt = `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-5',
+    max_tokens: 1024,
+    system: 'あなたはRUNEというサービスのサポートセンタースタッフです。\n' +
+      '以下のルールに従って返答文を生成してください。\n\n' +
+      '・問い合わせは全て会員IDに紐づいています\n' +
+      '・アカウント情報・ポイント数・注文番号・キャンペーン名などは\n' +
+      '  こちら側で確認済みの前提で対応してください\n' +
+      '・ユーザーに追加情報を聞き返すことは絶対にしないでください\n' +
+      '・対応済みの内容がある場合はその内容を踏まえた返答をしてください\n' +
+      '・丁寧な敬語で簡潔に返答してください\n' +
+      '・「会員様」という表記は使わず「お客様」に統一してください\n' +
+      '・対応内容の説明は簡潔にしてください\n' +
+      '  例：「〇ptを追加いたしました」「割引率を〇ptへ修正いたしました」程度で十分です\n' +
+      '  レベル番号・割引前後の詳細な数値・変更理由の説明は入れないでください\n' +
+      '  細かい説明はユーザーを混乱させる可能性があるため避けてください\n' +
+      '・最後にRUNEインフォメーションという署名を入れてください',
+    messages: [{ role: 'user', content: userPrompt }],
+  });
+
+  const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
+  return text || null;
+}
+
 // テンプレート自動返答の送信処理（reply-checker.js の sendReplyText と同じ
 // ロジック: ope_mainフレーム内の textarea#mess_body に入力して #chara_mail_send をクリック）
 async function sendSupportReplyText(page, userName, textToSend) {
@@ -610,6 +640,45 @@ async function checkSupport() {
               await sendSupportReplyText(page, candidate.userName, template.response);
             } else {
               console.log(`[TEMPLATE] ${candidate.userName}: 自動返答をスキップ → 手動対応`);
+            }
+          }
+        }
+
+        if (!templateId) {
+          let aiReplyText = null;
+          try {
+            aiReplyText = await generateReplyWithClaude(latestMessage);
+          } catch (e) {
+            console.log(`[AI-REPLY] ${candidate.userName}: 返答文生成に失敗: ${e.message}`);
+          }
+
+          if (aiReplyText) {
+            await sendLine([
+              '【AI生成返答】',
+              `ユーザー：${candidate.userName}`,
+              '---',
+              aiReplyText,
+              '---',
+              '「送信」：そのまま送信',
+              '「スキップ」：手動対応へ',
+              '「差し替え#文章」：内容を変更して送信',
+            ].join('\n'));
+
+            let aiReply = null;
+            try {
+              aiReply = await waitForLineReply();
+            } catch (e) {
+              console.log(`[TIMEOUT] ${candidate.userName}: AI生成返答確認 5分タイムアウト → 手動対応へ`);
+            }
+            console.log(`[LINE] AI生成返答確認返信: ${aiReply}`);
+
+            if (aiReply === '送信') {
+              await sendSupportReplyText(page, candidate.userName, aiReplyText);
+            } else if (aiReply && aiReply.startsWith('差し替え#')) {
+              const replacedText = aiReply.replace(/^差し替え#/, '').trim();
+              await sendSupportReplyText(page, candidate.userName, replacedText);
+            } else {
+              console.log(`[AI-REPLY] ${candidate.userName}: AI生成返答をスキップ → 手動対応`);
             }
           }
         }
