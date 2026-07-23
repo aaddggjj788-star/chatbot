@@ -694,7 +694,9 @@ async function checkSupport() {
           const sign = diff < 0 ? '+' : '-';
           const diffAbs = Math.abs(diff);
           console.log(`[STEP17] ${sign}${diffAbs}pt を調整`);
-          await adjustPoint(mainFrame, diffAbs, sign);
+          const kyouseiPage = await openKyouseitaikai(page, target.uid);
+          await adjustPoint(kyouseiPage, diffAbs, sign);
+          await kyouseiPage.close();
           await sendLine(`【調整完了】${target.userName}のポイントを${sign}${diffAbs}pt調整しました`);
         } else if (reply !== null) {
           console.log('[STEP16] スキップが選択されました');
