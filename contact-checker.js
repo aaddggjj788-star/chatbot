@@ -440,7 +440,9 @@ async function checkCampaignAndPoints(page, contact) {
       }
       const sign = diff < 0 ? '+' : '-';
       const diffAbs = Math.abs(diff);
-      await adjustPoint(kyouseiPage, diffAbs, sign);
+      const adjustPage = await openKyouseitaikai(page, contact.uid);
+      await adjustPoint(adjustPage, diffAbs, sign);
+      await adjustPage.close();
       await sendLine(`【調整完了】uid=${contact.uid}のポイントを${sign}${diffAbs}pt調整しました`);
       result.pointAdjusted = true;
       result.pointAmount = diffAbs;
