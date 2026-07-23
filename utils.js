@@ -25,8 +25,13 @@ async function openKyouseitaikai(page, uid) {
 async function adjustPoint(kyouseiPage, amount, sign = '+') {
   console.log(`[UTILS] adjustPoint: sign=${sign} amount=${amount}`);
   const markValue = sign === '+' ? '1' : '2';
+  console.log(`[UTILS] adjustPoint時のURL: ${kyouseiPage.url()}`);
   const el = await kyouseiPage.$('input[name="pointMark"][value="1"]');
   console.log(`[UTILS] pointMark要素: ${el ? '存在' : '存在しない'}`);
+  if (!el) {
+    const html = await kyouseiPage.content();
+    console.log(`[UTILS] ページHTML先頭500文字: ${html.slice(0, 500)}`);
+  }
   await kyouseiPage.click(`input[name="pointMark"][value="${markValue}"]`);
   await kyouseiPage.fill('input[name="pointOut"]', String(amount));
   await kyouseiPage.click('input[name="user_henko"]');
