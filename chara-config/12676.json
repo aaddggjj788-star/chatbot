@@ -36,6 +36,27 @@
         "searchTarget": "12676yu5/sinko/1",
         "useCurrentRow": true
       }
+    },
+    "yu11mu": {
+      "fileId": "12676yu11musinko",
+      "ho": {
+        "searchTarget": "12676yu11mu/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu21mu": {
+      "fileId": "12676yu21musinko",
+      "ho": {
+        "searchTarget": "12676yu21mu/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu35mu": {
+      "fileId": "12676yu35musinko",
+      "ho": {
+        "searchTarget": "12676yu35mu/sinko/1",
+        "useCurrentRow": true
+      }
     }
   }
 }
