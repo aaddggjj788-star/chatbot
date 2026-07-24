@@ -1723,9 +1723,10 @@ async function processUsers(page) {
             continue;
           }
           const useCurrentRow = selected.useCurrentRow === true;
-          console.log(`[JSON] ho timeBasedSearch → "${selected.searchTarget}" useCurrentRow=${useCurrentRow}`);
+          const selectedFileId = selected.fileId ?? hoFileId;
+          console.log(`[JSON] ho timeBasedSearch → "${selected.searchTarget}" useCurrentRow=${useCurrentRow} fileId=${selectedFileId}`);
           try {
-            replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, hoFileId);
+            replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, selectedFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
