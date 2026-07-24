@@ -30,10 +30,50 @@
       }
     },
     "yu5": {
-      "minPhaseNumber": 5,
-      "fileId": "12676yu5sinko",
-      "noresHo": {
+      "ho": {
         "searchTarget": "12676yu5/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu8": {
+      "ho": {
+        "searchTarget": "12676yu8/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu9": {
+      "ho": {
+        "searchTarget": "12676yu9/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu10": {
+      "ho": {
+        "searchTarget": "12676yu10/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu12": {
+      "ho": {
+        "searchTarget": "12676yu12/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu15": {
+      "ho": {
+        "searchTarget": "12676yu15/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu19": {
+      "ho": {
+        "searchTarget": "12676yu19/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu22": {
+      "ho": {
+        "searchTarget": "12676yu22/sinko/1",
         "useCurrentRow": true
       }
     },
