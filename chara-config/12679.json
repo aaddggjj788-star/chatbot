@@ -35,6 +35,11 @@
       "do": {
         "searchTarget": "12679mu2/do",
         "useCurrentRow": false
+      },
+      "do1": {
+        "fileId": "12679mu2do1",
+        "searchTarget": "12679mu2/do/1",
+        "useCurrentRow": false
       }
     },
     "12679yu1_11": {
