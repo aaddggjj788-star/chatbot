@@ -13,7 +13,7 @@
   "phases": {
     "mu1": {
       "fileId": "12679mu1sinko",
-      "do": {
+      "do1": {
         "searchTarget": "12679mu1/sinko/1",
         "useCurrentRow": true
       }
