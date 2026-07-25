@@ -230,6 +230,8 @@ function parseSubActionComment(commentStr) {
   const part3 = m[4];
   if (/^(?:sinko|his)/.test(sub) && /^\d+$/.test(part3)) return null;
   if (/^ho/.test(sub)) return null;
+  // "12680yu1/sinko/ho"（sinkoHo）形式はsubActionにせず、hoモードの履歴検索で処理する
+  if (sub === 'sinko' && /^ho\d*$/.test(part3)) return null;
   const part3Key = /^\d+$/.test(part3) ? part3 : (part3.charAt(0).toUpperCase() + part3.slice(1));
   const actionKey = sub + part3Key;
   return { baseId: m[1], typeNum: m[2], sub, part3, actionKey, charaId: m[1] + m[2], comment: commentStr };

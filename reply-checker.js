@@ -183,6 +183,9 @@ function parseSubActionComment(commentStr) {
   const part3 = m[4];
   if (/^(?:sinko|his)/.test(sub) && /^\d+$/.test(part3)) return null; // 通常 sinko/his 番号は除外
   if (/^ho/.test(sub)) return null; // hoコメントはhoモードで処理するため除外
+  // "12680yu1/sinko/ho"（sinkoHo）形式はsubActionにせず、hoモードのsinko挟み込み
+  // 履歴検索（同一charaIdのsinko/○を検索してsinko+1送信）で処理する
+  if (sub === 'sinko' && /^ho\d*$/.test(part3)) return null;
   // part3が英字なら先頭を大文字化してキャメルケースに結合（例: mtm→Mtm, ho→Ho）
   const part3Key = /^\d+$/.test(part3) ? part3 : (part3.charAt(0).toUpperCase() + part3.slice(1));
   const actionKey = sub + part3Key;
