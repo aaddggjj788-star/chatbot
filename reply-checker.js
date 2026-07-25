@@ -1991,6 +1991,24 @@ async function processUsers(page) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
           }
+        } else if (actionCfg.checkPattern) {
+          // checkPattern判定（例: sinko1）: ユーザーの最新メッセージがcheckPatternに一致し
+          // maxLength以下なら短縮返信(shortReply)を使用。それ以外は通常の次行処理へフォールバック。
+          const rawMsg = bodyNaibuTexts.length > 0 ? bodyNaibuTexts[0] : (analysis.latestUserTexts?.[0] || '');
+          const cleanMsg = rawMsg.replace(/[\t\n\r]/g, '').replace(/\s+/g, ' ').trim();
+          const patternRe = new RegExp(actionCfg.checkPattern);
+          const matched = patternRe.test(cleanMsg);
+          const withinLen = cleanMsg.length <= (actionCfg.maxLength ?? Infinity);
+          console.log(`[JSON] checkPattern="${actionCfg.checkPattern}" matched=${matched} len=${cleanMsg.length}/${actionCfg.maxLength ?? '∞'} within=${withinLen}`);
+          if (matched && withinLen && actionCfg.shortReply) {
+            // shortReply内にコメントアウトが含まれる前提のため、nextCommentは空にする
+            replyData = { title: 'checkPattern-short', replyText: actionCfg.shortReply, nextComment: '' };
+            alwaysQuoteUser = true;
+            console.log(`[JSON] checkPattern一致かつmaxLength以下 → shortReplyを使用`);
+          } else {
+            // 未一致、またはmaxLength超過 → replyData未設定のまま通常の次行(sinko+1)処理へ
+            console.log(`[JSON] checkPattern不一致 or 長文 → 通常の次行処理へフォールバック`);
+          }
         }
         // specialProcessのみなど、searchTarget系設定がない場合はデフォルト動作へ
       }
