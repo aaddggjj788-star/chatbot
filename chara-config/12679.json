@@ -22,6 +22,11 @@
         "checkPattern": "(有|ゆう)(千|せん)(運|うん)",
         "maxLength": 8,
         "shortReply": "お返事を確認しました。\n先ほどの伝え方が悪かったかもしれませんね。\n「有千運(ゆうせんうん)」\nつまりトラウマに心当たりがある場合はその内容を教えていただきたいのです。\nあまり詳しく話をしたくない事であればあらかたの内容でも構いませんからね。\nもう一度≪{getUserData(siteOriginal[wordinsert/start])}有千運(ゆうせんうん){getUserData(siteOriginal[wordinsert/end])}≫と記載した後にしっかりとお書きいただき、ご連絡下さいね。\nお待ちしています。\n<!--12679mu1/sinko/1-->"
+      },
+      "sinko2": {
+        "checkPattern": "(使|し)(千|せん)(運|うん)",
+        "maxLength": 7,
+        "shortReply": "私の伝え方が悪かったのでしょうか？\n\n先ほどの文章、ちゃんと読んで頂けておりますか？\n\nまず初めに≪{getUserData(siteOriginal[wordinsert/start])}使千運（しせんうん）{getUserData(siteOriginal[wordinsert/end])}≫という文言を文頭に記載してください。\n\nその後に使い道を記載してください。\n\nこの様にお願いをしております。\n\nあなたの方からしっかりと対応を頂けないと先に進める事が出来ませんからね。\n\nでは改めてのお返事をお待ちしています。\n\n<!--12679mu1/sinko/2-->"
       }
     },
     "mu2": {
