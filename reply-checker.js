@@ -289,7 +289,9 @@ function resolveCsvPath(charaId, fileId) {
     let bestFile = null;
     for (const f of files) {
       if (!f.endsWith('.csv')) continue;
-      const fm = f.match(new RegExp(`^${baseId}${type}(\\d+)`));
+      // 数値の直後に別サブタイプ(yu/mu)が続くファイル(例: yu4mu)は別系統として除外する
+      // 有効なサフィックス(sinko/his/kouhansinko/yorusinko等)は英字始まりだが yu/mu では始まらない
+      const fm = f.match(new RegExp(`^${baseId}${type}(\\d+)(?!mu|yu)`));
       if (!fm) continue;
       const n = parseInt(fm[1], 10);
       if (n <= targetNum && n > bestNum) { bestNum = n; bestFile = f; }
