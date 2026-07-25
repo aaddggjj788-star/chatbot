@@ -2200,14 +2200,14 @@ async function processUsers(page) {
       }
     } else if (isSashikae) {
       // #以降のテキストを新しい返信文として丸ごと差し替える
+      // 差し替え文章にはコメントアウトが含まれる前提のため、元のnextCommentは付加しない
       const replacedText = reply.replace(/^差し替え#/, '').replace(/\\n/g, '\n').trim();
-      const replacedFullText = replacedText + '\n' + replyData.nextComment;
+      const replacedFullText = replacedText;
 
       const confirmMsg = [
         '【差し替え確認】',
         '---',
         replacedText,
-        replyData.nextComment,
         '---',
         'この内容で送信しますか？',
         '「送信」または「スキップ」',
