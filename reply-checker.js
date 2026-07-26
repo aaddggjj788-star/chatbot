@@ -192,6 +192,21 @@ function parseSubActionComment(commentStr) {
   return { baseId: m[1], typeNum: m[2], sub, part3, actionKey, charaId: m[1] + m[2], comment: commentStr };
 }
 
+// ho設定のreplaceHeaderで返信文の文頭部分を差し替える
+// ・<imgタグがある場合: <imgタグより上をreplaceHeaderに置換（<img以降はそのまま残す）
+// ・<imgタグがない場合: 文頭3行をreplaceHeaderに置換
+// ※返信文の改行はCSV由来のリテラル "\n" のため、行分割もリテラル "\n" で行う
+function applyReplaceHeader(replyText, replaceHeader) {
+  if (!replyText) return replaceHeader;
+  const imgMatch = replyText.match(/<img/i);
+  if (imgMatch) {
+    return `${replaceHeader}\n${replyText.slice(imgMatch.index)}`;
+  }
+  const lines = replyText.split('\\n');
+  const rest = lines.slice(3).join('\\n');
+  return rest ? `${replaceHeader}\n${rest}` : replaceHeader;
+}
+
 // コメント情報からJSONのphase設定を解決する
 // 優先順: typeNum+sub ("mu2zenhan") → typeNum+type ("mu2his") → typeNum ("mu1")
 function resolvePhaseCfg(parsed, config) {
@@ -1888,6 +1903,13 @@ async function processUsers(page) {
           }
           latestComment = hoComment;
         }
+      }
+
+      // ─── replaceHeader: ho設定があれば返信文の文頭を差し替える ──────
+      // （LINE確認通知を送る前に適用する）
+      if (replyData && hoActionCfg?.replaceHeader) {
+        replyData.replyText = applyReplaceHeader(replyData.replyText, hoActionCfg.replaceHeader);
+        console.log(`[JSON] ho replaceHeader適用 (${userName})`);
       }
     } else {
       // 通常の sinko/his 処理（hisu等のhis変形も含む）
