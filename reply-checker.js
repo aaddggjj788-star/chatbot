@@ -2084,13 +2084,17 @@ async function processUsers(page) {
     // ─── LINEに確認メッセージを送信 ─────────────────────────────
     // \n（リテラル）が残っている場合に備えて実際の改行に変換してから表示
     const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
+    // ユーザーメッセージ引用の見出し（受信日時があれば併記）
+    const userMsgLabel = analysis.latestUserTime
+      ? `ユーザーメッセージ（${analysis.latestUserTime}受信）：`
+      : 'ユーザーメッセージ：';
     const lineMsg = analysis.hasLongMessage
       ? [
           '【長文メッセージあり】',
           `ユーザー：${userName}（u_id: ${uid}）`,
           `対象コメントアウト：${latestComment || '（不明）'}`,
           '',
-          'ユーザーメッセージ：',
+          userMsgLabel,
           '---',
           (analysis.longMessageTexts || []).join('\n'),
           '---',
@@ -2109,7 +2113,7 @@ async function processUsers(page) {
           `対象コメントアウト：${latestComment || '（不明）'}`,
           `念言：${(analysis.nengenWords || []).join('、')}`,
           '',
-          'ユーザーメッセージ：',
+          userMsgLabel,
           '---',
           (analysis.nengenUserTexts || []).join('\n'),
           '---',
@@ -2128,12 +2132,12 @@ async function processUsers(page) {
           `ユーザー：${userName}（u_id: ${uid}）`,
           `対象コメントアウト：${latestComment || '（不明）'}`,
           ...(alwaysQuoteUser ? [
-            'ユーザーメッセージ：',
+            userMsgLabel,
             '---',
             buildQuoteText(bodyNaibuTexts, analysis),
             '---',
           ] : analysis.hasConsultation ? [
-            'ユーザーメッセージ：',
+            userMsgLabel,
             '---',
             (analysis.consultationTexts || []).join('\n'),
             '---',
