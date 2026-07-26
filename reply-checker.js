@@ -1702,8 +1702,15 @@ async function processUsers(page) {
 
       console.log(`[COMMENT] ${userName}: /hoモード comment="${hoComment}" hoType="${hoType}" phase=${hoPhaseResult?.key} actionCfg=${JSON.stringify(hoActionCfg)}`);
 
+      // 「/sinko/ho」形式の場合はJSONのsearchTarget等を無視し、根底ルール
+      // （resolveCsvPath→履歴からsinko検索→sinko+1）で処理する
+      const isSinkoHo = /\/sinko\/ho/.test(hoComment);
+      if (isSinkoHo) {
+        console.log(`[JSON] ho "/sinko/ho"形式 → JSON設定を無視して根底ルール（履歴検索）を適用`);
+      }
+
       // ─── JSON設定に基づく処理分岐 ────────────────────────────────
-      if (hoActionCfg) {
+      if (hoActionCfg && !isSinkoHo) {
         if (hoActionCfg.specialProcess) {
           console.log(`[JSON] ho specialProcess: ${JSON.stringify(hoActionCfg.specialProcess)}`);
           await executeSpecialProcess(hoActionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts);
