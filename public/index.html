@@ -125,16 +125,32 @@
     return r;
   }
   const raw = getRawParams();
+  // GETパラメータが未解決タグ（例: {getUserData(myUserId)}）の場合は無効とみなし、
+  // localStorageの値をフォールバックとして使用する
+  function isValidParam(val) {
+    return val && !val.startsWith('{getUserData');
+  }
   const userInfo = {
-    user_id:    decodeParam(raw.user_id) || localStorage.getItem('rune_user_id'),
-    user_name:  decodeParam(raw.user_name) || localStorage.getItem('rune_user_name'),
-    user_point: decodeParam(raw.user_point) || localStorage.getItem('rune_user_point'),
-    user_token: decodeParam(raw.user_token) || localStorage.getItem('rune_user_token'),
+    user_id: isValidParam(decodeParam(raw.user_id))
+      ? decodeParam(raw.user_id)
+      : localStorage.getItem('rune_user_id'),
+    user_name: isValidParam(decodeParam(raw.user_name))
+      ? decodeParam(raw.user_name)
+      : localStorage.getItem('rune_user_name'),
+    user_point: isValidParam(decodeParam(raw.user_point))
+      ? decodeParam(raw.user_point)
+      : localStorage.getItem('rune_user_point'),
+    user_token: isValidParam(decodeParam(raw.user_token))
+      ? decodeParam(raw.user_token)
+      : localStorage.getItem('rune_user_token'),
   };
-  localStorage.setItem('rune_user_id', userInfo.user_id);
-  localStorage.setItem('rune_user_name', userInfo.user_name);
-  localStorage.setItem('rune_user_point', userInfo.user_point);
-  localStorage.setItem('rune_user_token', userInfo.user_token);
+  // 有効なパラメータのときのみlocalStorageへ上書き保存（無効時は既存の値を保持）
+  if (isValidParam(userInfo.user_id)) {
+    localStorage.setItem('rune_user_id', userInfo.user_id);
+    localStorage.setItem('rune_user_name', userInfo.user_name);
+    localStorage.setItem('rune_user_point', userInfo.user_point);
+    localStorage.setItem('rune_user_token', userInfo.user_token);
+  }
   console.log('【GETパラメータ取得】', userInfo);
 
   // --- 時間帯別挨拶 ---
