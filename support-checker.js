@@ -349,7 +349,27 @@ function isPointRelatedInquiry(text) {
 // ─── contact-templates.json からテンプレートIDをClaude APIで判定 ──────
 // （contact-checker.js の matchTemplate と同じロジック）
 // 該当なし・判定失敗時はnullを返す
-async function matchTemplate(inquiryText) {
+async function matchTemplate(inquiryText, charaId = null) {
+  const templates = JSON.parse(fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')).templates;
+
+  // charaId制約チェック: テンプレートにcharaIdがある場合は対象キャラIDと一致必須
+  const charaOk = (t) => !t.charaId || String(t.charaId) === String(charaId);
+
+  // 1. キーワードベース判定（keywordMatchを明示的に持つテンプレートのみ対象）
+  //    keywordMatch="any": いずれか1つでも含まれれば一致 / それ以外: 全て含む場合に一致
+  for (const t of templates) {
+    if (!t.keywordMatch || !Array.isArray(t.keywords) || t.keywords.length === 0) continue;
+    if (!charaOk(t)) continue;
+    const matched = t.keywordMatch === 'any'
+      ? t.keywords.some(k => inquiryText.includes(k))
+      : t.keywords.every(k => inquiryText.includes(k));
+    if (matched) {
+      console.log(`[TEMPLATE] キーワード一致: ${t.id} (keywordMatch=${t.keywordMatch}, charaId=${t.charaId ?? 'なし'})`);
+      return t.id;
+    }
+  }
+
+  // 2. Claude APIによる分類（従来ロジック）
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-5',
     max_tokens: 100,
@@ -381,7 +401,15 @@ discount_ticket: 割引チケット・ガチャチケット・クーポンの使
 
   const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
   const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-  return parsed.templateId || null;
+  const id = parsed.templateId || null;
+  if (!id) return null;
+  // Claudeが返したテンプレートにcharaId制約がある場合は一致時のみ採用
+  const picked = templates.find(t => t.id === id);
+  if (picked && !charaOk(picked)) {
+    console.log(`[TEMPLATE] ${id} はcharaId=${picked.charaId}専用のため対象外（現在=${charaId}）`);
+    return null;
+  }
+  return id;
 }
 
 // ─── テンプレート該当なし時、Claude APIで返答文を自動生成する ──────────
@@ -736,7 +764,7 @@ async function checkSupport() {
         // ─── 返答生成（テンプレート判定 → AI生成、supplementはAI生成に反映） ──
         let templateId = null;
         try {
-          templateId = await matchTemplate(latestMessage);
+          templateId = await matchTemplate(latestMessage, candidate.kid);
         } catch (e) {
           console.log(`[TEMPLATE] ${candidate.userName}: テンプレート判定に失敗: ${e.message}`);
         }
