@@ -387,8 +387,11 @@ discount_ticket: 割引チケット・ガチャチケット・クーポンの使
 // ─── テンプレート該当なし時、Claude APIで返答文を自動生成する ──────────
 // （contact-checker.js の generateReplyWithClaude と同じロジック）
 // 生成失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
-async function generateReplyWithClaude(inquiryText) {
-  const userPrompt = `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`;
+async function generateReplyWithClaude(inquiryText, supplement = null) {
+  let userPrompt = `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`;
+  if (supplement) {
+    userPrompt += `\n\nオペレーターからの補足指示：${supplement}\nこの補足も踏まえて返答文を生成してください。`;
+  }
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-5',
@@ -647,8 +650,90 @@ async function checkSupport() {
       console.log(`[STEP3] ${candidate.userName} の最新メッセージ: "${latestMessage.slice(0, 80)}"`);
 
       if (!isPointRelatedInquiry(latestMessage)) {
-        console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせではない → テンプレート自動判定を試行`);
+        console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせではない → 処理コマンドを待つ`);
 
+        // ─── 問い合わせ内容を表示し、処理コマンドを待つ ─────────────
+        const latestDatetime = await getLatestUserDatetime(page);
+        await sendLine([
+          '【コンタクトメール受信】',
+          `会員ID：${candidate.uid}`,
+          `ユーザー：${candidate.userName}`,
+          `受信日時：${latestDatetime || '（不明）'}`,
+          '---',
+          latestMessage,
+          '---',
+          '処理コマンドを入力してください：',
+          '「開始」：返答生成へ',
+          '「開始#補足」：補足を踏まえた返答生成へ',
+          '「スキップ」：このユーザーをスキップ',
+          '「ポイント{数値}pt追加」：ポイント追加のみ',
+          '「レベル変更:{数値}」：レベル変更のみ',
+          '（例）「ポイント100pt追加 レベル変更:12 開始」',
+        ].join('\n'));
+
+        let cmdReply = null;
+        try {
+          cmdReply = await waitForLineReply();
+        } catch (e) {
+          console.log(`[TIMEOUT] ${candidate.userName}: 処理コマンド待ち タイムアウト → スキップ`);
+          continue;
+        }
+        console.log(`[LINE] 処理コマンド返信: ${cmdReply}`);
+
+        // コマンド解析（「開始」は末尾組み合わせにも対応するためincludesで判定）
+        const pointMatch = cmdReply.match(/ポイント(\d+)pt追加/);
+        const levelMatch = cmdReply.match(/レベル変更:(\d+)/);
+        const startMatch = cmdReply.includes('開始');
+        const supplement = cmdReply.match(/開始#(.+)/)?.[1] ?? null;
+
+        // 1&2. ポイント追加・レベル変更（会員IDが必要）
+        if ((pointMatch || levelMatch) && !candidate.uid) {
+          console.log(`[WARN] ${candidate.userName}: uid未取得のためポイント/レベル操作をスキップ`);
+          await sendLine('【エラー】会員IDが取得できず、ポイント/レベル操作を実行できませんでした');
+        } else {
+          if (pointMatch) {
+            const amount = pointMatch[1];
+            if (DRY_RUN) {
+              console.log(`[DRY RUN] ${candidate.userName}: ポイント追加(${amount}pt)をスキップ`);
+              await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
+            } else {
+              try {
+                const ptPage = await openKyouseitaikai(page, candidate.uid);
+                await adjustPoint(ptPage, amount, '+');
+                await ptPage.close().catch(() => {});
+                await sendLine(`【完了】${amount}ptを追加しました`);
+              } catch (e) {
+                console.log(`[POINT] ${candidate.userName}: ポイント追加に失敗: ${e.message}`);
+                await sendLine(`【エラー】ポイント追加に失敗しました: ${e.message}`);
+              }
+            }
+          }
+          if (levelMatch) {
+            const level = levelMatch[1];
+            if (DRY_RUN) {
+              console.log(`[DRY RUN] ${candidate.userName}: レベル変更(${level})をスキップ`);
+              await sendLine(`【DRY RUN】レベル${level}への変更をスキップしました`);
+            } else {
+              try {
+                const lvPage = await openKyouseitaikai(page, candidate.uid);
+                await setPointLevel(lvPage, level);
+                await lvPage.close().catch(() => {});
+                await sendLine(`【完了】レベルを${level}に変更しました`);
+              } catch (e) {
+                console.log(`[LEVEL] ${candidate.userName}: レベル変更に失敗: ${e.message}`);
+                await sendLine(`【エラー】レベル変更に失敗しました: ${e.message}`);
+              }
+            }
+          }
+        }
+
+        // 3. 「開始」がなければ（スキップ含む）次のユーザーへ
+        if (!startMatch) {
+          console.log(`[SKIP] ${candidate.userName}: 開始コマンドなし（reply="${cmdReply}"）→ 次のユーザーへ`);
+          continue;
+        }
+
+        // ─── 返答生成（テンプレート判定 → AI生成、supplementはAI生成に反映） ──
         let templateId = null;
         try {
           templateId = await matchTemplate(latestMessage);
@@ -693,7 +778,7 @@ async function checkSupport() {
         if (!templateId) {
           let aiReplyText = null;
           try {
-            aiReplyText = await generateReplyWithClaude(latestMessage);
+            aiReplyText = await generateReplyWithClaude(latestMessage, supplement);
           } catch (e) {
             console.log(`[AI-REPLY] ${candidate.userName}: 返答文生成に失敗: ${e.message}`);
           }
@@ -729,7 +814,7 @@ async function checkSupport() {
           }
         }
 
-        console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせではないためスキップ`);
+        console.log(`[STEP3] ${candidate.userName}: 返答生成フロー完了 → 次のユーザーへ`);
         continue;
       }
 
