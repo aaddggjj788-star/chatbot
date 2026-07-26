@@ -286,23 +286,44 @@ async function getLatestUserMessage(page) {
   }
 }
 
-// ─── 最新メッセージの受信日時を取得 ─────────────────────────────────
-// メッセージ本文の上部に <td style="...width:110px">07月26日 10時00分</td> の
-// 形式で表示される受信日時を抽出する。日時列(width:110px)を優先し、なければ
-// 日時パターンに一致する最初のtdを採用する（本文は最新が先頭のため先頭=最新）。
+// ─── 最新ユーザーメッセージの受信日時を取得 ─────────────────────────
+// 画面は「最新が上・下ほど古い」構成。鑑定士側の送信履歴は背景色 #90EE90(緑)で
+// 表示され、その緑ブロックより上が最新のユーザーメッセージ群になる。
+// 取得対象は「鑑定士側の送信履歴の一つ上にあるユーザーメッセージの受信日時」
+// = 最初(最新)の緑ブロックの直前にある日時td（<td>07月26日 10時00分</td> 形式）。
 async function getLatestUserDatetime(page) {
   const mainFrame = page.frame({ name: 'ope_main' });
   if (!mainFrame) return '';
   try {
     return await mainFrame.evaluate(() => {
       const DATE_RE = /(\d{1,2}月\d{1,2}日\s*\d{1,2}時\d{1,2}分)/;
-      const tds = Array.from(document.querySelectorAll('td'));
-      const dated = tds.filter(td => DATE_RE.test(td.textContent || ''));
-      const preferred =
-        dated.find(td => (td.getAttribute('style') || '').replace(/\s/g, '').includes('width:110px')) ||
-        dated[0];
-      if (!preferred) return '';
-      const m = (preferred.textContent || '').match(DATE_RE);
+      // 日時のみのtd（本文中に日付が混ざったtdを誤検知しないよう厳密一致）
+      const DATE_ONLY_RE = /^\s*\d{1,2}月\d{1,2}日\s*\d{1,2}時\d{1,2}分\s*$/;
+      const norm = el => (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
+
+      // 鑑定士側(緑背景 #90EE90)の最初(=最新)のブロックを特定
+      const green = Array.from(document.querySelectorAll('*')).find(el => {
+        const s = norm(el);
+        return s.includes('90ee90') || s.includes('144,238,144');
+      }) || null;
+
+      const dateTds = Array.from(document.querySelectorAll('td'))
+        .filter(td => DATE_ONLY_RE.test(td.textContent || ''));
+
+      let target = null;
+      if (green) {
+        // 緑ブロックより前(=上=新しい側)の日時tdのうち、緑に最も近い(=一つ上)もの。
+        // 緑ブロック内に含まれる鑑定士自身の日時はPRECEDINGにならないため自動的に除外される。
+        const before = dateTds.filter(
+          td => green.compareDocumentPosition(td) & Node.DOCUMENT_POSITION_PRECEDING
+        );
+        target = before.length ? before[before.length - 1] : null;
+      }
+      // フォールバック: 緑が無い/緑より上に日時が無い場合は先頭(最新)の日時td
+      if (!target) target = dateTds[0] || null;
+      if (!target) return '';
+
+      const m = (target.textContent || '').match(DATE_RE);
       return m ? m[1].replace(/\s+/g, ' ').trim() : '';
     });
   } catch (e) {
