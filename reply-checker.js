@@ -2043,6 +2043,63 @@ async function processUsers(page) {
             // 未一致、またはmaxLength超過 → replyData未設定のまま通常の次行(sinko+1)処理へ
             console.log(`[JSON] checkPattern不一致 or 長文 → 通常の次行処理へフォールバック`);
           }
+        } else if (actionCfg.useHistorySearch) {
+          // useHistorySearch: この sinko アクション設定がある場合のみ、phase由来のcharaIdではなく
+          // resolveCsvPath で直近の既存sinkoファイルを解決し、履歴からsinko検索→sinko+1を取得する。
+          // （actionCfgにuseHistorySearchが無い場合は本分岐に入らず従来処理を継続するため、
+          //   他のphase・キャラIDには影響しない）
+          const { resolvedCharaId } = resolveCsvPath(charaId);
+          console.log(`[JSON] sinko useHistorySearch: charaId=${charaId} → resolvedCharaId=${resolvedCharaId}`);
+
+          const historyComments = analysis.allKanteishiComments || [];
+          let historySinkoComments = historyComments.filter(c => {
+            if (!c.startsWith(resolvedCharaId + '/')) return false;
+            return /(?:sinko|his\w*)\/?(\d+)/.test(c);
+          });
+          console.log(`[DEBUG] resolvedCharaId=${resolvedCharaId} のsinko/hisコメント件数(表示中履歴): ${historySinkoComments.length}`);
+
+          if (historySinkoComments.length === 0) {
+            console.log(`[JSON] sinko useHistorySearch: 表示中の履歴に${resolvedCharaId}のsinko/hisコメントなし → mg_k_rireki.php で再検索`);
+            let rirekiResult = null;
+            try {
+              rirekiResult = await searchSinkoFromRirekiHistory(page, resolvedCharaId);
+            } catch (e) {
+              console.error(`[ERROR] sinko useHistorySearch 履歴再検索失敗 (${userName}): ${e.message}`);
+            }
+            if (rirekiResult) historySinkoComments = rirekiResult.sinkoComments;
+          }
+
+          if (historySinkoComments.length > 0) {
+            const histSinkoNums = historySinkoComments
+              .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+              .filter(n => n !== null);
+            const maxSinko = Math.max(...histSinkoNums);
+            latestComment = historySinkoComments.find(c => {
+              const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+              return m && parseInt(m[1], 10) === maxSinko;
+            }) || latestComment;
+            console.log(`[COMMENT] ${userName}: sinko useHistorySearch sinko+1 resolvedCharaId=${resolvedCharaId} maxSinko=${maxSinko}`);
+            try {
+              replyData = getReplyFromCSV(resolvedCharaId, maxSinko);
+            } catch (e) {
+              console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+              continue;
+            }
+          } else {
+            console.log(`[COMMENT] ${userName}: sinko useHistorySearch 履歴になし → ${resolvedCharaId}/sinko/1 を送信`);
+            try {
+              replyData = getReplyFromCSVByTarget(resolvedCharaId, `${resolvedCharaId}/sinko/1`, true);
+            } catch (e) {
+              console.error(`[ERROR] sinko useHistorySearch sinko/1取得失敗 (${userName}): ${e.message}`);
+              continue;
+            }
+          }
+
+          // 取得した文章の文頭をreplaceHeaderで差し替え
+          if (replyData && actionCfg.replaceHeader) {
+            replyData.replyText = applyReplaceHeader(replyData.replyText, actionCfg.replaceHeader);
+            console.log(`[JSON] sinko useHistorySearch replaceHeader適用 (${userName})`);
+          }
         }
         // specialProcessのみなど、searchTarget系設定がない場合はデフォルト動作へ
       }
