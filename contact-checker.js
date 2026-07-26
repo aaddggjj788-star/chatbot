@@ -600,7 +600,7 @@ async function processContacts(page) {
     try {
       const content = await getLatestThreadMessage(threadPage, contact.preview);
 
-      // ─── 問い合わせ内容を先にLINEへ表示 ─────────────────────────
+      // ─── 問い合わせ内容を先にLINEへ表示し、処理開始の確認を取る ──────
       await sendLine([
         '【コンタクトメール受信】',
         `会員ID：${contact.uid}`,
@@ -609,8 +609,24 @@ async function processContacts(page) {
         '---',
         content,
         '---',
-        '処理を開始します...',
+        '処理を開始しますか？',
+        '「開始」：キャンペーン・ポイントチェックを実行',
+        '「スキップ」：このユーザーをスキップ',
       ].join('\n'));
+
+      let startReply;
+      try {
+        startReply = await waitForLineReply();
+      } catch (e) {
+        console.log(`[TIMEOUT] uid=${contact.uid}: 処理開始確認 タイムアウト → スキップ`);
+        continue;
+      }
+      console.log(`[LINE] 処理開始確認返信: ${startReply}`);
+
+      if (startReply !== '開始') {
+        console.log(`[SKIP] uid=${contact.uid} 処理開始確認でスキップ`);
+        continue;
+      }
 
       // ─── STEP4.5: キャンペーン・ポイント確認（割引率調整→ポイント調整） ──
       // 問い合わせ内容にポイント関連キーワードが含まれる場合のみ実行する

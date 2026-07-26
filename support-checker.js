@@ -688,6 +688,35 @@ async function checkSupport() {
       }
 
       console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせと判定`);
+
+      // ─── 処理を開始する前にLINEで確認を取る ───────────────────────
+      await sendLine([
+        '【コンタクトメール受信】',
+        `会員ID：${candidate.uid}`,
+        `ユーザー：${candidate.userName}`,
+        `受信日時：${candidate.datetime ?? '（不明）'}`,
+        '---',
+        latestMessage,
+        '---',
+        '処理を開始しますか？',
+        '「開始」：キャンペーン・ポイントチェックを実行',
+        '「スキップ」：このユーザーをスキップ',
+      ].join('\n'));
+
+      let startReply = null;
+      try {
+        startReply = await waitForLineReply();
+      } catch (e) {
+        console.log(`[TIMEOUT] ${candidate.userName}: 処理開始確認 タイムアウト → スキップ`);
+        continue;
+      }
+      console.log(`[LINE] 処理開始確認返信: ${startReply}`);
+
+      if (startReply !== '開始') {
+        console.log(`[SKIP] ${candidate.userName}: 処理開始確認でスキップ → 次のユーザーへ`);
+        continue;
+      }
+
       target = candidate;
       break;
     }
