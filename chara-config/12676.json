@@ -1,9 +1,18 @@
 {
   "charaId": "12676",
-  "globalStopTime": { "start": "23:00", "end": "09:00" },
+  "globalStopTime": {
+    "start": "23:00",
+    "end": "09:00"
+  },
+  "spanMatchExclude": [
+    "12676yu14/ho"
+  ],
   "phases": {
     "mu1": {
-      "do1": { "searchTarget": "12676mu1/do/1", "useCurrentRow": false },
+      "do1": {
+        "searchTarget": "12676mu1/do/1",
+        "useCurrentRow": false
+      },
       "alwaysQuoteUser": true
     },
     "mu2": {
@@ -57,6 +66,11 @@
       "ho": {
         "searchTarget": "12676yu12/sinko/1",
         "useCurrentRow": true
+      }
+    },
+    "yu14": {
+      "ho": {
+        "replaceHeader": "お返事確認しました。\n\nありがとうございます。\n\nでは準備は問題ないと言う事で進めて行きますね。\n\nあと、少しですが思念を通して緊張が伝わってきています。\n\n恐らく私がお伝えした事に対しての反応でしょう。\n\nお気持ちは分かりますが、金秘録が示す結果です。\n\n貴方が行うべき事を行なえば結果を訪れます。\n\n絶対に当選できるという自信を持ってこちらの工程を進めて下さい。\n"
       }
     },
     "yu15": {
