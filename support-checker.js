@@ -286,6 +286,31 @@ async function getLatestUserMessage(page) {
   }
 }
 
+// ─── 最新メッセージの受信日時を取得 ─────────────────────────────────
+// メッセージ本文の上部に <td style="...width:110px">07月26日 10時00分</td> の
+// 形式で表示される受信日時を抽出する。日時列(width:110px)を優先し、なければ
+// 日時パターンに一致する最初のtdを採用する（本文は最新が先頭のため先頭=最新）。
+async function getLatestUserDatetime(page) {
+  const mainFrame = page.frame({ name: 'ope_main' });
+  if (!mainFrame) return '';
+  try {
+    return await mainFrame.evaluate(() => {
+      const DATE_RE = /(\d{1,2}月\d{1,2}日\s*\d{1,2}時\d{1,2}分)/;
+      const tds = Array.from(document.querySelectorAll('td'));
+      const dated = tds.filter(td => DATE_RE.test(td.textContent || ''));
+      const preferred =
+        dated.find(td => (td.getAttribute('style') || '').replace(/\s/g, '').includes('width:110px')) ||
+        dated[0];
+      if (!preferred) return '';
+      const m = (preferred.textContent || '').match(DATE_RE);
+      return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+    });
+  } catch (e) {
+    console.error('[ERROR] getLatestUserDatetime:', e.message);
+    return '';
+  }
+}
+
 // ─── ポイント関連の問い合わせかどうかを判定 ─────────────────────────
 // （「合わない」「足りない」「おかしい」「違う」「間違い」「少ない」のいずれか）
 // かつ（「ポイント」「pt」「PT」のいずれか）を含む場合のみ true
@@ -690,11 +715,12 @@ async function checkSupport() {
       console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせと判定`);
 
       // ─── 処理を開始する前にLINEで確認を取る ───────────────────────
+      const latestDatetime = await getLatestUserDatetime(page);
       await sendLine([
         '【コンタクトメール受信】',
         `会員ID：${candidate.uid}`,
         `ユーザー：${candidate.userName}`,
-        `受信日時：${candidate.datetime ?? '（不明）'}`,
+        `受信日時：${latestDatetime || '（不明）'}`,
         '---',
         latestMessage,
         '---',
