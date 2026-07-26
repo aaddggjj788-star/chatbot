@@ -360,6 +360,12 @@ async function matchTemplate(inquiryText, charaId = null) {
   for (const t of templates) {
     if (!t.keywordMatch || !Array.isArray(t.keywords) || t.keywords.length === 0) continue;
     if (!charaOk(t)) continue;
+    // excludeExactの文字列と完全一致する場合はマッチさせない
+    // （申請キーワードそのものの送信はテンプレ返答の対象外）
+    if (Array.isArray(t.excludeExact) && t.excludeExact.includes(inquiryText.trim())) {
+      console.log(`[TEMPLATE] ${t.id}: excludeExact完全一致のため除外 ("${inquiryText.trim()}")`);
+      continue;
+    }
     const matched = t.keywordMatch === 'any'
       ? t.keywords.some(k => inquiryText.includes(k))
       : t.keywords.every(k => inquiryText.includes(k));
