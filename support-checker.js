@@ -735,7 +735,7 @@ async function checkSupport() {
 
       console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせと判定`);
 
-      // ─── 処理を開始する前にLINEで確認を取る ───────────────────────
+      // ─── 問い合わせ内容を表示し、処理コマンドを待つ ─────────────────
       const latestDatetime = await getLatestUserDatetime(page);
       await sendLine([
         '【コンタクトメール受信】',
@@ -745,23 +745,85 @@ async function checkSupport() {
         '---',
         latestMessage,
         '---',
-        '処理を開始しますか？',
+        '処理コマンドを入力してください：',
         '「開始」：キャンペーン・ポイントチェックを実行',
+        '「開始#補足」：補足を踏まえて実行',
         '「スキップ」：このユーザーをスキップ',
+        '「ポイント{数値}pt追加」：ポイント追加のみ',
+        '「レベル変更:{数値}」：レベル変更のみ',
+        '（例）「ポイント100pt追加 レベル変更:12 開始」',
       ].join('\n'));
 
       let startReply = null;
       try {
         startReply = await waitForLineReply();
       } catch (e) {
-        console.log(`[TIMEOUT] ${candidate.userName}: 処理開始確認 タイムアウト → スキップ`);
+        console.log(`[TIMEOUT] ${candidate.userName}: 処理コマンド待ち タイムアウト → スキップ`);
         continue;
       }
-      console.log(`[LINE] 処理開始確認返信: ${startReply}`);
+      console.log(`[LINE] 処理コマンド返信: ${startReply}`);
 
-      if (startReply !== '開始') {
-        console.log(`[SKIP] ${candidate.userName}: 処理開始確認でスキップ → 次のユーザーへ`);
+      // ─── コマンド解析 ───────────────────────────────────────────
+      const pointMatch = startReply.match(/ポイント(\d+)pt追加/);
+      const levelMatch = startReply.match(/レベル変更:(\d+)/);
+      // 「ポイント〇pt追加 レベル変更:〇 開始」のように「開始」が末尾に来る組み合わせにも
+      // 対応するため、startsWithではなくincludesで「開始」の有無を判定する
+      const startMatch = startReply.includes('開始');
+      const supplement = startReply.match(/開始#(.+)/)?.[1] ?? null;
+
+      // 1&2. ポイント追加・レベル変更（会員IDが必要）
+      if ((pointMatch || levelMatch) && !candidate.uid) {
+        console.log(`[WARN] ${candidate.userName}: uid未取得のためポイント/レベル操作をスキップ`);
+        await sendLine('【エラー】会員IDが取得できず、ポイント/レベル操作を実行できませんでした');
+      } else {
+        // 1. ポイント追加
+        if (pointMatch) {
+          const amount = pointMatch[1];
+          if (DRY_RUN) {
+            console.log(`[DRY RUN] ${candidate.userName}: ポイント追加(${amount}pt)をスキップ`);
+            await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
+          } else {
+            try {
+              const ptPage = await openKyouseitaikai(page, candidate.uid);
+              await adjustPoint(ptPage, amount, '+');
+              await ptPage.close().catch(() => {});
+              await sendLine(`【完了】${amount}ptを追加しました`);
+            } catch (e) {
+              console.log(`[POINT] ${candidate.userName}: ポイント追加に失敗: ${e.message}`);
+              await sendLine(`【エラー】ポイント追加に失敗しました: ${e.message}`);
+            }
+          }
+        }
+
+        // 2. レベル変更
+        if (levelMatch) {
+          const level = levelMatch[1];
+          if (DRY_RUN) {
+            console.log(`[DRY RUN] ${candidate.userName}: レベル変更(${level})をスキップ`);
+            await sendLine(`【DRY RUN】レベル${level}への変更をスキップしました`);
+          } else {
+            try {
+              const lvPage = await openKyouseitaikai(page, candidate.uid);
+              await setPointLevel(lvPage, level);
+              await lvPage.close().catch(() => {});
+              await sendLine(`【完了】レベルを${level}に変更しました`);
+            } catch (e) {
+              console.log(`[LEVEL] ${candidate.userName}: レベル変更に失敗: ${e.message}`);
+              await sendLine(`【エラー】レベル変更に失敗しました: ${e.message}`);
+            }
+          }
+        }
+      }
+
+      // 3. 「開始」がなければ（スキップ含む）次の候補へ
+      if (!startMatch) {
+        console.log(`[SKIP] ${candidate.userName}: 開始コマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
         continue;
+      }
+      // サポートの対象処理はキャンペーン・ポイント照合であり返答生成(Claude)を
+      // 行わないため、補足(supplement)は記録のみ（プロンプトへの反映先がない）
+      if (supplement) {
+        console.log(`[SUPPORT] ${candidate.userName}: 補足="${supplement}"（対象処理では未使用・記録のみ）`);
       }
 
       target = candidate;

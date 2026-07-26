@@ -461,7 +461,7 @@ async function checkCampaignAndPoints(page, contact) {
 // 生成失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
 // adjustments: checkCampaignAndPoints()の戻り値。割引率・ポイント調整を
 // 実施済みの場合、その内容をプロンプトに含めて返答文に反映させる
-async function generateReplyWithClaude(inquiryText, adjustments) {
+async function generateReplyWithClaude(inquiryText, adjustments, supplement = null) {
   const actionLines = [];
   if (adjustments?.discountChanged) {
     actionLines.push(`・割引率を${adjustments.fromLevel}→${adjustments.toLevel}に変更しました`);
@@ -470,7 +470,7 @@ async function generateReplyWithClaude(inquiryText, adjustments) {
     actionLines.push(`・${adjustments.pointAmount}ptを追加しました`);
   }
 
-  const userPrompt = actionLines.length > 0
+  let userPrompt = actionLines.length > 0
     ? `以下のユーザーからの問い合わせに対して返答文を生成してください。
 
 問い合わせ内容：${inquiryText}
@@ -481,6 +481,10 @@ ${actionLines.join('\n')}
 上記の対応を踏まえた上で、ユーザーへの返答文を生成してください。
 対応済みの内容を反映した文章にしてください。`
     : `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`;
+
+  if (supplement) {
+    userPrompt += `\n\nオペレーターからの補足指示：${supplement}\nこの補足も踏まえて返答文を生成してください。`;
+  }
 
   const response = await claudeClient.messages.create({
     model: 'claude-sonnet-5',
@@ -600,7 +604,7 @@ async function processContacts(page) {
     try {
       const content = await getLatestThreadMessage(threadPage, contact.preview);
 
-      // ─── 問い合わせ内容を先にLINEへ表示し、処理開始の確認を取る ──────
+      // ─── 問い合わせ内容を先にLINEへ表示し、処理コマンドを待つ ──────
       await sendLine([
         '【コンタクトメール受信】',
         `会員ID：${contact.uid}`,
@@ -609,22 +613,73 @@ async function processContacts(page) {
         '---',
         content,
         '---',
-        '処理を開始しますか？',
-        '「開始」：キャンペーン・ポイントチェックを実行',
+        '処理コマンドを入力してください：',
+        '「開始」：返答生成へ',
+        '「開始#補足」：補足を踏まえた返答生成へ',
         '「スキップ」：このユーザーをスキップ',
+        '「ポイント{数値}pt追加」：ポイント追加のみ',
+        '「レベル変更:{数値}」：レベル変更のみ',
+        '（例）「ポイント100pt追加 レベル変更:12 開始」',
       ].join('\n'));
 
       let startReply;
       try {
         startReply = await waitForLineReply();
       } catch (e) {
-        console.log(`[TIMEOUT] uid=${contact.uid}: 処理開始確認 タイムアウト → スキップ`);
+        console.log(`[TIMEOUT] uid=${contact.uid}: 処理コマンド待ち タイムアウト → スキップ`);
         continue;
       }
-      console.log(`[LINE] 処理開始確認返信: ${startReply}`);
+      console.log(`[LINE] 処理コマンド返信: ${startReply}`);
 
-      if (startReply !== '開始') {
-        console.log(`[SKIP] uid=${contact.uid} 処理開始確認でスキップ`);
+      // ─── コマンド解析 ───────────────────────────────────────────
+      const pointMatch = startReply.match(/ポイント(\d+)pt追加/);
+      const levelMatch = startReply.match(/レベル変更:(\d+)/);
+      // 「ポイント〇pt追加 レベル変更:〇 開始」のように「開始」が末尾に来る組み合わせにも
+      // 対応するため、startsWithではなくincludesで「開始」の有無を判定する
+      const startMatch = startReply.includes('開始');
+      const supplement = startReply.match(/開始#(.+)/)?.[1] ?? null;
+
+      // 1. ポイント追加
+      if (pointMatch) {
+        const amount = pointMatch[1];
+        if (DRY_RUN) {
+          console.log(`[DRY RUN] uid=${contact.uid}: ポイント追加(${amount}pt)をスキップ`);
+          await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
+        } else {
+          try {
+            const ptPage = await openKyouseitaikai(page, contact.uid);
+            await adjustPoint(ptPage, amount, '+');
+            await ptPage.close().catch(() => {});
+            await sendLine(`【完了】${amount}ptを追加しました`);
+          } catch (e) {
+            console.log(`[POINT] uid=${contact.uid}: ポイント追加に失敗: ${e.message}`);
+            await sendLine(`【エラー】ポイント追加に失敗しました: ${e.message}`);
+          }
+        }
+      }
+
+      // 2. レベル変更
+      if (levelMatch) {
+        const level = levelMatch[1];
+        if (DRY_RUN) {
+          console.log(`[DRY RUN] uid=${contact.uid}: レベル変更(${level})をスキップ`);
+          await sendLine(`【DRY RUN】レベル${level}への変更をスキップしました`);
+        } else {
+          try {
+            const lvPage = await openKyouseitaikai(page, contact.uid);
+            await setPointLevel(lvPage, level);
+            await lvPage.close().catch(() => {});
+            await sendLine(`【完了】レベルを${level}に変更しました`);
+          } catch (e) {
+            console.log(`[LEVEL] uid=${contact.uid}: レベル変更に失敗: ${e.message}`);
+            await sendLine(`【エラー】レベル変更に失敗しました: ${e.message}`);
+          }
+        }
+      }
+
+      // 3. 「開始」がなければ（スキップ含む）次のユーザーへ
+      if (!startMatch) {
+        console.log(`[SKIP] uid=${contact.uid}: 開始コマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
         continue;
       }
 
@@ -689,7 +744,7 @@ async function processContacts(page) {
       if (!templateId) {
         let aiReplyText = null;
         try {
-          aiReplyText = await generateReplyWithClaude(content, campaignResult);
+          aiReplyText = await generateReplyWithClaude(content, campaignResult, supplement);
         } catch (e) {
           console.log(`[AI-REPLY] uid=${contact.uid}: 返答文生成に失敗: ${e.message}`);
         }
