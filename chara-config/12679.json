@@ -56,20 +56,18 @@
         "useCurrentRow": false
       }
     },
-    "yu1": {
+    "yu1am": {
+      "fileId": "12679yu1amsinko",
       "ho": {
-        "timeBasedSearch": {
-          "before1100": {
-            "fileId": "12679yu1amsinko",
-            "searchTarget": "12679yu1am/sinko/1",
-            "useCurrentRow": true
-          },
-          "after1100": {
-            "fileId": "12679yu1sinko",
-            "searchTarget": "12679yu1/sinko/1",
-            "useCurrentRow": true
-          }
-        }
+        "searchTarget": "12679yu1am/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu1": {
+      "fileId": "12679yu1sinko",
+      "ho": {
+        "searchTarget": "12679yu1/sinko/1",
+        "useCurrentRow": true
       }
     },
     "yu2": {
