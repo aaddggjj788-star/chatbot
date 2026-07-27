@@ -286,8 +286,14 @@ function resolveCsvPath(charaId, fileId) {
     console.log(`[CSV] fileId "${fileId}.csv" が見つかりません → プレフィックス検索に切り替え`);
   }
 
-  // charaIdで始まるCSVを検索（sinkoを含むファイルを優先）
+  // charaIdで始まるCSVを検索
+  // まず {prefix}sinko.csv / {prefix}his.csv の完全一致を最優先で返す。
+  // これにより「12679yu1」で「12679yu1amsinko.csv」等の別phase変種を誤って
+  // 拾わず、「12679yu1sinko.csv」を確実に選択できる。
+  // 完全一致がない場合のみ従来のprefix検索（時間帯変種 hirusinko等を拾う）に委ねる。
   function findByPrefix(prefix) {
+    const exact = [`${prefix}sinko.csv`, `${prefix}his.csv`].find(n => files.includes(n));
+    if (exact) return exact;
     const candidates = files.filter(f => f.startsWith(prefix) && f.endsWith('.csv'));
     if (candidates.length === 0) return null;
     return candidates.find(f => f.includes('sinko')) || candidates[0];
