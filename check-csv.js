@@ -51,7 +51,11 @@ function resolveCsvPath(charaId, fileId) {
     console.log(`[CSV] fileId "${fileId}.csv" が見つかりません → プレフィックス検索に切り替え`);
   }
 
+  // {prefix}sinko.csv / {prefix}his.csv の完全一致を最優先で返す（reply-checker.jsと同一ロジック）。
+  // 別phase変種（例: 12679yu1amsinko.csv）を誤って拾わないようにする。
   function findByPrefix(prefix) {
+    const exact = [`${prefix}sinko.csv`, `${prefix}his.csv`].find(n => files.includes(n));
+    if (exact) return exact;
     const candidates = files.filter(f => f.startsWith(prefix) && f.endsWith('.csv'));
     if (candidates.length === 0) return null;
     return candidates.find(f => f.includes('sinko')) || candidates[0];
