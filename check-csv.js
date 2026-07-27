@@ -114,6 +114,7 @@ function printResult(csvPath, rowIdx, row) {
 // （his/2 ↔ his2 の省略形も許容）。見つからない/次行がない場合はnullを返す
 function findByTarget(charaId, searchTarget, useCurrentRow, fileId) {
   const { csvPath } = resolveCsvPath(charaId, fileId);
+  console.log(`[DEBUG] 使用CSVファイル: ${csvPath}`);
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
   const rows = parseCSV(csvPath);
 
