@@ -50,6 +50,25 @@ async function setPointLevel(kyouseiPage, level) {
 }
 
 /**
+ * 絆レベルを設定する共通関数
+ * mg_charaUserUniqueSetting.php（キャラ別ユーザー設定）を新規ページで開き、
+ * select[name="lovelv"] を変更して保存する
+ * page: 同一コンテキストのPage（新規ページを開くために使用）
+ * charaId: キャラID / level: lovelvのvalue値
+ */
+async function setLoveLevel(page, uid, charaId, level) {
+  const lovePage = await page.context().newPage();
+  await lovePage.goto(
+    `http://manager.x7j4l2p9m1.com/mg/mg_charaUserUniqueSetting.php?ken=1&cid=${charaId}&uid=${uid}`
+  );
+  await lovePage.waitForLoadState('networkidle');
+  await lovePage.selectOption('select[name="lovelv"]', String(level));
+  await lovePage.click('input[name="memo_henko"]');
+  await lovePage.waitForLoadState('networkidle');
+  await lovePage.close();
+}
+
+/**
  * 現在のポイントレベルを取得する共通関数
  */
 async function getPointLevel(kyouseiPage) {
@@ -370,6 +389,6 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
 }
 
 module.exports = {
-  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, checkAndApplyDiscount,
+  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, setLoveLevel, checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
 };

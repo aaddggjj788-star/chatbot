@@ -50,7 +50,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const {
-  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, checkAndApplyDiscount,
+  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, setLoveLevel, checkAndApplyDiscount,
   getMailRows, getBankHistory, checkPointDiff,
 } = require('./utils');
 
@@ -137,7 +137,7 @@ function waitForLineReply() {
 
 // ─── 処理コマンド解析 ─────────────────────────────────────────────
 // 「開始」「開始#補足」「スキップ」「ポイント〇pt追加」「レベル変更:〇」
-// 「メール確認」「決済確認」および上記の組み合わせ
+// 「メール確認」「決済確認」「絆変更:{キャラID}:{value}」および上記の組み合わせ
 // （例:「メール確認 決済確認 開始」）に対応する。
 // 各コマンドは末尾に来る組み合わせもあるためincludesで判定する。
 function parseCommand(reply) {
@@ -152,7 +152,29 @@ function parseCommand(reply) {
     supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
     mail:       body.includes('メール確認'),
     bank:       body.includes('決済確認'),
+    love:       (m => (m ? { charaId: m[1], value: m[2] } : null))(body.match(/絆変更:(\d+):(\d+)/)),
   };
+}
+
+// ─── 「絆変更:{キャラID}:{value}」コマンド ─────────────────────────
+// 指定キャラIDの絆レベルを確認なしで即時変更する
+async function applyLoveLevel(page, uid, charaId, value) {
+  if (!uid) {
+    await sendLine('【エラー】会員IDが取得できず、絆レベル変更を実行できませんでした');
+    return;
+  }
+  if (DRY_RUN) {
+    console.log(`[LOVE] uid=${uid}: 絆レベル変更(cid=${charaId} value=${value})をスキップ`);
+    await sendLine(`【DRY RUN】キャラ${charaId}の絆レベル変更（value=${value}）をスキップしました`);
+    return;
+  }
+  try {
+    await setLoveLevel(page, uid, charaId, value);
+    await sendLine(`【完了】uid=${uid} キャラ${charaId}の絆レベルをvalue=${value}に変更しました`);
+  } catch (e) {
+    console.log(`[LOVE] uid=${uid}: 絆レベル変更に失敗: ${e.message}`);
+    await sendLine(`【エラー】絆レベル変更に失敗しました: ${e.message}`);
+  }
 }
 
 // ─── 「メール確認」コマンド ───────────────────────────────────────
@@ -715,6 +737,7 @@ async function processContacts(page) {
         '「レベル変更:{数値}」：レベル変更のみ',
         '「メール確認」：当日配信メールを通知',
         '「決済確認」：当日決済履歴を通知',
+        '「絆変更:{キャラID}:{value}」：絆レベル変更のみ',
         '（例）「メール確認 決済確認 開始」',
       ].join('\n'));
 
@@ -729,11 +752,14 @@ async function processContacts(page) {
 
       // ─── コマンド解析 ───────────────────────────────────────────
       const { point: amount, level, start: startMatch, supplement,
-              mail: mailMatch, bank: bankMatch } = parseCommand(startReply);
+              mail: mailMatch, bank: bankMatch, love: loveMatch } = parseCommand(startReply);
 
       // 0. メール確認・決済確認（照会のみ。他コマンドとの組み合わせにも対応）
       if (mailMatch) await notifyTodayMails(page, contact.uid);
       if (bankMatch) await notifyBankHistory(page, contact.uid);
+
+      // 0-2. 絆レベル変更（確認なしで即時実行）
+      if (loveMatch) await applyLoveLevel(page, contact.uid, loveMatch.charaId, loveMatch.value);
 
       // 1. ポイント追加
       if (amount) {

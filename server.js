@@ -305,7 +305,7 @@ async function handleEvent(event) {
   // 固定コマンド（開始/開始#〜/送信/手動対応/スキップ/調整する/変更する/差し込み#〜/差し替え#〜）に加え、
   // contact-checker.js/support-checker.js の処理コマンド
   // （開始 / 開始#補足 / 手動対応 / スキップ / ポイント〇pt追加 / レベル変更:〇 /
-  //   メール確認 / 決済確認 の組み合わせ）や
+  //   メール確認 / 決済確認 / 絆変更:{キャラID}:{value} の組み合わせ）や
   // contact-checker.js のSTEP6（返答内容の自由入力）にも対応するため、
   // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」もそのままstate fileへ書き込まれる）
   if (fs.existsSync(REPLY_STATE_FILE)) {
