@@ -116,6 +116,29 @@ function waitForLineReply() {
   });
 }
 
+// ─── 処理コマンド解析 ─────────────────────────────────────────────
+// 「開始」「開始#補足」「手動対応」「スキップ」「ポイント〇pt追加」「レベル変更:〇」
+// および上記の組み合わせ（例:「ポイント100pt追加 レベル変更:12 開始」）に対応する。
+// 「開始」「手動対応」は末尾に来る組み合わせもあるためincludesで判定する。
+function parseCommand(reply) {
+  const text = reply || '';
+  // 補足（開始#〜）は末尾まで自由入力のため、補足内の文言を他コマンドと
+  // 誤認しないよう、コマンド判定は補足を除いた部分に対して行う
+  const body = text.replace(/開始#[\s\S]+/, '開始');
+  return {
+    point:      body.match(/ポイント(\d+)pt追加/)?.[1] ?? null,
+    level:      body.match(/レベル変更:(\d+)/)?.[1] ?? null,
+    start:      body.includes('開始'),
+    supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
+    manual:     body.includes('手動対応'),
+  };
+}
+
+// 「手動対応」コマンド用の通知（返答生成は行わず、担当者へ対応を依頼する）
+async function notifyManual(userName, uid) {
+  await sendLine(`【手動対応】${userName}（uid:${uid || '不明'}）の対応をお願いします`);
+}
+
 // ─── Playwright: ログイン（reply-checker.js と同じ処理）─────────────
 
 async function login(page) {
@@ -699,7 +722,8 @@ async function checkSupport() {
           '処理コマンドを入力してください：',
           '「開始」：返答生成へ',
           '「開始#補足」：補足を踏まえた返答生成へ',
-          '「スキップ」：このユーザーをスキップ',
+          '「手動対応」：手動対応を通知して次のユーザーへ',
+          '「スキップ」：通知なしで次のユーザーへ',
           '「ポイント{数値}pt追加」：ポイント追加のみ',
           '「レベル変更:{数値}」：レベル変更のみ',
           '（例）「ポイント100pt追加 レベル変更:12 開始」',
@@ -714,19 +738,16 @@ async function checkSupport() {
         }
         console.log(`[LINE] 処理コマンド返信: ${cmdReply}`);
 
-        // コマンド解析（「開始」は末尾組み合わせにも対応するためincludesで判定）
-        const pointMatch = cmdReply.match(/ポイント(\d+)pt追加/);
-        const levelMatch = cmdReply.match(/レベル変更:(\d+)/);
-        const startMatch = cmdReply.includes('開始');
-        const supplement = cmdReply.match(/開始#(.+)/)?.[1] ?? null;
+        // コマンド解析
+        const { point: amount, level, start: startMatch, supplement, manual: manualMatch } =
+          parseCommand(cmdReply);
 
         // 1&2. ポイント追加・レベル変更（会員IDが必要）
-        if ((pointMatch || levelMatch) && !candidate.uid) {
+        if ((amount || level) && !candidate.uid) {
           console.log(`[WARN] ${candidate.userName}: uid未取得のためポイント/レベル操作をスキップ`);
           await sendLine('【エラー】会員IDが取得できず、ポイント/レベル操作を実行できませんでした');
         } else {
-          if (pointMatch) {
-            const amount = pointMatch[1];
+          if (amount) {
             if (DRY_RUN) {
               console.log(`[DRY RUN] ${candidate.userName}: ポイント追加(${amount}pt)をスキップ`);
               await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
@@ -742,8 +763,7 @@ async function checkSupport() {
               }
             }
           }
-          if (levelMatch) {
-            const level = levelMatch[1];
+          if (level) {
             if (DRY_RUN) {
               console.log(`[DRY RUN] ${candidate.userName}: レベル変更(${level})をスキップ`);
               await sendLine(`【DRY RUN】レベル${level}への変更をスキップしました`);
@@ -761,7 +781,14 @@ async function checkSupport() {
           }
         }
 
-        // 3. 「開始」がなければ（スキップ含む）次のユーザーへ
+        // 3. 「手動対応」：LINEへ手動対応を通知して次のユーザーへ
+        if (manualMatch) {
+          console.log(`[MANUAL] ${candidate.userName}: 手動対応コマンド → 通知して次のユーザーへ`);
+          await notifyManual(candidate.userName, candidate.uid);
+          continue;
+        }
+
+        // 4. 「開始」がなければ（スキップ・ポイント/レベル操作のみ含む）通知なしで次のユーザーへ
         if (!startMatch) {
           console.log(`[SKIP] ${candidate.userName}: 開始コマンドなし（reply="${cmdReply}"）→ 次のユーザーへ`);
           continue;
@@ -790,7 +817,8 @@ async function checkSupport() {
               template.response,
               '---',
               '「送信」：そのまま送信',
-              '「スキップ」：手動対応へ',
+              '「手動対応」：手動対応を通知して次のユーザーへ',
+              '「スキップ」：通知なしで次のユーザーへ',
             ].join('\n'));
 
             let autoReply = null;
@@ -801,10 +829,14 @@ async function checkSupport() {
             }
             console.log(`[LINE] 自動返答確認返信: ${autoReply}`);
 
+            // 未返信（タイムアウト）も手動対応として通知する
             if (autoReply === '送信') {
               await sendSupportReplyText(page, candidate.userName, template.response);
+            } else if (!autoReply || autoReply.includes('手動対応')) {
+              console.log(`[MANUAL] ${candidate.userName}: 自動返答を送信せず手動対応`);
+              await notifyManual(candidate.userName, candidate.uid);
             } else {
-              console.log(`[TEMPLATE] ${candidate.userName}: 自動返答をスキップ → 手動対応`);
+              console.log(`[TEMPLATE] ${candidate.userName}: 自動返答をスキップ（通知なし）`);
             }
           }
         }
@@ -825,8 +857,9 @@ async function checkSupport() {
               aiReplyText,
               '---',
               '「送信」：そのまま送信',
-              '「スキップ」：手動対応へ',
               '「差し替え#文章」：内容を変更して送信',
+              '「手動対応」：手動対応を通知して次のユーザーへ',
+              '「スキップ」：通知なしで次のユーザーへ',
             ].join('\n'));
 
             let aiReply = null;
@@ -837,13 +870,17 @@ async function checkSupport() {
             }
             console.log(`[LINE] AI生成返答確認返信: ${aiReply}`);
 
+            // 未返信（タイムアウト）も手動対応として通知する
             if (aiReply === '送信') {
               await sendSupportReplyText(page, candidate.userName, aiReplyText);
             } else if (aiReply && aiReply.startsWith('差し替え#')) {
               const replacedText = aiReply.replace(/^差し替え#/, '').trim();
               await sendSupportReplyText(page, candidate.userName, replacedText);
+            } else if (!aiReply || aiReply.includes('手動対応')) {
+              console.log(`[MANUAL] ${candidate.userName}: AI生成返答を送信せず手動対応`);
+              await notifyManual(candidate.userName, candidate.uid);
             } else {
-              console.log(`[AI-REPLY] ${candidate.userName}: AI生成返答をスキップ → 手動対応`);
+              console.log(`[AI-REPLY] ${candidate.userName}: AI生成返答をスキップ（通知なし）`);
             }
           }
         }
@@ -867,7 +904,8 @@ async function checkSupport() {
         '処理コマンドを入力してください：',
         '「開始」：キャンペーン・ポイントチェックを実行',
         '「開始#補足」：補足を踏まえて実行',
-        '「スキップ」：このユーザーをスキップ',
+        '「手動対応」：手動対応を通知して次のユーザーへ',
+        '「スキップ」：通知なしで次のユーザーへ',
         '「ポイント{数値}pt追加」：ポイント追加のみ',
         '「レベル変更:{数値}」：レベル変更のみ',
         '（例）「ポイント100pt追加 レベル変更:12 開始」',
@@ -883,21 +921,16 @@ async function checkSupport() {
       console.log(`[LINE] 処理コマンド返信: ${startReply}`);
 
       // ─── コマンド解析 ───────────────────────────────────────────
-      const pointMatch = startReply.match(/ポイント(\d+)pt追加/);
-      const levelMatch = startReply.match(/レベル変更:(\d+)/);
-      // 「ポイント〇pt追加 レベル変更:〇 開始」のように「開始」が末尾に来る組み合わせにも
-      // 対応するため、startsWithではなくincludesで「開始」の有無を判定する
-      const startMatch = startReply.includes('開始');
-      const supplement = startReply.match(/開始#(.+)/)?.[1] ?? null;
+      const { point: amount, level, start: startMatch, supplement, manual: manualMatch } =
+        parseCommand(startReply);
 
       // 1&2. ポイント追加・レベル変更（会員IDが必要）
-      if ((pointMatch || levelMatch) && !candidate.uid) {
+      if ((amount || level) && !candidate.uid) {
         console.log(`[WARN] ${candidate.userName}: uid未取得のためポイント/レベル操作をスキップ`);
         await sendLine('【エラー】会員IDが取得できず、ポイント/レベル操作を実行できませんでした');
       } else {
         // 1. ポイント追加
-        if (pointMatch) {
-          const amount = pointMatch[1];
+        if (amount) {
           if (DRY_RUN) {
             console.log(`[DRY RUN] ${candidate.userName}: ポイント追加(${amount}pt)をスキップ`);
             await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
@@ -915,8 +948,7 @@ async function checkSupport() {
         }
 
         // 2. レベル変更
-        if (levelMatch) {
-          const level = levelMatch[1];
+        if (level) {
           if (DRY_RUN) {
             console.log(`[DRY RUN] ${candidate.userName}: レベル変更(${level})をスキップ`);
             await sendLine(`【DRY RUN】レベル${level}への変更をスキップしました`);
@@ -934,7 +966,14 @@ async function checkSupport() {
         }
       }
 
-      // 3. 「開始」がなければ（スキップ含む）次の候補へ
+      // 3. 「手動対応」：LINEへ手動対応を通知して次の候補へ
+      if (manualMatch) {
+        console.log(`[MANUAL] ${candidate.userName}: 手動対応コマンド → 通知して次のユーザーへ`);
+        await notifyManual(candidate.userName, candidate.uid);
+        continue;
+      }
+
+      // 4. 「開始」がなければ（スキップ・ポイント/レベル操作のみ含む）通知なしで次の候補へ
       if (!startMatch) {
         console.log(`[SKIP] ${candidate.userName}: 開始コマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
         continue;
