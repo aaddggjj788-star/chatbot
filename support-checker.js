@@ -118,8 +118,9 @@ function waitForLineReply() {
 
 // ─── 処理コマンド解析 ─────────────────────────────────────────────
 // 「開始」「開始#補足」「手動対応」「スキップ」「ポイント〇pt追加」「レベル変更:〇」
-// および上記の組み合わせ（例:「ポイント100pt追加 レベル変更:12 開始」）に対応する。
-// 「開始」「手動対応」は末尾に来る組み合わせもあるためincludesで判定する。
+// 「メール確認」「決済確認」および上記の組み合わせ
+// （例:「メール確認 決済確認 開始」）に対応する。
+// 各コマンドは末尾に来る組み合わせもあるためincludesで判定する。
 function parseCommand(reply) {
   const text = reply || '';
   // 補足（開始#〜）は末尾まで自由入力のため、補足内の文言を他コマンドと
@@ -131,12 +132,88 @@ function parseCommand(reply) {
     start:      body.includes('開始'),
     supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
     manual:     body.includes('手動対応'),
+    mail:       body.includes('メール確認'),
+    bank:       body.includes('決済確認'),
   };
 }
 
 // 「手動対応」コマンド用の通知（返答生成は行わず、担当者へ対応を依頼する）
 async function notifyManual(userName, uid) {
   await sendLine(`【手動対応】${userName}（uid:${uid || '不明'}）の対応をお願いします`);
+}
+
+// ─── 「メール確認」コマンド ───────────────────────────────────────
+// 会員詳細ページからgetMailRows()で当日配信メールを取得し、一覧をLINEへ通知する
+async function notifyTodayMails(page, uid) {
+  if (!uid) {
+    await sendLine('【エラー】会員IDが取得できず、メール確認を実行できませんでした');
+    return;
+  }
+  let kyouseiPage = null;
+  try {
+    kyouseiPage = await openKyouseitaikai(page, uid);
+    const mailRows = await getMailRows(kyouseiPage, SUPPORT_CHECK_TEST_MODE);
+    console.log(`[MAIL-CHECK] uid=${uid}: 当日配信メール ${mailRows.length}件`);
+    if (mailRows.length === 0) {
+      await sendLine('【当日配信メール】\n当日配信されたお知らせメールはありませんでした');
+      return;
+    }
+    await sendLine([
+      '【当日配信メール】',
+      ...mailRows.map((row, i) => `メール${i + 1}: ${row.title || '（タイトルなし）'}`),
+    ].join('\n'));
+  } catch (e) {
+    console.log(`[MAIL-CHECK] uid=${uid}: メール確認に失敗: ${e.message}`);
+    await sendLine(`【エラー】メール確認に失敗しました: ${e.message}`);
+  } finally {
+    if (kyouseiPage) await kyouseiPage.close().catch(() => {});
+  }
+}
+
+// ─── 「決済確認」コマンド ───────────────────────────────────────
+// 会員詳細ページからgetBankHistory()で当日の決済履歴を取得し、LINEへ通知する
+// ※getBankHistory()は履歴表示前に所持ポイントを+1する（既存STEP10-14の仕様）ため
+//   DRY_RUN時は実行しない
+async function notifyBankHistory(page, uid) {
+  if (!uid) {
+    await sendLine('【エラー】会員IDが取得できず、決済確認を実行できませんでした');
+    return;
+  }
+  if (DRY_RUN) {
+    console.log(`[BANK-CHECK] uid=${uid}: 決済確認をスキップ`);
+    await sendLine('【DRY RUN】決済確認をスキップしました');
+    return;
+  }
+  let kyouseiPage = null;
+  let historyPage = null;
+  try {
+    kyouseiPage = await openKyouseitaikai(page, uid);
+    // getBankHistory()は「お知らせメール一覧から会員詳細へ戻る」前提で
+    // window.history.back()を実行するため、単独実行時に戻り先が無くならないよう
+    // 同じURLをもう一度開いて履歴を1つ積んでおく
+    await kyouseiPage.goto(kyouseiPage.url());
+    await kyouseiPage.waitForLoadState('networkidle');
+
+    const { bankRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+    historyPage = hp;
+    console.log(`[BANK-CHECK] uid=${uid}: 当日決済履歴 ${bankRows.length}件`);
+    if (bankRows.length === 0) {
+      await sendLine('【当日決済履歴】\n当日の決済履歴はありませんでした');
+      return;
+    }
+    const total = bankRows.reduce((sum, r) => sum + r.amount, 0);
+    await sendLine([
+      '【当日決済履歴】',
+      ...bankRows.map(r => `${r.time} | ${r.amount.toLocaleString('en-US')}円 | ${r.point}pt`),
+      `合計：${total.toLocaleString('en-US')}円`,
+    ].join('\n'));
+  } catch (e) {
+    console.log(`[BANK-CHECK] uid=${uid}: 決済確認に失敗: ${e.message}`);
+    await sendLine(`【エラー】決済確認に失敗しました: ${e.message}`);
+  } finally {
+    if (historyPage && historyPage !== kyouseiPage) await historyPage.close().catch(() => {});
+    if (kyouseiPage) await kyouseiPage.close().catch(() => {});
+  }
 }
 
 // ─── Playwright: ログイン（reply-checker.js と同じ処理）─────────────
@@ -726,7 +803,9 @@ async function checkSupport() {
           '「スキップ」：通知なしで次のユーザーへ',
           '「ポイント{数値}pt追加」：ポイント追加のみ',
           '「レベル変更:{数値}」：レベル変更のみ',
-          '（例）「ポイント100pt追加 レベル変更:12 開始」',
+          '「メール確認」：当日配信メールを通知',
+          '「決済確認」：当日決済履歴を通知',
+          '（例）「メール確認 決済確認 開始」',
         ].join('\n'));
 
         let cmdReply = null;
@@ -739,8 +818,12 @@ async function checkSupport() {
         console.log(`[LINE] 処理コマンド返信: ${cmdReply}`);
 
         // コマンド解析
-        const { point: amount, level, start: startMatch, supplement, manual: manualMatch } =
-          parseCommand(cmdReply);
+        const { point: amount, level, start: startMatch, supplement, manual: manualMatch,
+                mail: mailMatch, bank: bankMatch } = parseCommand(cmdReply);
+
+        // 0. メール確認・決済確認（照会のみ。他コマンドとの組み合わせにも対応）
+        if (mailMatch) await notifyTodayMails(page, candidate.uid);
+        if (bankMatch) await notifyBankHistory(page, candidate.uid);
 
         // 1&2. ポイント追加・レベル変更（会員IDが必要）
         if ((amount || level) && !candidate.uid) {
@@ -908,7 +991,9 @@ async function checkSupport() {
         '「スキップ」：通知なしで次のユーザーへ',
         '「ポイント{数値}pt追加」：ポイント追加のみ',
         '「レベル変更:{数値}」：レベル変更のみ',
-        '（例）「ポイント100pt追加 レベル変更:12 開始」',
+        '「メール確認」：当日配信メールを通知',
+        '「決済確認」：当日決済履歴を通知',
+        '（例）「メール確認 決済確認 開始」',
       ].join('\n'));
 
       let startReply = null;
@@ -921,8 +1006,12 @@ async function checkSupport() {
       console.log(`[LINE] 処理コマンド返信: ${startReply}`);
 
       // ─── コマンド解析 ───────────────────────────────────────────
-      const { point: amount, level, start: startMatch, supplement, manual: manualMatch } =
-        parseCommand(startReply);
+      const { point: amount, level, start: startMatch, supplement, manual: manualMatch,
+              mail: mailMatch, bank: bankMatch } = parseCommand(startReply);
+
+      // 0. メール確認・決済確認（照会のみ。他コマンドとの組み合わせにも対応）
+      if (mailMatch) await notifyTodayMails(page, candidate.uid);
+      if (bankMatch) await notifyBankHistory(page, candidate.uid);
 
       // 1&2. ポイント追加・レベル変更（会員IDが必要）
       if ((amount || level) && !candidate.uid) {
