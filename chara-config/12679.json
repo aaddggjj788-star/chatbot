@@ -73,13 +73,6 @@
     "yu2": {
       "minPhaseNumber": 2,
       "fileId": "12679yu2sinko",
-      "ho": {
-        "useHistorySearch": true,
-        "fallback": {
-          "searchTarget": "12679yu2/sinko/1",
-          "useCurrentRow": true
-        }
-      },
       "noresHo": {
         "searchTarget": "12679yu2/sinko/1",
         "useCurrentRow": true
