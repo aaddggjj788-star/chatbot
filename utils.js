@@ -69,6 +69,17 @@ async function setLoveLevel(page, uid, charaId, level) {
 }
 
 /**
+ * 現在の所持ポイントを取得する共通関数
+ * kyouseiPage: 会員詳細ページ（mg_kyoseitaikai.php）
+ */
+async function getCurrentPoint(kyouseiPage) {
+  return await kyouseiPage.evaluate(() => {
+    const el = document.querySelector('input[name="update[point]"]');
+    return el ? parseInt(el.value) : null;
+  });
+}
+
+/**
  * 現在のポイントレベルを取得する共通関数
  */
 async function getPointLevel(kyouseiPage) {
@@ -276,13 +287,15 @@ async function getMailRows(target, testMode = false) {
   return mailRows;
 }
 
-// ─── STEP10-14相当: 会員詳細ページに戻り、ポイント+1加算後、 ──────────
+// ─── STEP10-14相当: 会員詳細ページに戻り、 ────────────────────────
 // ポイント増減履歴から当日の銀行振込履歴を取得する
 // topPage: popupイベント検知用の最上位Page（Frameはwaitで使えないため必須）
 // target: クリック対象（Page または Frame。mg_mail_edit.phpから戻る操作もここで行う）
 // 戻り値: { bankRows, historyPage } historyPageはSTEP17の調整操作で使う
 //   （popupで開いた場合はtargetと異なるオブジェクトになるため呼び出し側で
 //   close/戻る操作を行い分ける必要がある）
+// ※以前は履歴表示前に所持ポイントを+1していたが、参照のみのはずの処理で
+//   会員のポイントが増えてしまうため削除した
 async function getBankHistory(topPage, target) {
   console.log(`[UTILS] kyouseiPage URL: ${target.url()}`);
 
@@ -290,13 +303,7 @@ async function getBankHistory(topPage, target) {
   await target.evaluate(() => window.history.back());
   await new Promise(r => setTimeout(r, 2000));
 
-  console.log(`[UTILS] adjustPoint前URL: ${target.url()}`);
-  console.log('[UTILS] 所持ポイントに1を加算');
-  await target.click('input[name="pointMark"][value="1"]');
-  await target.fill('input[name="pointOut"]', '1');
-  await target.click('input[name="user_henko"]');
-  await new Promise(r => setTimeout(r, 3000));
-
+  console.log(`[UTILS] ポイント増減履歴を開く前のURL: ${target.url()}`);
   console.log('[UTILS] 「ポイント増減履歴」を開く');
   const popupPromise = topPage.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
   await target.click('input[value="ポイント増減履歴"]');
@@ -389,6 +396,7 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
 }
 
 module.exports = {
-  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, setLoveLevel, checkAndApplyDiscount,
+  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, setLoveLevel,
+  checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
 };

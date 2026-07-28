@@ -51,7 +51,8 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const {
-  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, setLoveLevel, checkAndApplyDiscount,
+  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, setLoveLevel,
+  checkAndApplyDiscount,
   calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
 } = require('./utils');
 
@@ -161,12 +162,19 @@ function parseCommand(reply) {
 // 決済履歴を取得できなかった場合（0件・遷移失敗いずれも）の通知文
 const NO_BANK_HISTORY_MSG = '【決済履歴】当日の決済履歴はありません';
 
+// 会員情報（ポイント・決済履歴・キャンペーン）の取得対象とする問い合わせの判定
+// ポイント関連でない問い合わせでは取得せず、そのままコマンド待ちへ進む
+const MEMBER_INFO_KEYWORDS = ['ポイント', 'pt', 'PT', '購入', '決済', '入金', 'キャンペーン', '割引'];
+
+function needsMemberInfo(inquiryText) {
+  if (!inquiryText) return false;
+  return MEMBER_INFO_KEYWORDS.some(k => inquiryText.includes(k));
+}
+
 // ─── 会員情報（ポイント・レベル・当日購入履歴）を取得する ─────────────
 // 問い合わせ内容と併せてLINEへ通知するための情報をまとめて取得し、
 // 通知用の行配列を返す。取得できない項目があっても例外は投げず、
-// 取得できた範囲を返す
-// ※getBankHistory()は履歴表示前に所持ポイントを+1する（既存STEP10-14の仕様）ため
-//   現在のポイント数は+1前に読み取り、DRY_RUN時は購入履歴を取得しない
+// 取得できた範囲を返す（参照のみでポイントは変更しない）
 async function collectMemberInfo(page, uid) {
   const lines = ['【会員情報】'];
   if (!uid) {
@@ -184,23 +192,15 @@ async function collectMemberInfo(page, uid) {
       return lines;
     }
 
-    // 1. 現在のポイント数・ポイントレベル（getBankHistory()の+1前に読み取る）
-    const { point, level } = await kyouseiPage.evaluate(() => {
-      const pointInput = document.querySelector('input[name="update[point]"]');
+    // 1. 現在のポイント数・ポイントレベル
+    const point = await getCurrentPoint(kyouseiPage);
+    const level = await kyouseiPage.evaluate(() => {
       const lvSelect = document.querySelector('select[name="update[lv]"]');
-      return {
-        point: pointInput ? (pointInput.value || pointInput.getAttribute('value') || '') : null,
-        level: lvSelect ? lvSelect.selectedIndex : null,
-      };
+      return lvSelect ? lvSelect.selectedIndex : null;
     });
-    lines.push(`現在のポイント数：${point ? `${point}pt` : '不明'}`);
+    const hasPoint = point !== null && !Number.isNaN(point);
+    lines.push(`現在のポイント数：${hasPoint ? `${point}pt` : '不明'}`);
     lines.push(`ポイントレベル：${level === null ? '不明' : level}`);
-
-    if (DRY_RUN) {
-      console.log(`[MEMBER-INFO] uid=${uid}: DRY RUN のため当日購入履歴は取得しない`);
-      lines.push('当日購入履歴：未取得（DRY RUN）');
-      return lines;
-    }
 
     // 2. 当日配信メールからキャンペーン情報を取得（失敗時は補助0として続行）
     const campaigns = [];
@@ -235,6 +235,8 @@ async function collectMemberInfo(page, uid) {
 
     lines.push('当日購入履歴：有');
     lines.push(`当日購入総額：${totalAmount.toLocaleString('en-US')}円`);
+    // 決済前ポイント = 現在のポイント - 当日追加された実際のポイント合計
+    if (hasPoint) lines.push(`決済前ポイント：${point - actualPt}pt`);
     lines.push(`想定追加ポイント：${expectedPt}pt（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}）`);
     lines.push(`実際の追加ポイント：${actualPt}pt`);
     lines.push(`差異：${actualPt - expectedPt}pt`);
@@ -312,16 +314,10 @@ async function notifyTodayMails(page, uid) {
 
 // ─── 「決済確認」コマンド ───────────────────────────────────────
 // 会員詳細ページからgetBankHistory()で当日の決済履歴を取得し、LINEへ通知する
-// ※getBankHistory()は履歴表示前に所持ポイントを+1する（既存STEP10-14の仕様）ため
-//   DRY_RUN時は実行しない
+// （参照のみでポイントは変更しないためDRY_RUN時も実行する）
 async function notifyBankHistory(page, uid) {
   if (!uid) {
     await sendLine('【エラー】会員IDが取得できず、決済確認を実行できませんでした');
-    return;
-  }
-  if (DRY_RUN) {
-    console.log(`[BANK-CHECK] uid=${uid}: 決済確認をスキップ`);
-    await sendLine('【DRY RUN】決済確認をスキップしました');
     return;
   }
   let kyouseiPage = null;
@@ -655,8 +651,8 @@ async function parseCampaignWithClaude(bodyHtml) {
 // ─── STEP4.5: uidのキャンペーン・入金状況を確認し割引率/ポイント差異をチェック ──
 // support-checker.jsのSTEP4-6(お知らせメール取得)・STEP11-14(銀行振込履歴取得)・
 // STEP15(ポイント差異チェック)・checkAndApplyDiscountと同じ処理をuidベースで行う。
-// 実在ユーザーの所持ポイントを変更する処理を含むため、DRY_RUN=trueの間は
-// 銀行振込履歴取得（+1加算を含む）以降を一切実行しない
+// 割引率調整・ポイント差異調整で実在ユーザーの所持ポイント・レベルを変更する
+// ため、DRY_RUN=trueの間は銀行振込履歴取得以降を一切実行しない
 // 戻り値: { discountChanged, fromLevel, toLevel, pointAdjusted, pointAmount, pointSign }
 // （AI返答生成プロンプトに実施した対応を反映するために使う）
 async function checkCampaignAndPoints(page, contact) {
@@ -889,7 +885,13 @@ async function processContacts(page) {
       // ─── 問い合わせ内容を先にLINEへ表示し、処理コマンドを待つ ──────
       // 「メール確認」「決済確認」等の照会コマンドを受けた場合は次のユーザーへ
       // 進まず、結果を確認したうえで再度コマンドを入力できるようにする
-      const memberInfoLines = await collectMemberInfo(page, contact.uid);
+      // ポイント関連の問い合わせのみ会員情報（ポイント・決済履歴・キャンペーン）を取得
+      let memberInfoLines = [];
+      if (needsMemberInfo(content)) {
+        memberInfoLines = await collectMemberInfo(page, contact.uid);
+      } else {
+        console.log(`[MEMBER-INFO] uid=${contact.uid}: ポイント関連キーワードなし → 会員情報取得をスキップ`);
+      }
 
       let cmd = null;
       let timedOut = false;
@@ -904,8 +906,7 @@ async function processContacts(page) {
               '---',
               content,
               '---',
-              ...memberInfoLines,
-              '',
+              ...(memberInfoLines.length > 0 ? [...memberInfoLines, ''] : []),
               '処理コマンドを入力してください：',
               ...COMMAND_HELP_LINES,
             ].join('\n')
