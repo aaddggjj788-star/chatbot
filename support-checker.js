@@ -134,6 +134,7 @@ function parseCommand(reply) {
     manual:     body.includes('手動対応'),
     mail:       body.includes('メール確認'),
     bank:       body.includes('決済確認'),
+    skip:       body.includes('スキップ'),
     love:       (m => (m ? { charaId: m[1], value: m[2] } : null))(body.match(/絆変更:(\d+):(\d+)/)),
   };
 }
@@ -141,6 +142,121 @@ function parseCommand(reply) {
 // 「手動対応」コマンド用の通知（返答生成は行わず、担当者へ対応を依頼する）
 async function notifyManual(userName, uid) {
   await sendLine(`【手動対応】${userName}（uid:${uid || '不明'}）の対応をお願いします`);
+}
+
+// 決済履歴を取得できなかった場合（0件・遷移失敗いずれも）の通知文
+const NO_BANK_HISTORY_MSG = '【決済履歴】当日の決済履歴はありません';
+
+// 処理コマンド待ちでLINEに表示するコマンド一覧
+// startLabel: 「開始」の説明（ポイント関連の問い合わせか否かで文言が異なる）
+function commandHelpLines(startLabel) {
+  return [
+    `「開始」：${startLabel}`,
+    '「開始#補足」：補足を踏まえて実行',
+    '「手動対応」：手動対応を通知して次のユーザーへ',
+    '「スキップ」：通知なしで次のユーザーへ',
+    '「ポイント{数値}pt追加」：ポイント追加のみ',
+    '「レベル変更:{数値}」：レベル変更のみ',
+    '「メール確認」：当日配信メールを通知',
+    '「決済確認」：当日決済履歴を通知',
+    '「絆変更:{キャラID}:{value}」：絆レベル変更のみ',
+    '（例）「メール確認 決済確認 開始」',
+  ];
+}
+
+// ─── 1コマンド分の照会・更新系処理をまとめて実行する ─────────────────
+// 「開始」「手動対応」「スキップ」以外のコマンド（メール確認/決済確認/絆変更/
+// ポイント追加/レベル変更）を処理する
+async function runSubCommands(page, uid, cmd) {
+  if (cmd.mail) await notifyTodayMails(page, uid);
+  if (cmd.bank) await notifyBankHistory(page, uid);
+  if (cmd.love) await applyLoveLevel(page, uid, cmd.love.charaId, cmd.love.value);
+
+  if ((cmd.point || cmd.level) && !uid) {
+    console.log('[WARN] uid未取得のためポイント/レベル操作をスキップ');
+    await sendLine('【エラー】会員IDが取得できず、ポイント/レベル操作を実行できませんでした');
+    return;
+  }
+
+  if (cmd.point) {
+    const amount = cmd.point;
+    if (DRY_RUN) {
+      console.log(`[DRY RUN] uid=${uid}: ポイント追加(${amount}pt)をスキップ`);
+      await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
+    } else {
+      try {
+        const ptPage = await openKyouseitaikai(page, uid);
+        await adjustPoint(ptPage, amount, '+');
+        await ptPage.close().catch(() => {});
+        await sendLine(`【完了】${amount}ptを追加しました`);
+      } catch (e) {
+        console.log(`[POINT] uid=${uid}: ポイント追加に失敗: ${e.message}`);
+        await sendLine(`【エラー】ポイント追加に失敗しました: ${e.message}`);
+      }
+    }
+  }
+
+  if (cmd.level) {
+    const level = cmd.level;
+    if (DRY_RUN) {
+      console.log(`[DRY RUN] uid=${uid}: レベル変更(${level})をスキップ`);
+      await sendLine(`【DRY RUN】レベル${level}への変更をスキップしました`);
+    } else {
+      try {
+        const lvPage = await openKyouseitaikai(page, uid);
+        await setPointLevel(lvPage, level);
+        await lvPage.close().catch(() => {});
+        await sendLine(`【完了】レベルを${level}に変更しました`);
+      } catch (e) {
+        console.log(`[LEVEL] uid=${uid}: レベル変更に失敗: ${e.message}`);
+        await sendLine(`【エラー】レベル変更に失敗しました: ${e.message}`);
+      }
+    }
+  }
+}
+
+// ─── 処理コマンド待ちループ ───────────────────────────────────────
+// 問い合わせ内容を表示してコマンドを待ち、照会コマンド（メール確認/決済確認）
+// を受けた場合は結果を通知したうえで再度コマンド待ちに戻る。
+// 戻り値: 解析済みコマンド（タイムアウト・停止要求時は null）
+async function waitForCommand(page, candidate, headerLines, startLabel) {
+  const helpLines = commandHelpLines(startLabel);
+  let firstPrompt = true;
+
+  while (true) {
+    await sendLine(firstPrompt
+      ? [...headerLines, '処理コマンドを入力してください：', ...helpLines].join('\n')
+      : [
+          '【コマンド待ち】',
+          `ユーザー：${candidate.userName}`,
+          '続けて処理コマンドを入力してください：',
+          ...helpLines,
+        ].join('\n'));
+    firstPrompt = false;
+
+    let reply;
+    try {
+      reply = await waitForLineReply();
+    } catch (e) {
+      console.log(`[TIMEOUT] ${candidate.userName}: 処理コマンド待ち タイムアウト → スキップ`);
+      return null;
+    }
+    console.log(`[LINE] 処理コマンド返信: ${reply}`);
+
+    const parsed = parseCommand(reply);
+
+    // 照会・更新系コマンド（メール確認/決済確認/絆変更/ポイント/レベル）を実行
+    await runSubCommands(page, candidate.uid, parsed);
+
+    // 照会コマンドが含まれ、かつ「開始」「手動対応」「スキップ」の指示がなければ
+    // 結果を確認したうえで次のコマンドを入力できるようコマンド待ちに戻る
+    if ((parsed.mail || parsed.bank) && !parsed.start && !parsed.manual && !parsed.skip) {
+      console.log(`[CMD] ${candidate.userName}: 照会コマンドのみ → 再度コマンド待ちへ`);
+      continue;
+    }
+
+    return { ...parsed, reply };
+  }
 }
 
 // ─── 「絆変更:{キャラID}:{value}」コマンド ─────────────────────────
@@ -210,6 +326,14 @@ async function notifyBankHistory(page, uid) {
   let historyPage = null;
   try {
     kyouseiPage = await openKyouseitaikai(page, uid);
+    // about:blank等で会員詳細ページを開けなかった場合はエラーにせず
+    // 「履歴なし」として扱い、コマンド待ちに戻す
+    if (!kyouseiPage.url().includes('mg_kyoseitaikai')) {
+      console.log(`[BANK-CHECK] uid=${uid}: 会員詳細ページへ遷移できず（URL=${kyouseiPage.url()}）`);
+      await sendLine(NO_BANK_HISTORY_MSG);
+      return;
+    }
+
     // getBankHistory()は「お知らせメール一覧から会員詳細へ戻る」前提で
     // window.history.back()を実行するため、単独実行時に戻り先が無くならないよう
     // 同じURLをもう一度開いて履歴を1つ積んでおく
@@ -220,7 +344,7 @@ async function notifyBankHistory(page, uid) {
     historyPage = hp;
     console.log(`[BANK-CHECK] uid=${uid}: 当日決済履歴 ${bankRows.length}件`);
     if (bankRows.length === 0) {
-      await sendLine('【当日決済履歴】\n当日の決済履歴はありませんでした');
+      await sendLine(NO_BANK_HISTORY_MSG);
       return;
     }
     const total = bankRows.reduce((sum, r) => sum + r.amount, 0);
@@ -230,8 +354,10 @@ async function notifyBankHistory(page, uid) {
       `合計：${total.toLocaleString('en-US')}円`,
     ].join('\n'));
   } catch (e) {
-    console.log(`[BANK-CHECK] uid=${uid}: 決済確認に失敗: ${e.message}`);
-    await sendLine(`【エラー】決済確認に失敗しました: ${e.message}`);
+    // ページ遷移・要素待ちの失敗（about:blankのままback()した場合等）も
+    // エラー通知にせず「履歴なし」として扱う
+    console.log(`[BANK-CHECK] uid=${uid}: 決済履歴を取得できませんでした: ${e.message}`);
+    await sendLine(NO_BANK_HISTORY_MSG);
   } finally {
     if (historyPage && historyPage !== kyouseiPage) await historyPage.close().catch(() => {});
     if (kyouseiPage) await kyouseiPage.close().catch(() => {});
@@ -809,8 +935,9 @@ async function checkSupport() {
         console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせではない → 処理コマンドを待つ`);
 
         // ─── 問い合わせ内容を表示し、処理コマンドを待つ ─────────────
+        // 照会コマンド（メール確認/決済確認）実行後はコマンド待ちに戻る
         const latestDatetime = await getLatestUserDatetime(page);
-        await sendLine([
+        const cmd = await waitForCommand(page, candidate, [
           '【コンタクトメール受信】',
           `会員ID：${candidate.uid}`,
           `ユーザー：${candidate.userName}`,
@@ -818,77 +945,11 @@ async function checkSupport() {
           '---',
           latestMessage,
           '---',
-          '処理コマンドを入力してください：',
-          '「開始」：返答生成へ',
-          '「開始#補足」：補足を踏まえた返答生成へ',
-          '「手動対応」：手動対応を通知して次のユーザーへ',
-          '「スキップ」：通知なしで次のユーザーへ',
-          '「ポイント{数値}pt追加」：ポイント追加のみ',
-          '「レベル変更:{数値}」：レベル変更のみ',
-          '「メール確認」：当日配信メールを通知',
-          '「決済確認」：当日決済履歴を通知',
-          '「絆変更:{キャラID}:{value}」：絆レベル変更のみ',
-          '（例）「メール確認 決済確認 開始」',
-        ].join('\n'));
+        ], '返答生成へ');
+        if (!cmd) continue;
 
-        let cmdReply = null;
-        try {
-          cmdReply = await waitForLineReply();
-        } catch (e) {
-          console.log(`[TIMEOUT] ${candidate.userName}: 処理コマンド待ち タイムアウト → スキップ`);
-          continue;
-        }
-        console.log(`[LINE] 処理コマンド返信: ${cmdReply}`);
-
-        // コマンド解析
-        const { point: amount, level, start: startMatch, supplement, manual: manualMatch,
-                mail: mailMatch, bank: bankMatch, love: loveMatch } = parseCommand(cmdReply);
-
-        // 0. メール確認・決済確認（照会のみ。他コマンドとの組み合わせにも対応）
-        if (mailMatch) await notifyTodayMails(page, candidate.uid);
-        if (bankMatch) await notifyBankHistory(page, candidate.uid);
-
-        // 0-2. 絆レベル変更（確認なしで即時実行）
-        if (loveMatch) await applyLoveLevel(page, candidate.uid, loveMatch.charaId, loveMatch.value);
-
-        // 1&2. ポイント追加・レベル変更（会員IDが必要）
-        if ((amount || level) && !candidate.uid) {
-          console.log(`[WARN] ${candidate.userName}: uid未取得のためポイント/レベル操作をスキップ`);
-          await sendLine('【エラー】会員IDが取得できず、ポイント/レベル操作を実行できませんでした');
-        } else {
-          if (amount) {
-            if (DRY_RUN) {
-              console.log(`[DRY RUN] ${candidate.userName}: ポイント追加(${amount}pt)をスキップ`);
-              await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
-            } else {
-              try {
-                const ptPage = await openKyouseitaikai(page, candidate.uid);
-                await adjustPoint(ptPage, amount, '+');
-                await ptPage.close().catch(() => {});
-                await sendLine(`【完了】${amount}ptを追加しました`);
-              } catch (e) {
-                console.log(`[POINT] ${candidate.userName}: ポイント追加に失敗: ${e.message}`);
-                await sendLine(`【エラー】ポイント追加に失敗しました: ${e.message}`);
-              }
-            }
-          }
-          if (level) {
-            if (DRY_RUN) {
-              console.log(`[DRY RUN] ${candidate.userName}: レベル変更(${level})をスキップ`);
-              await sendLine(`【DRY RUN】レベル${level}への変更をスキップしました`);
-            } else {
-              try {
-                const lvPage = await openKyouseitaikai(page, candidate.uid);
-                await setPointLevel(lvPage, level);
-                await lvPage.close().catch(() => {});
-                await sendLine(`【完了】レベルを${level}に変更しました`);
-              } catch (e) {
-                console.log(`[LEVEL] ${candidate.userName}: レベル変更に失敗: ${e.message}`);
-                await sendLine(`【エラー】レベル変更に失敗しました: ${e.message}`);
-              }
-            }
-          }
-        }
+        const { start: startMatch, supplement, manual: manualMatch } = cmd;
+        const cmdReply = cmd.reply;
 
         // 3. 「手動対応」：LINEへ手動対応を通知して次のユーザーへ
         if (manualMatch) {
@@ -1001,8 +1062,9 @@ async function checkSupport() {
       console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせと判定`);
 
       // ─── 問い合わせ内容を表示し、処理コマンドを待つ ─────────────────
+      // 照会コマンド（メール確認/決済確認）実行後はコマンド待ちに戻る
       const latestDatetime = await getLatestUserDatetime(page);
-      await sendLine([
+      const cmd = await waitForCommand(page, candidate, [
         '【コンタクトメール受信】',
         `会員ID：${candidate.uid}`,
         `ユーザー：${candidate.userName}`,
@@ -1010,80 +1072,11 @@ async function checkSupport() {
         '---',
         latestMessage,
         '---',
-        '処理コマンドを入力してください：',
-        '「開始」：キャンペーン・ポイントチェックを実行',
-        '「開始#補足」：補足を踏まえて実行',
-        '「手動対応」：手動対応を通知して次のユーザーへ',
-        '「スキップ」：通知なしで次のユーザーへ',
-        '「ポイント{数値}pt追加」：ポイント追加のみ',
-        '「レベル変更:{数値}」：レベル変更のみ',
-        '「メール確認」：当日配信メールを通知',
-        '「決済確認」：当日決済履歴を通知',
-        '「絆変更:{キャラID}:{value}」：絆レベル変更のみ',
-        '（例）「メール確認 決済確認 開始」',
-      ].join('\n'));
+      ], 'キャンペーン・ポイントチェックを実行');
+      if (!cmd) continue;
 
-      let startReply = null;
-      try {
-        startReply = await waitForLineReply();
-      } catch (e) {
-        console.log(`[TIMEOUT] ${candidate.userName}: 処理コマンド待ち タイムアウト → スキップ`);
-        continue;
-      }
-      console.log(`[LINE] 処理コマンド返信: ${startReply}`);
-
-      // ─── コマンド解析 ───────────────────────────────────────────
-      const { point: amount, level, start: startMatch, supplement, manual: manualMatch,
-              mail: mailMatch, bank: bankMatch, love: loveMatch } = parseCommand(startReply);
-
-      // 0. メール確認・決済確認（照会のみ。他コマンドとの組み合わせにも対応）
-      if (mailMatch) await notifyTodayMails(page, candidate.uid);
-      if (bankMatch) await notifyBankHistory(page, candidate.uid);
-
-      // 0-2. 絆レベル変更（確認なしで即時実行）
-      if (loveMatch) await applyLoveLevel(page, candidate.uid, loveMatch.charaId, loveMatch.value);
-
-      // 1&2. ポイント追加・レベル変更（会員IDが必要）
-      if ((amount || level) && !candidate.uid) {
-        console.log(`[WARN] ${candidate.userName}: uid未取得のためポイント/レベル操作をスキップ`);
-        await sendLine('【エラー】会員IDが取得できず、ポイント/レベル操作を実行できませんでした');
-      } else {
-        // 1. ポイント追加
-        if (amount) {
-          if (DRY_RUN) {
-            console.log(`[DRY RUN] ${candidate.userName}: ポイント追加(${amount}pt)をスキップ`);
-            await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
-          } else {
-            try {
-              const ptPage = await openKyouseitaikai(page, candidate.uid);
-              await adjustPoint(ptPage, amount, '+');
-              await ptPage.close().catch(() => {});
-              await sendLine(`【完了】${amount}ptを追加しました`);
-            } catch (e) {
-              console.log(`[POINT] ${candidate.userName}: ポイント追加に失敗: ${e.message}`);
-              await sendLine(`【エラー】ポイント追加に失敗しました: ${e.message}`);
-            }
-          }
-        }
-
-        // 2. レベル変更
-        if (level) {
-          if (DRY_RUN) {
-            console.log(`[DRY RUN] ${candidate.userName}: レベル変更(${level})をスキップ`);
-            await sendLine(`【DRY RUN】レベル${level}への変更をスキップしました`);
-          } else {
-            try {
-              const lvPage = await openKyouseitaikai(page, candidate.uid);
-              await setPointLevel(lvPage, level);
-              await lvPage.close().catch(() => {});
-              await sendLine(`【完了】レベルを${level}に変更しました`);
-            } catch (e) {
-              console.log(`[LEVEL] ${candidate.userName}: レベル変更に失敗: ${e.message}`);
-              await sendLine(`【エラー】レベル変更に失敗しました: ${e.message}`);
-            }
-          }
-        }
-      }
+      const { start: startMatch, supplement, manual: manualMatch } = cmd;
+      const startReply = cmd.reply;
 
       // 3. 「手動対応」：LINEへ手動対応を通知して次の候補へ
       if (manualMatch) {
