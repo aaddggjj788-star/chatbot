@@ -14,8 +14,9 @@
  *   STEP3: background-color: #ffaaaa の行を未処理として取得
  *   STEP4: mg_mail_contact.php?u_mail=&uid={uid}（「スレッド確認」の
  *          実際の遷移先）を新しいページとして開き、
- *          スレッド内の最新メッセージを取得。取得した内容をまず
- *          「【コンタクトメール受信】」としてLINEに表示する
+ *          スレッド内の最新メッセージを取得。取得した内容と会員情報
+ *          （ポイント数・レベル・当日購入履歴）をまず
+ *          「【問い合わせ受信】」としてLINEに表示する
  *   STEP4.5: 問い合わせ内容にポイント関連キーワードが含まれる場合のみ、
  *          uidの本日配信メールからキャンペーンを解析し、
  *          1) 割引率調整（utils.jsのcheckAndApplyDiscount）
@@ -51,7 +52,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, setLoveLevel, checkAndApplyDiscount,
-  getMailRows, getBankHistory, checkPointDiff,
+  calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
 } = require('./utils');
 
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
@@ -159,6 +160,93 @@ function parseCommand(reply) {
 
 // 決済履歴を取得できなかった場合（0件・遷移失敗いずれも）の通知文
 const NO_BANK_HISTORY_MSG = '【決済履歴】当日の決済履歴はありません';
+
+// ─── 会員情報（ポイント・レベル・当日購入履歴）を取得する ─────────────
+// 問い合わせ内容と併せてLINEへ通知するための情報をまとめて取得し、
+// 通知用の行配列を返す。取得できない項目があっても例外は投げず、
+// 取得できた範囲を返す
+// ※getBankHistory()は履歴表示前に所持ポイントを+1する（既存STEP10-14の仕様）ため
+//   現在のポイント数は+1前に読み取り、DRY_RUN時は購入履歴を取得しない
+async function collectMemberInfo(page, uid) {
+  const lines = ['【会員情報】'];
+  if (!uid) {
+    lines.push('会員IDが取得できず、会員情報を取得できませんでした');
+    return lines;
+  }
+
+  let kyouseiPage = null;
+  let historyPage = null;
+  try {
+    kyouseiPage = await openKyouseitaikai(page, uid);
+    if (!kyouseiPage.url().includes('mg_kyoseitaikai')) {
+      console.log(`[MEMBER-INFO] uid=${uid}: 会員詳細ページへ遷移できず（URL=${kyouseiPage.url()}）`);
+      lines.push('会員詳細ページを開けず、会員情報を取得できませんでした');
+      return lines;
+    }
+
+    // 1. 現在のポイント数・ポイントレベル（getBankHistory()の+1前に読み取る）
+    const { point, level } = await kyouseiPage.evaluate(() => {
+      const pointInput = document.querySelector('input[name="update[point]"]');
+      const lvSelect = document.querySelector('select[name="update[lv]"]');
+      return {
+        point: pointInput ? (pointInput.value || pointInput.getAttribute('value') || '') : null,
+        level: lvSelect ? lvSelect.selectedIndex : null,
+      };
+    });
+    lines.push(`現在のポイント数：${point ? `${point}pt` : '不明'}`);
+    lines.push(`ポイントレベル：${level === null ? '不明' : level}`);
+
+    if (DRY_RUN) {
+      console.log(`[MEMBER-INFO] uid=${uid}: DRY RUN のため当日購入履歴は取得しない`);
+      lines.push('当日購入履歴：未取得（DRY RUN）');
+      return lines;
+    }
+
+    // 2. 当日配信メールからキャンペーン情報を取得（失敗時は補助0として続行）
+    const campaigns = [];
+    try {
+      const mailRows = await getMailRows(kyouseiPage);
+      for (const row of mailRows) {
+        campaigns.push(...await parseCampaignWithClaude(row.bodyHtml));
+      }
+      console.log(`[MEMBER-INFO] uid=${uid}: 当日配信メール${mailRows.length}件 キャンペーン${campaigns.length}件`);
+    } catch (e) {
+      console.log(`[MEMBER-INFO] uid=${uid}: キャンペーン情報の取得に失敗: ${e.message}`);
+    }
+
+    // 3. 当日購入履歴（getMailRows()でmg_mail_edit.phpへ遷移済みのため
+    //    getBankHistory()内のwindow.history.back()で会員詳細へ戻れる）
+    const { bankRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+    historyPage = hp;
+    console.log(`[MEMBER-INFO] uid=${uid}: 当日購入履歴 ${bankRows.length}件`);
+    if (bankRows.length === 0) {
+      lines.push('当日購入履歴：無');
+      return lines;
+    }
+
+    // 4. 想定ポイントと実際の付与ポイントを照合（checkPointDiff と同じ計算）
+    const totalAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
+    const normalPt = bankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
+    const servicePt = bankRows.reduce(
+      (sum, r) => sum + (r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0), 0);
+    const campaignBonus = calcExpectedPoints(totalAmount, campaigns).campaignBonus;
+    const expectedPt = normalPt + servicePt + campaignBonus;
+    const actualPt = bankRows.reduce((sum, r) => sum + r.point, 0);
+
+    lines.push('当日購入履歴：有');
+    lines.push(`当日購入総額：${totalAmount.toLocaleString('en-US')}円`);
+    lines.push(`想定追加ポイント：${expectedPt}pt（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}）`);
+    lines.push(`実際の追加ポイント：${actualPt}pt`);
+    lines.push(`差異：${actualPt - expectedPt}pt`);
+  } catch (e) {
+    console.log(`[MEMBER-INFO] uid=${uid}: 会員情報の取得に失敗: ${e.message}`);
+    lines.push('会員情報の取得に失敗しました');
+  } finally {
+    if (historyPage && historyPage !== kyouseiPage) await historyPage.close().catch(() => {});
+    if (kyouseiPage) await kyouseiPage.close().catch(() => {});
+  }
+  return lines;
+}
 
 // 処理コマンド待ちでLINEに表示するコマンド一覧
 const COMMAND_HELP_LINES = [
@@ -801,19 +889,23 @@ async function processContacts(page) {
       // ─── 問い合わせ内容を先にLINEへ表示し、処理コマンドを待つ ──────
       // 「メール確認」「決済確認」等の照会コマンドを受けた場合は次のユーザーへ
       // 進まず、結果を確認したうえで再度コマンドを入力できるようにする
+      const memberInfoLines = await collectMemberInfo(page, contact.uid);
+
       let cmd = null;
       let timedOut = false;
       let firstPrompt = true;
       while (true) {
         await sendLine(firstPrompt
           ? [
-              '【コンタクトメール受信】',
+              '【問い合わせ受信】',
               `会員ID：${contact.uid}`,
               `ユーザー：${contact.username}`,
               `受信日時：${contact.datetime}`,
               '---',
               content,
               '---',
+              ...memberInfoLines,
+              '',
               '処理コマンドを入力してください：',
               ...COMMAND_HELP_LINES,
             ].join('\n')
