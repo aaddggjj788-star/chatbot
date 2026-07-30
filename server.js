@@ -276,6 +276,142 @@ async function lineReply(replyToken, text) {
   }).catch(err => console.error('LINE返信エラー:', err.message));
 }
 
+// LINEへブロードキャスト送信する（replyTokenが使えない非同期処理の完了通知用）
+async function lineBroadcast(text) {
+  await fetch('https://api.line.me/v2/bot/message/broadcast', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messages: [{ type: 'text', text }],
+    }),
+  }).catch(err => console.error('LINE通知エラー:', err.message));
+}
+
+// ─── 「会員:{uid} {操作コマンド}」直接操作 ─────────────────────────
+// 例:「会員:1042287 ポイント750pt追加」
+//    「会員:1042287 レベル変更:10」
+//    「会員:1042287 ポイント750pt追加 レベル変更:10」
+// 各チェック処理（contact-checker等）を経由せず、会員IDを直接指定して
+// 会員詳細ページを開き、同じ書式の操作コマンドを実行する
+
+// contact-checker.js / support-checker.js の parseCommand と同じ書式で
+// 操作コマンドを解析する（照会系ではなく更新系のコマンドのみを対象とする）
+function parseMemberCommand(command) {
+  const body = command || '';
+  return {
+    point: body.match(/ポイント(\d+)pt追加/)?.[1] ?? null,
+    level: body.match(/レベル変更:(\d+)/)?.[1] ?? null,
+    love:  (m => (m ? { charaId: m[1], value: m[2] } : null))(body.match(/絆変更:(\d+):(\d+)/)),
+  };
+}
+
+// 管理画面へログインする（contact-checker.js の login と同じ手順）
+async function loginToSystem(page) {
+  const loginUrl = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
+  await page.goto(loginUrl, { waitUntil: 'networkidle' });
+
+  // セッション切れ対応
+  const sessionLink = page.locator('a[href*="s_system"]');
+  if (await sessionLink.count() > 0) {
+    await sessionLink.first().click();
+    await page.waitForLoadState('networkidle');
+  }
+
+  await page.fill('[name="id"]',   process.env.SYSTEM_LOGIN_ID);
+  await page.fill('[name="pass"]', process.env.SYSTEM_LOGIN_PASS);
+  await page.click('[name="login"]');
+  await page.waitForLoadState('networkidle');
+  console.log('[MEMBER-CMD] ログイン完了:', await page.title());
+}
+
+// 「会員:{uid} {操作コマンド}」を実行し、結果をLINEへ通知する
+async function runMemberCommand(uid, command) {
+  const DRY_RUN = process.env.DRY_RUN === 'true';
+  const cmd = parseMemberCommand(command);
+  console.log(`[MEMBER-CMD] uid=${uid} command="${command}" 解析結果=${JSON.stringify(cmd)}`);
+
+  if (!cmd.point && !cmd.level && !cmd.love) {
+    return lineBroadcast(
+      `【エラー】会員ID：${uid}\n実行できる操作コマンドがありません：${command}\n` +
+      '「ポイント{数値}pt追加」「レベル変更:{数値}」「絆変更:{キャラID}:{value}」が指定できます'
+    );
+  }
+
+  const { chromium } = require('playwright');
+  const { openKyouseitaikaiBySearch, adjustPoint, setPointLevel, setLoveLevel } = require('./utils');
+
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  const results = [];
+  try {
+    const page = await context.newPage();
+    await loginToSystem(page);
+
+    // 会員検索から会員詳細ページを開く
+    let kyouseiPage = await openKyouseitaikaiBySearch(page, uid);
+    // フォーム送信後はページが遷移するため、次の操作前に開き直す
+    let submitted = false;
+    const freshKyouseiPage = async () => {
+      if (submitted) {
+        await kyouseiPage.close().catch(() => {});
+        kyouseiPage = await openKyouseitaikaiBySearch(page, uid);
+        submitted = false;
+      }
+      return kyouseiPage;
+    };
+
+    if (cmd.point) {
+      if (DRY_RUN) {
+        results.push(`ポイント：+${cmd.point}pt（DRY RUNのため未実行）`);
+      } else {
+        await adjustPoint(await freshKyouseiPage(), cmd.point, '+');
+        submitted = true;
+        results.push(`ポイント：+${cmd.point}pt`);
+      }
+    }
+
+    if (cmd.level) {
+      if (DRY_RUN) {
+        results.push(`レベル：${cmd.level}へ変更（DRY RUNのため未実行）`);
+      } else {
+        await setPointLevel(await freshKyouseiPage(), cmd.level);
+        submitted = true;
+        results.push(`レベル：${cmd.level}へ変更`);
+      }
+    }
+
+    if (cmd.love) {
+      if (DRY_RUN) {
+        results.push(`絆レベル：キャラ${cmd.love.charaId} → value=${cmd.love.value}（DRY RUNのため未実行）`);
+      } else {
+        await setLoveLevel(page, uid, cmd.love.charaId, cmd.love.value);
+        results.push(`絆レベル：キャラ${cmd.love.charaId} → value=${cmd.love.value}`);
+      }
+    }
+
+    await kyouseiPage.close().catch(() => {});
+    await lineBroadcast([`【会員操作完了】会員ID：${uid}`, ...results].join('\n'));
+  } catch (err) {
+    console.error('[MEMBER-CMD] エラー:', err.message, err.stack);
+    await lineBroadcast([
+      `【エラー】会員ID：${uid} の操作に失敗しました`,
+      err.message,
+      ...(results.length > 0 ? ['（完了済み）', ...results] : []),
+    ].join('\n'));
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 async function handleEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return;
 
@@ -306,8 +442,10 @@ async function handleEvent(event) {
   // contact-checker.js/support-checker.js の処理コマンド
   // （開始 / 開始#補足 / 手動対応 / スキップ / ポイント〇pt追加 / レベル変更:〇 /
   //   メール確認 / 決済確認 / 絆変更:{キャラID}:{value} の組み合わせ）や
-  // contact-checker.js のSTEP6（返答内容の自由入力）にも対応するため、
-  // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」もそのままstate fileへ書き込まれる）
+  // contact-checker.js のSTEP6（返答内容の自由入力）、
+  // 「会員:{uid} {操作コマンド}」形式の直接操作コマンドにも対応するため、
+  // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」「会員:〜」も
+  // そのままstate fileへ書き込まれる）
   if (fs.existsSync(REPLY_STATE_FILE)) {
     try {
       const state = JSON.parse(fs.readFileSync(REPLY_STATE_FILE, 'utf8'));
@@ -316,6 +454,19 @@ async function handleEvent(event) {
         return;
       }
     } catch (_) {}
+  }
+
+  // ─── 「会員:{uid} {操作コマンド}」直接操作 ───────────────────────
+  // 処理には時間がかかりreplyTokenが失効するため、受付だけ即返信し、
+  // 実行結果はブロードキャストで通知する
+  const memberMatch = text.match(/^会員:(\d+)\s+(.+)$/);
+  if (memberMatch) {
+    const uid = memberMatch[1];
+    const command = memberMatch[2].trim();
+    console.log(`[LINE] 会員直接操作: uid=${uid} command="${command}"`);
+    runMemberCommand(uid, command)
+      .catch(err => console.error('[MEMBER-CMD] 実行エラー:', err.message));
+    return lineReply(replyToken, `【会員操作】会員ID：${uid}\nコマンド：${command}\n処理を開始しました`);
   }
 
   if (text === '返信チェック開始') {

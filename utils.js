@@ -20,6 +20,30 @@ async function openKyouseitaikai(page, uid) {
 }
 
 /**
+ * 会員検索画面から会員詳細ページを開く共通関数
+ * mg_kyoseitaikai_list.php でIDを検索し、検索結果のIDリンクをクリックして遷移する
+ * （mg_kyoseitaikai.php を直接URL指定で開けない場合に使用する）
+ */
+async function openKyouseitaikaiBySearch(page, uid) {
+  // 新しいページで検索画面を開く
+  const searchPage = await page.context().newPage();
+  await searchPage.goto('http://manager.x7j4l2p9m1.com/mg/mg_kyoseitaikai_list.php');
+  await searchPage.waitForLoadState('networkidle');
+
+  // IDを入力して検索
+  await searchPage.fill('textarea[name="ken_id"]', String(uid));
+  await searchPage.click('input[name="userSearch"]');
+  await searchPage.waitForLoadState('networkidle');
+
+  // 検索結果のIDリンクをクリック
+  await searchPage.click(`a[href*="ken_id=${uid}"]`);
+  await searchPage.waitForLoadState('networkidle');
+
+  console.log(`[UTILS] openKyouseitaikaiBySearch後のURL: ${searchPage.url()}`);
+  return searchPage;
+}
+
+/**
  * ポイントを追加/減算する共通関数
  * sign: '+' または '-'
  */
@@ -396,7 +420,8 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
 }
 
 module.exports = {
-  openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, setLoveLevel,
+  openKyouseitaikai, openKyouseitaikaiBySearch,
+  adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
 };
