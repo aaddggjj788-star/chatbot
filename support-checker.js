@@ -118,17 +118,19 @@ function waitForLineReply() {
 }
 
 // ─── 処理コマンド解析 ─────────────────────────────────────────────
-// 「開始」「開始#補足」「手動対応」「スキップ」「ポイント〇pt追加」「レベル変更:〇」
+// 「開始」「開始#補足」「手動対応」「スキップ」「〇pt追加」「〇pt減算」「レベル変更:〇」
 // 「メール確認」「決済確認」「絆変更:{キャラID}:{value}」および上記の組み合わせ
 // （例:「メール確認 決済確認 開始」）に対応する。
 // 各コマンドは末尾に来る組み合わせもあるためincludesで判定する。
+// ポイント操作は「ポイント」の接頭辞を省略でき、追加/減算のどちらも指定できる
+// （point: { amount, sign } / signは追加なら '+'、減算なら '-'）
 function parseCommand(reply) {
   const text = reply || '';
   // 補足（開始#〜）は末尾まで自由入力のため、補足内の文言を他コマンドと
   // 誤認しないよう、コマンド判定は補足を除いた部分に対して行う
   const body = text.replace(/開始#[\s\S]+/, '開始');
   return {
-    point:      body.match(/ポイント(\d+)pt追加/)?.[1] ?? null,
+    point:      (m => (m ? { amount: m[1], sign: m[2] === '減算' ? '-' : '+' } : null))(body.match(/(?:ポイント)?(\d+)pt(追加|減算)/)),
     level:      body.match(/レベル変更:(\d+)/)?.[1] ?? null,
     start:      body.includes('開始'),
     supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
@@ -244,7 +246,7 @@ function commandHelpLines(startLabel) {
     '「開始#補足」：補足を踏まえて実行',
     '「手動対応」：手動対応を通知して次のユーザーへ',
     '「スキップ」：通知なしで次のユーザーへ',
-    '「ポイント{数値}pt追加」：ポイント追加のみ',
+    '「{数値}pt追加」「{数値}pt減算」：ポイント増減のみ',
     '「レベル変更:{数値}」：レベル変更のみ',
     '「メール確認」：当日配信メールを通知',
     '「決済確認」：当日決済履歴を通知',
@@ -268,19 +270,20 @@ async function runSubCommands(page, uid, cmd) {
   }
 
   if (cmd.point) {
-    const amount = cmd.point;
+    const { amount, sign } = cmd.point;
+    const label = sign === '-' ? '減算' : '追加';
     if (DRY_RUN) {
-      console.log(`[DRY RUN] uid=${uid}: ポイント追加(${amount}pt)をスキップ`);
-      await sendLine(`【DRY RUN】${amount}ptの追加をスキップしました`);
+      console.log(`[DRY RUN] uid=${uid}: ポイント${label}(${amount}pt)をスキップ`);
+      await sendLine(`【DRY RUN】${amount}ptの${label}をスキップしました`);
     } else {
       try {
         const ptPage = await openKyouseitaikai(page, uid);
-        await adjustPoint(ptPage, amount, '+');
+        await adjustPoint(ptPage, amount, sign);
         await ptPage.close().catch(() => {});
-        await sendLine(`【完了】${amount}ptを追加しました`);
+        await sendLine(`【完了】${amount}ptを${label}しました`);
       } catch (e) {
-        console.log(`[POINT] uid=${uid}: ポイント追加に失敗: ${e.message}`);
-        await sendLine(`【エラー】ポイント追加に失敗しました: ${e.message}`);
+        console.log(`[POINT] uid=${uid}: ポイント${label}に失敗: ${e.message}`);
+        await sendLine(`【エラー】ポイント${label}に失敗しました: ${e.message}`);
       }
     }
   }

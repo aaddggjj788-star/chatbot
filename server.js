@@ -291,18 +291,21 @@ async function lineBroadcast(text) {
 }
 
 // ─── 「会員:{uid} {操作コマンド}」直接操作 ─────────────────────────
-// 例:「会員:1042287 ポイント750pt追加」
+// 例:「会員:1042287 750pt追加」（「ポイント750pt追加」も可）
+//    「会員:1042287 750pt減算」
 //    「会員:1042287 レベル変更:10」
-//    「会員:1042287 ポイント750pt追加 レベル変更:10」
+//    「会員:1042287 750pt追加 レベル変更:10」
 // 各チェック処理（contact-checker等）を経由せず、会員IDを直接指定して
 // 会員詳細ページを開き、同じ書式の操作コマンドを実行する
 
 // contact-checker.js / support-checker.js の parseCommand と同じ書式で
 // 操作コマンドを解析する（照会系ではなく更新系のコマンドのみを対象とする）
+// ポイント操作は「ポイント」の接頭辞を省略でき、追加/減算のどちらも指定できる
+// （point: { amount, sign } / signは追加なら '+'、減算なら '-'）
 function parseMemberCommand(command) {
   const body = command || '';
   return {
-    point: body.match(/ポイント(\d+)pt追加/)?.[1] ?? null,
+    point: (m => (m ? { amount: m[1], sign: m[2] === '減算' ? '-' : '+' } : null))(body.match(/(?:ポイント)?(\d+)pt(追加|減算)/)),
     level: body.match(/レベル変更:(\d+)/)?.[1] ?? null,
     love:  (m => (m ? { charaId: m[1], value: m[2] } : null))(body.match(/絆変更:(\d+):(\d+)/)),
   };
@@ -336,7 +339,7 @@ async function runMemberCommand(uid, command) {
   if (!cmd.point && !cmd.level && !cmd.love) {
     return lineBroadcast(
       `【エラー】会員ID：${uid}\n実行できる操作コマンドがありません：${command}\n` +
-      '「ポイント{数値}pt追加」「レベル変更:{数値}」「絆変更:{キャラID}:{value}」が指定できます'
+      '「{数値}pt追加」「{数値}pt減算」「レベル変更:{数値}」「絆変更:{キャラID}:{value}」が指定できます'
     );
   }
 
@@ -370,12 +373,13 @@ async function runMemberCommand(uid, command) {
     };
 
     if (cmd.point) {
+      const { amount, sign } = cmd.point;
       if (DRY_RUN) {
-        results.push(`ポイント：+${cmd.point}pt（DRY RUNのため未実行）`);
+        results.push(`ポイント：${sign}${amount}pt（DRY RUNのため未実行）`);
       } else {
-        await adjustPoint(await freshKyouseiPage(), cmd.point, '+');
+        await adjustPoint(await freshKyouseiPage(), amount, sign);
         submitted = true;
-        results.push(`ポイント：+${cmd.point}pt`);
+        results.push(`ポイント：${sign}${amount}pt`);
       }
     }
 
@@ -440,8 +444,9 @@ async function handleEvent(event) {
   // 受信テキストをそのままstate fileに書き込んで終了する。
   // 固定コマンド（開始/開始#〜/送信/手動対応/スキップ/調整する/変更する/差し込み#〜/差し替え#〜）に加え、
   // contact-checker.js/support-checker.js の処理コマンド
-  // （開始 / 開始#補足 / 手動対応 / スキップ / ポイント〇pt追加 / レベル変更:〇 /
-  //   メール確認 / 決済確認 / 絆変更:{キャラID}:{value} の組み合わせ）や
+  // （開始 / 開始#補足 / 手動対応 / スキップ / レベル変更:〇 /
+  //   メール確認 / 決済確認 / {数値}pt追加 / {数値}pt減算 /
+  //   絆変更:{キャラID}:{value} の組み合わせ）や
   // contact-checker.js のSTEP6（返答内容の自由入力）、
   // 「会員:{uid} {操作コマンド}」形式の直接操作コマンドにも対応するため、
   // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」「会員:〜」も
