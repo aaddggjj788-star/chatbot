@@ -38,10 +38,31 @@ const CHARA_CONFIG_DIR = path.join(__dirname, 'chara-config');
 const DRY_RUN = process.env.DRY_RUN === 'true';
 
 const STATE_FILE = '/tmp/rune-reply-state.json';
+// 返信対象外（SKIP）となったユーザーの記録先
+// server.js の「返信対象外チェック」コマンドから読み出してLINEへ通知する
+const SKIPPED_FILE = '/tmp/rune-skipped.json';
 const POLL_INTERVAL_MS = 2000;
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 let _shouldStop = false;
+
+// 今回の返信チェックで対象外となったユーザー
+// [{ userName, uid, reason }]
+let skippedUsers = [];
+
+// skippedUsers を /tmp/rune-skipped.json へ書き出す
+// （書き込みに失敗しても返信チェック自体は継続させる）
+function saveSkippedUsers() {
+  try {
+    fs.writeFileSync(SKIPPED_FILE, JSON.stringify({
+      checkedAt: new Date().toISOString(),
+      skipped: skippedUsers,
+    }, null, 2));
+    console.log(`[SKIPPED] ${skippedUsers.length}件を ${SKIPPED_FILE} に保存しました`);
+  } catch (e) {
+    console.error(`[SKIPPED] 保存に失敗: ${e.message}`);
+  }
+}
 
 // ─── LINE 送信 ────────────────────────────────────────────────────
 
@@ -1290,6 +1311,9 @@ async function searchSinkoFromRirekiHistory(page, charaId) {
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
 async function processUsers(page) {
+  // 今回の実行分だけを記録するため、開始時にリセットする
+  skippedUsers = [];
+
   // page = mg_ope.php（親フレームページ）
   // ope_menuフレームから対象ユーザーを取得
   const targets = await getTargetUsers(page);
@@ -1306,9 +1330,13 @@ async function processUsers(page) {
       break;
     }
 
+    // 返信対象外となった理由を記録する（ログ出力は各判定箇所の[SKIP]をそのまま使う）
+    const recordSkip = (reason) => skippedUsers.push({ userName, uid, reason });
+
     // ─── キャラ別停止時間チェック ──────────────────────────────────
     if (process.env.DISABLE_STOP_TIME !== 'true' && isInStopTime(kid)) {
       console.log(`[SKIP] ${userName}: 停止時間帯のためスキップ (k_id=${kid})`);
+      recordSkip(`停止時間帯のためスキップ (k_id=${kid})`);
       continue;
     }
 
@@ -1368,6 +1396,7 @@ async function processUsers(page) {
     const analysis = await analyzeMessages(page);
     if (!analysis.target) {
       console.log(`[SKIP] ${userName}: ${analysis.reason}`);
+      recordSkip(analysis.reason);
       continue;
     }
 
@@ -1377,6 +1406,7 @@ async function processUsers(page) {
       const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
       if (elapsedMin < 20) {
         console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 20分未満のためスキップ`);
+        recordSkip(`受信から${elapsedMin.toFixed(1)}分（20分未満）のためスキップ`);
         continue;
       }
       console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 処理続行`);
@@ -1418,10 +1448,12 @@ async function processUsers(page) {
         console.log(`[SPAN-CHECK] ${userName}: spanMatchRange一致 (${_spanRangeMatch.from}〜${_spanRangeMatch.to}, minOffset=${minOffset})`);
         if (spanCount < userMsgCount - minOffset) {
           console.log(`[SKIP] ${userName}: span個数(${spanCount}) < ユーザーメッセージ通数(${userMsgCount})-${minOffset}`);
+          recordSkip(`span個数(${spanCount}) < ユーザーメッセージ通数(${userMsgCount})-${minOffset}`);
           continue;
         }
       } else if (userMsgCount < spanCount) {
         console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount})`);
+        recordSkip(`ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount})`);
         continue;
       }
     }
@@ -1476,6 +1508,7 @@ async function processUsers(page) {
       const hasBothMtmAndHis = allComments.some(c => /\/mtm\b/.test(c) && /\/his/.test(c));
       if (!hasBothMtmAndHis) {
         console.log(`[SKIP] ${userName}: /mtm コメントあり（/his なし）`);
+        recordSkip('/mtm コメントあり（/his なし）');
         continue;
       }
       console.log(`[INFO] ${userName}: /mtm と /his が共存 → スキップしない`);
@@ -1488,6 +1521,7 @@ async function processUsers(page) {
     // /sinko も /his も /ho も subAction も含まれない → スキップ
     if (!hasSubAction && !hasHo && !allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
       console.log(`[SKIP] ${userName}: /sinko・/his・/ho・subActionコメントなし`);
+      recordSkip('/sinko・/his・/ho・subActionコメントなし');
       continue;
     }
 
@@ -1539,6 +1573,7 @@ async function processUsers(page) {
             break;
           }
           console.log(`[SKIP] ${userName}: subAction actionCfgなし (${parsed.actionKey})`);
+          recordSkip(`subAction actionCfgなし (${parsed.actionKey})`);
           skipUser = true;
           break;
         }
@@ -1557,6 +1592,7 @@ async function processUsers(page) {
           console.log(`[JSON] requiredMessages: ${matchCount}/${required} マッチ (${parsed.actionKey})`);
           if (matchCount < required) {
             console.log(`[SKIP] ${userName}: requiredMessages 未達 (${matchCount}/${required})`);
+            recordSkip(`requiredMessages 未達 (${matchCount}/${required})`);
             skipUser = true;
             break;
           }
@@ -1612,6 +1648,7 @@ async function processUsers(page) {
 
           if (historySinkoComments.length === 0) {
             console.log(`[SKIP] ${userName}: subAction useHistorySearch・履歴にsinko/hisコメントなし (${parsed.actionKey})`);
+            recordSkip(`subAction useHistorySearch・履歴にsinko/hisコメントなし (${parsed.actionKey})`);
             skipUser = true;
           } else {
             const histSinkoNums = historySinkoComments
@@ -1637,7 +1674,10 @@ async function processUsers(page) {
       }
 
       if (skipUser || !replyData) {
-        if (!skipUser) console.log(`[SKIP] ${userName}: subAction replyData取得失敗`);
+        if (!skipUser) {
+          console.log(`[SKIP] ${userName}: subAction replyData取得失敗`);
+          recordSkip('subAction replyData取得失敗');
+        }
         continue;
       }
     } else if (hasHo) {
@@ -1796,6 +1836,7 @@ async function processUsers(page) {
           }
           if (!currentRowData) {
             console.log(`[SKIP] ${userName}: ho useCurrentRow 対象行が見つかりません`);
+            recordSkip('ho useCurrentRow 対象行が見つかりません');
             continue;
           }
 
@@ -1810,6 +1851,7 @@ async function processUsers(page) {
             });
             if (historySinkoComments.length === 0) {
               console.log(`[SKIP] ${userName}: ho workflowMarker・履歴にsinko/hisコメントなし`);
+              recordSkip('ho workflowMarker・履歴にsinko/hisコメントなし');
               continue;
             }
             const histSinkoNums = historySinkoComments
@@ -1826,6 +1868,7 @@ async function processUsers(page) {
             }
             if (!historyNextData) {
               console.log(`[SKIP] ${userName}: ho workflowMarker・履歴次行が取得できません`);
+              recordSkip('ho workflowMarker・履歴次行が取得できません');
               continue;
             }
 
@@ -1861,6 +1904,7 @@ async function processUsers(page) {
       if (!replyData) {
         if (!charaId) {
           console.log(`[SKIP] ${userName}: /hoあり・charaIdを特定できません`);
+          recordSkip('/hoあり・charaIdを特定できません');
           continue;
         }
 
@@ -2269,6 +2313,7 @@ async function processUsers(page) {
       reply = await waitForLineReply();
     } catch (e) {
       console.log(`[TIMEOUT] ${userName}: 5分タイムアウト → スキップ`);
+      recordSkip('LINE確認の5分タイムアウト');
       continue;
     }
 
@@ -2325,6 +2370,7 @@ async function processUsers(page) {
         sashikomiReply = await waitForLineReply();
       } catch (e) {
         console.log(`[TIMEOUT] ${userName}: 差し込み確認 5分タイムアウト → スキップ`);
+        recordSkip('差し込み確認の5分タイムアウト');
         continue;
       }
       console.log(`[LINE] 差し込み確認返信: ${sashikomiReply}`);
@@ -2333,6 +2379,7 @@ async function processUsers(page) {
         await sendReplyText(splicedText);
       } else {
         console.log(`[SKIP] ${userName} 差し込みをスキップ`);
+        recordSkip('差し込み確認でスキップを選択');
       }
     } else if (isSashikae) {
       // #以降のテキストを新しい返信文として丸ごと差し替える
@@ -2355,6 +2402,7 @@ async function processUsers(page) {
         sashikaeReply = await waitForLineReply();
       } catch (e) {
         console.log(`[TIMEOUT] ${userName}: 差し替え確認 5分タイムアウト → スキップ`);
+        recordSkip('差し替え確認の5分タイムアウト');
         continue;
       }
       console.log(`[LINE] 差し替え確認返信: ${sashikaeReply}`);
@@ -2363,9 +2411,11 @@ async function processUsers(page) {
         await sendReplyText(replacedFullText);
       } else {
         console.log(`[SKIP] ${userName} 差し替えをスキップ`);
+        recordSkip('差し替え確認でスキップを選択');
       }
     } else {
       console.log(`[SKIP] ${userName} スキップ`);
+      recordSkip('LINEでスキップを選択');
     }
   }
 }
@@ -2403,6 +2453,8 @@ async function checkReplies() {
     await sendLine(`【システムエラー】reply-checker: ${err.message}`);
   } finally {
     clearState();
+    // 中断・エラー時もそこまでの対象外ユーザーを残す
+    saveSkippedUsers();
     await browser.close();
   }
 }

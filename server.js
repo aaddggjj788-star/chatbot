@@ -5,6 +5,8 @@ const fs = require('fs');
 
 // reply-checker.js との連携用（LINEから「送信」「スキップ」を受け取りポーリング通知）
 const REPLY_STATE_FILE = '/tmp/rune-reply-state.json';
+// reply-checker.js が返信対象外（SKIP）ユーザーを書き出すファイル
+const SKIPPED_FILE = '/tmp/rune-skipped.json';
 
 // mail-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let startMailCheck = () => console.warn('mail-checker 未ロード');
@@ -290,6 +292,47 @@ async function lineBroadcast(text) {
   }).catch(err => console.error('LINE通知エラー:', err.message));
 }
 
+// ─── 「返信対象外チェック」コマンド ───────────────────────────────
+// reply-checker.js が /tmp/rune-skipped.json に書き出した
+// 返信対象外（SKIP）ユーザーの一覧を読み込んで通知文を組み立てる
+function buildSkippedUsersMessage() {
+  let data;
+  try {
+    if (!fs.existsSync(SKIPPED_FILE)) {
+      return '【返信対象外一覧】\n対象外ユーザーはいませんでした';
+    }
+    data = JSON.parse(fs.readFileSync(SKIPPED_FILE, 'utf8'));
+  } catch (e) {
+    console.error('[SKIPPED] 読み込みエラー:', e.message);
+    return `【返信対象外一覧】\n読み込みに失敗しました：${e.message}`;
+  }
+
+  const skipped = Array.isArray(data?.skipped) ? data.skipped : [];
+  if (skipped.length === 0) {
+    return '【返信対象外一覧】\n対象外ユーザーはいませんでした';
+  }
+
+  const lines = skipped.map(u => `・${u.userName}（u_id: ${u.uid || '不明'}）\n  理由：${u.reason}`);
+
+  // LINEの1メッセージ上限（5000文字）を超えると送信できないため、
+  // 超える場合は件数を打ち切って残件数を末尾に付ける
+  const MAX_LEN = 4800;
+  const shown = [];
+  let len = '【返信対象外一覧】'.length;
+  for (const line of lines) {
+    if (len + line.length + 1 > MAX_LEN) break;
+    shown.push(line);
+    len += line.length + 1;
+  }
+  const rest = lines.length - shown.length;
+
+  return [
+    '【返信対象外一覧】',
+    ...shown,
+    ...(rest > 0 ? [`（ほか${rest}件は文字数上限のため省略）`] : []),
+  ].join('\n');
+}
+
 // ─── 「会員:{uid} {操作コマンド}」直接操作 ─────────────────────────
 // 例:「会員:1042287 750pt追加」（「ポイント750pt追加」も可）
 //    「会員:1042287 750pt減算」
@@ -448,9 +491,10 @@ async function handleEvent(event) {
   //   メール確認 / 決済確認 / {数値}pt追加 / {数値}pt減算 /
   //   絆変更:{キャラID}:{value} の組み合わせ）や
   // contact-checker.js のSTEP6（返答内容の自由入力）、
-  // 「会員:{uid} {操作コマンド}」形式の直接操作コマンドにも対応するため、
-  // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」「会員:〜」も
-  // そのままstate fileへ書き込まれる）
+  // 「会員:{uid} {操作コマンド}」形式の直接操作コマンド、
+  // 「返信対象外チェック」にも対応するため、
+  // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」「会員:〜」
+  // 「返信対象外チェック」もそのままstate fileへ書き込まれる）
   if (fs.existsSync(REPLY_STATE_FILE)) {
     try {
       const state = JSON.parse(fs.readFileSync(REPLY_STATE_FILE, 'utf8'));
@@ -459,6 +503,12 @@ async function handleEvent(event) {
         return;
       }
     } catch (_) {}
+  }
+
+  // ─── 「返信対象外チェック」───────────────────────────────────
+  // 直近の返信チェックでSKIPになったユーザーと理由を一覧通知する
+  if (text === '返信対象外チェック') {
+    return lineReply(replyToken, buildSkippedUsersMessage());
   }
 
   // ─── 「会員:{uid} {操作コマンド}」直接操作 ───────────────────────
