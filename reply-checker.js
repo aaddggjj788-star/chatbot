@@ -1495,6 +1495,9 @@ async function processUsers(page) {
     let replyData;
     let latestComment = null;
     let alwaysQuoteUser = true;
+    // 履歴にsinko/hisコメントが見つからず sinko/1 から開始したかどうか
+    // （LINE確認通知の「対象コメントアウト」行に注記を付けるために保持する）
+    let historyNotFound = false;
 
     if (hasSubAction) {
       // ─── subAction処理（requiredMessages判定 + searchTarget）──────
@@ -1908,6 +1911,7 @@ async function processUsers(page) {
           }
         } else {
           console.log(`[COMMENT] ${userName}: /ho 根底ルール 履歴になし → ${resolvedCharaId}/sinko/1 を送信`);
+          historyNotFound = true;
           try {
             replyData = getReplyFromCSVByTarget(resolvedCharaId, `${resolvedCharaId}/sinko/1`, true);
           } catch (e) {
@@ -2093,6 +2097,7 @@ async function processUsers(page) {
             }
           } else {
             console.log(`[COMMENT] ${userName}: sinko useHistorySearch 履歴になし → ${resolvedCharaId}/sinko/1 を送信`);
+            historyNotFound = true;
             try {
               replyData = getReplyFromCSVByTarget(resolvedCharaId, `${resolvedCharaId}/sinko/1`, true);
             } catch (e) {
@@ -2180,11 +2185,21 @@ async function processUsers(page) {
     const userMsgLabel = analysis.latestUserTime
       ? `ユーザーメッセージ（${analysis.latestUserTime}受信）：`
       : 'ユーザーメッセージ：';
+    // ─── コメントアウト表示行 ────────────────────────────────────
+    // 最新コメントアウト：最新の鑑定士メッセージに含まれるコメントアウト
+    // 対象コメントアウト：今回の返信取得に使用したコメントアウト
+    //   履歴にsinko/hisが見つからずsinko/1から開始した場合は末尾に注記を付ける
+    const latestKanteishiLine =
+      `最新コメントアウト：${(analysis.kanteishiComments || []).join('、') || '（なし）'}`;
+    const targetCommentLine = latestComment
+      ? `対象コメントアウト：${latestComment}${historyNotFound ? '（※履歴なし→sinko/1から開始）' : ''}`
+      : '対象コメントアウト：（なし）';
     const lineMsg = analysis.hasLongMessage
       ? [
           '【長文メッセージあり】',
           `ユーザー：${userName}（u_id: ${uid}）`,
-          `対象コメントアウト：${latestComment || '（不明）'}`,
+          latestKanteishiLine,
+          targetCommentLine,
           '',
           userMsgLabel,
           '---',
@@ -2202,7 +2217,8 @@ async function processUsers(page) {
       ? [
           '【念言未検出】',
           `ユーザー：${userName}（u_id: ${uid}）`,
-          `対象コメントアウト：${latestComment || '（不明）'}`,
+          latestKanteishiLine,
+          targetCommentLine,
           `念言：${(analysis.nengenWords || []).join('、')}`,
           '',
           userMsgLabel,
@@ -2222,7 +2238,8 @@ async function processUsers(page) {
       : [
           '【返信確認】',
           `ユーザー：${userName}（u_id: ${uid}）`,
-          `対象コメントアウト：${latestComment || '（不明）'}`,
+          latestKanteishiLine,
+          targetCommentLine,
           ...(alwaysQuoteUser ? [
             userMsgLabel,
             '---',
