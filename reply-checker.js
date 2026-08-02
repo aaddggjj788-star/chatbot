@@ -2115,21 +2115,33 @@ async function processUsers(page) {
           // resolveCsvPath で直近の既存sinkoファイルを解決し、履歴からsinko検索→sinko+1を取得する。
           // （actionCfgにuseHistorySearchが無い場合は本分岐に入らず従来処理を継続するため、
           //   他のphase・キャラIDには影響しない）
-          const { resolvedCharaId } = resolveCsvPath(charaId);
-          console.log(`[JSON] sinko useHistorySearch: charaId=${charaId} → resolvedCharaId=${resolvedCharaId}`);
+          //
+          // historyCharaId が指定されている場合は、現在のcharaIdではなく
+          // そのcharaId（例: "12673yu3"）で履歴を検索し、
+          // resolveCsvPath(historyCharaId) で解決したCSVからsinko+1を取得する。
+          // 履歴に見つからない場合は fallbackSearch のコメントアウト行
+          // （その行自身）を送信する。
+          const historyCharaId = actionCfg.historyCharaId || null;
+          const { resolvedCharaId } = resolveCsvPath(historyCharaId || charaId);
+          // 履歴検索に使うcharaId（historyCharaId指定時はそのIDで検索する）
+          const searchCharaId = historyCharaId || resolvedCharaId;
+          if (historyCharaId) {
+            console.log(`[JSON] sinko useHistorySearch: historyCharaId="${historyCharaId}" で履歴検索`);
+          }
+          console.log(`[JSON] sinko useHistorySearch: charaId=${charaId} → searchCharaId=${searchCharaId} resolvedCharaId=${resolvedCharaId}`);
 
           const historyComments = analysis.allKanteishiComments || [];
           let historySinkoComments = historyComments.filter(c => {
-            if (!c.startsWith(resolvedCharaId + '/')) return false;
+            if (!c.startsWith(searchCharaId + '/')) return false;
             return /(?:sinko|his\w*)\/?(\d+)/.test(c);
           });
-          console.log(`[DEBUG] resolvedCharaId=${resolvedCharaId} のsinko/hisコメント件数(表示中履歴): ${historySinkoComments.length}`);
+          console.log(`[DEBUG] searchCharaId=${searchCharaId} のsinko/hisコメント件数(表示中履歴): ${historySinkoComments.length}`);
 
           if (historySinkoComments.length === 0) {
-            console.log(`[JSON] sinko useHistorySearch: 表示中の履歴に${resolvedCharaId}のsinko/hisコメントなし → mg_k_rireki.php で再検索`);
+            console.log(`[JSON] sinko useHistorySearch: 表示中の履歴に${searchCharaId}のsinko/hisコメントなし → mg_k_rireki.php で再検索`);
             let rirekiResult = null;
             try {
-              rirekiResult = await searchSinkoFromRirekiHistory(page, resolvedCharaId);
+              rirekiResult = await searchSinkoFromRirekiHistory(page, searchCharaId);
             } catch (e) {
               console.error(`[ERROR] sinko useHistorySearch 履歴再検索失敗 (${userName}): ${e.message}`);
             }
@@ -2153,12 +2165,14 @@ async function processUsers(page) {
               continue;
             }
           } else {
-            console.log(`[COMMENT] ${userName}: sinko useHistorySearch 履歴になし → ${resolvedCharaId}/sinko/1 を送信`);
+            // fallbackSearch 未指定時は従来どおり {resolvedCharaId}/sinko/1 を送信する
+            const fallbackTarget = actionCfg.fallbackSearch || `${resolvedCharaId}/sinko/1`;
+            console.log(`[COMMENT] ${userName}: sinko useHistorySearch 履歴になし → ${fallbackTarget} を送信`);
             historyNotFound = true;
             try {
-              replyData = getReplyFromCSVByTarget(resolvedCharaId, `${resolvedCharaId}/sinko/1`, true);
+              replyData = getReplyFromCSVByTarget(resolvedCharaId, fallbackTarget, true);
             } catch (e) {
-              console.error(`[ERROR] sinko useHistorySearch sinko/1取得失敗 (${userName}): ${e.message}`);
+              console.error(`[ERROR] sinko useHistorySearch フォールバック取得失敗 (${userName}): ${e.message}`);
               continue;
             }
           }
