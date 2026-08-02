@@ -38,9 +38,6 @@ const CHARA_CONFIG_DIR = path.join(__dirname, 'chara-config');
 const DRY_RUN = process.env.DRY_RUN === 'true';
 
 const STATE_FILE = '/tmp/rune-reply-state.json';
-// 返信対象外（SKIP）となったユーザーの記録先
-// server.js の「返信対象外チェック」コマンドから読み出してLINEへ通知する
-const SKIPPED_FILE = '/tmp/rune-skipped.json';
 const POLL_INTERVAL_MS = 2000;
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
@@ -50,18 +47,34 @@ let _shouldStop = false;
 // [{ userName, uid, reason }]
 let skippedUsers = [];
 
-// skippedUsers を /tmp/rune-skipped.json へ書き出す
-// （書き込みに失敗しても返信チェック自体は継続させる）
-function saveSkippedUsers() {
-  try {
-    fs.writeFileSync(SKIPPED_FILE, JSON.stringify({
-      checkedAt: new Date().toISOString(),
-      skipped: skippedUsers,
-    }, null, 2));
-    console.log(`[SKIPPED] ${skippedUsers.length}件を ${SKIPPED_FILE} に保存しました`);
-  } catch (e) {
-    console.error(`[SKIPPED] 保存に失敗: ${e.message}`);
+// 返信チェック完了時にLINEへ通知する対象外ユーザー一覧を組み立てる
+function buildSkippedMessage() {
+  if (skippedUsers.length === 0) {
+    return '【返信チェック完了】\n対象外ユーザーはいませんでした';
   }
+
+  const lines = skippedUsers.map(
+    u => `・${u.userName}（u_id: ${u.uid || '不明'}）\n  理由：${u.reason}`
+  );
+
+  // LINEの1メッセージ上限（5000文字）を超えると送信できないため、
+  // 超える場合は件数を打ち切って残件数を末尾に付ける
+  const MAX_LEN = 4800;
+  const shown = [];
+  let len = '【返信チェック完了】\n対象外ユーザー：'.length;
+  for (const line of lines) {
+    if (len + line.length + 1 > MAX_LEN) break;
+    shown.push(line);
+    len += line.length + 1;
+  }
+  const rest = lines.length - shown.length;
+
+  return [
+    '【返信チェック完了】',
+    '対象外ユーザー：',
+    ...shown,
+    ...(rest > 0 ? [`（ほか${rest}件は文字数上限のため省略）`] : []),
+  ].join('\n');
 }
 
 // ─── LINE 送信 ────────────────────────────────────────────────────
@@ -2447,14 +2460,14 @@ async function checkReplies() {
     await login(page);
     const supportPage = await openSupportPage(page);
     await processUsers(supportPage);
+    // 対象外となったユーザーと理由をまとめてLINEへ通知する
+    await sendLine(buildSkippedMessage());
     console.log('=== reply-checker 完了 ===');
   } catch (err) {
     console.error('[FATAL]', err.message, err.stack);
     await sendLine(`【システムエラー】reply-checker: ${err.message}`);
   } finally {
     clearState();
-    // 中断・エラー時もそこまでの対象外ユーザーを残す
-    saveSkippedUsers();
     await browser.close();
   }
 }
