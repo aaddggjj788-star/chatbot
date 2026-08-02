@@ -78,8 +78,19 @@
         "useCurrentRow": true
       }
     },
+    "yu7": {
+      "fileId": "12679yu3sinko",
+      "ho": {
+        "searchTarget": "12679yu3/sinko/1",
+        "useCurrentRow": true
+      }
+    },
     "yu7mu": {
       "fileId": "12679yu7musinko",
+      "ho": {
+        "searchTarget": "12679yu7mu/sinko/1",
+        "useCurrentRow": true
+      },
       "sinko7": {
         "useHistorySearch": true,
         "historyCharaId": "12673yu3",
