@@ -77,6 +77,15 @@
         "searchTarget": "12679yu2/sinko/1",
         "useCurrentRow": true
       }
+    },
+    "yu7mu": {
+      "fileId": "12679yu7musinko",
+      "sinko7": {
+        "useHistorySearch": true,
+        "historyCharaId": "12673yu3",
+        "fallbackSearch": "12673yu3/sinko/1",
+        "replaceHeader": "確認させて頂きました。\n\n問題ありません。\n\n特化させた術式による効果はしっかりと得る事が出来ました。\n\nこれまでのあなたとは違い、反応も別格なのは言うまでもありません。\n\n今の状態を活かしながら要素を固めて行きましょう。\n\nこれまでのあなたを褒め、そして受け入れ、昇華させられるのはあなた自身ですからね。\n\nでは下記続きからお願いします。\n\n"
+      }
     }
   }
 }
