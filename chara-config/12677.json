@@ -23,7 +23,11 @@
       "fileId": "12677mu2sinko",
         "searchTarget": "12677mu2/sinko/1",
         "useCurrentRow": true
-      }
+      },
+      "his": {
+      "fileId": "12677mu2his",
+        "useCurrentRow": true
+      }      
     }
   }
 }
