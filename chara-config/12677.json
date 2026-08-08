@@ -4,14 +4,24 @@
     "start": "23:00",
     "end": "09:00"
   },
-  "spanMatchExclude": [
-    
-  ],
+  "spanMatchExclude": [],
   "phases": {
     "mu1": {
       "fileId": "12677mu1sinko",
       "do1": {
         "searchTarget": "12677mu1/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "mu2": {
+      "do1": {
+      "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/his/1",
+        "useCurrentRow": true
+      },
+      "ho": {
+      "fileId": "12677mu2sinko",
+        "searchTarget": "12677mu2/sinko/1",
         "useCurrentRow": true
       }
     }
