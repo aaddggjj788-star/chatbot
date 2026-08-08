@@ -24,10 +24,26 @@
         "searchTarget": "12677mu2/sinko/1",
         "useCurrentRow": true
       },
-      "his": {
+      "his1": {
       "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/his/2",      
         "useCurrentRow": true
-      }      
+      },
+      "his2": {
+      "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/his/3",      
+        "useCurrentRow": true
+      },
+      "his3": {
+      "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/his/4",      
+        "useCurrentRow": true
+      },    
+      "his4": {
+      "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/sinko/2",      
+        "useCurrentRow": true
+      }    
     }
   }
 }
