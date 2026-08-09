@@ -4,7 +4,9 @@
     "start": "23:00",
     "end": "09:00"
   },
-  "spanMatchExclude": [],
+  "spanMatchExclude": [
+   "12541mu1/sinko/4"
+  ],
   "phases": {
     "mu1": {
       "fileId": "12541mu1sinko",
@@ -16,7 +18,8 @@
     "mu2": {
       "fileId": "12541mu2sinko",
       "sinko0": {
-        "specialProcess": ["saveMemo1", "saveNickname"]
+        "specialProcess": ["saveMemo1", "saveNickname"],
+        "nextTarget": "12541mu2/sinko/1"
       },
       "ho": {
         "searchTarget": "12541mu2/sinko/0",
