@@ -2040,8 +2040,9 @@ async function processUsers(page) {
             ? actionCfg.branch.positive
             : actionCfg.branch.negative;
           console.log(`[JSON] 分岐自動判定: ${branchChoice} → ${branchTarget}`);
+          const effectiveFileId = actionCfg?.fileId ?? fileId;
           try {
-            replyData = getReplyFromCSVByTarget(charaId, branchTarget, true, fileId);
+            replyData = getReplyFromCSVByTarget(charaId, branchTarget, true, effectiveFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
@@ -2070,8 +2071,9 @@ async function processUsers(page) {
           }
           const useCurrentRow = selected.useCurrentRow === true;
           console.log(`[JSON] timeBasedSearch → "${selected.searchTarget}" useCurrentRow=${useCurrentRow}`);
+          const effectiveFileId = actionCfg?.fileId ?? fileId;
           try {
-            replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, fileId);
+            replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, effectiveFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
@@ -2079,16 +2081,18 @@ async function processUsers(page) {
         } else if (actionCfg.searchTarget) {
           const useCurrentRow = actionCfg.useCurrentRow === true;
           console.log(`[JSON] searchTarget="${actionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
+          const effectiveFileId = actionCfg?.fileId ?? fileId;
           try {
-            replyData = getReplyFromCSVByTarget(charaId, actionCfg.searchTarget, useCurrentRow, fileId);
+            replyData = getReplyFromCSVByTarget(charaId, actionCfg.searchTarget, useCurrentRow, effectiveFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
           }
         } else if (actionCfg.nextTarget) {
           console.log(`[JSON] nextTarget="${actionCfg.nextTarget}"`);
+          const effectiveFileId = actionCfg?.fileId ?? fileId;
           try {
-            replyData = getReplyFromCSVByTarget(charaId, actionCfg.nextTarget, true, fileId);
+            replyData = getReplyFromCSVByTarget(charaId, actionCfg.nextTarget, true, effectiveFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             continue;
