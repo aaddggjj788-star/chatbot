@@ -15,35 +15,41 @@
     },
     "mu2": {
       "do1": {
-      "fileId": "12677mu2his",
+        "fileId": "12677mu2his",
         "searchTarget": "12677mu2/his/1",
         "useCurrentRow": true
       },
       "ho": {
-      "fileId": "12677mu2sinko",
+        "fileId": "12677mu2sinko",
         "searchTarget": "12677mu2/sinko/1",
         "useCurrentRow": true
       },
       "his1": {
-      "fileId": "12677mu2his",
-        "searchTarget": "12677mu2/his/1",      
+        "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/his/1",
         "useCurrentRow": false
       },
       "his2": {
-      "fileId": "12677mu2his",
-        "searchTarget": "12677mu2/his/2",      
+        "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/his/2",
         "useCurrentRow": false
       },
       "his3": {
-      "fileId": "12677mu2his",
-        "searchTarget": "12677mu2/his/3",      
+        "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/his/3",
         "useCurrentRow": false
-      },    
+      },
       "his4": {
-      "fileId": "12677mu2his",
-        "searchTarget": "12677mu2/sinko/4",      
+        "fileId": "12677mu2his",
+        "searchTarget": "12677mu2/sinko/4",
         "useCurrentRow": false
-      }    
+      }
+    },
+    "yu1": {
+      "ho1": {
+        "searchTarget": "12677yu1/sinko/1",
+        "useCurrentRow": true
+      }
     }
   }
 }
