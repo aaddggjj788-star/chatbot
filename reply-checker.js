@@ -401,7 +401,7 @@ function getReplyFromCSV(charaId, sinkoNum, fileId) {
   // fileId未指定時は従来通りresolvedCharaIdを使用する。
   const patternCharaId = fileId ? (charaIdFromFileId(fileId) ?? charaId) : resolvedCharaId;
   const sinkoPattern = new RegExp(
-    `<!--${patternCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:sinko|his)\\/?${sinkoNum}(?:\\/[A-Za-z0-9]+)?-->`
+    `<!--${patternCharaId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/(?:sinko|his)\\/?${sinkoNum}(?:\\/[A-Za-z0-9]+)?-->"?`
   );
   console.log(`[CSV] 検索パターン: ${sinkoPattern}`);
   const idx = rows.findIndex(r => sinkoPattern.test((r[0] || '').trim()));
@@ -453,7 +453,7 @@ function getReplyFromCSVByTarget(charaId, searchTarget, useCurrentRow, fileId) {
   // 特殊文字をエスケープしつつ、数字の直前スラッシュは省略形も許容（his/2 ↔ his2）
   const escaped = effectiveTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const flexEscaped = escaped.replace(/\/(\d)/g, '\\/?$1');
-  const pattern = new RegExp(`<!--${flexEscaped}-->`);
+  const pattern = new RegExp(`<!--${flexEscaped}-->"?`);
 
   console.log(`[CSV-TARGET] 検索: "${effectiveTarget}" pattern=${pattern}`);
 

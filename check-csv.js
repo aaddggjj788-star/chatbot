@@ -124,7 +124,7 @@ function findByTarget(charaId, searchTarget, useCurrentRow, fileId) {
 
   const escaped = searchTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const flexEscaped = escaped.replace(/\/(\d)/g, '\\/?$1');
-  const pattern = new RegExp(`<!--${flexEscaped}-->`);
+  const pattern = new RegExp(`<!--${flexEscaped}-->"?`);
   console.log(`検索パターン: ${pattern}`);
 
   const idx = rows.findIndex(r => pattern.test((r[0] || '').trim()));
