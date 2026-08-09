@@ -1,0 +1,27 @@
+{
+  "charaId": "12541",
+  "globalStopTime": {
+    "start": "23:00",
+    "end": "09:00"
+  },
+  "spanMatchExclude": [],
+  "phases": {
+    "mu1": {
+      "fileId": "12541mu1sinko",
+      "do1": {
+        "searchTarget": "12541mu1/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "mu2": {
+      "fileId": "12541mu2sinko",
+      "sinko0": {
+        "specialProcess": ["saveMemo1", "saveNickname"]
+      },
+      "ho": {
+        "searchTarget": "12541mu2/sinko/0",
+        "useCurrentRow": true
+      }
+    }
+  }    
+}
