@@ -26,23 +26,23 @@
       },
       "his1": {
       "fileId": "12677mu2his",
-        "searchTarget": "12677mu2/his/2",      
-        "useCurrentRow": true
+        "searchTarget": "12677mu2/his/1",      
+        "useCurrentRow": false
       },
       "his2": {
       "fileId": "12677mu2his",
-        "searchTarget": "12677mu2/his/3",      
-        "useCurrentRow": true
+        "searchTarget": "12677mu2/his/2",      
+        "useCurrentRow": false
       },
       "his3": {
       "fileId": "12677mu2his",
-        "searchTarget": "12677mu2/his/4",      
-        "useCurrentRow": true
+        "searchTarget": "12677mu2/his/3",      
+        "useCurrentRow": false
       },    
       "his4": {
       "fileId": "12677mu2his",
-        "searchTarget": "12677mu2/sinko/2",      
-        "useCurrentRow": true
+        "searchTarget": "12677mu2/sinko/4",      
+        "useCurrentRow": false
       }    
     }
   }
