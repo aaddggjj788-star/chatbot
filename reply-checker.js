@@ -1347,6 +1347,9 @@ async function processUsers(page) {
     // 返信対象外となった理由を記録する（ログ出力は各判定箇所の[SKIP]をそのまま使う）
     const recordSkip = (reason) => skippedUsers.push({ userName, uid, reason });
 
+    // 1ユーザーの処理中に想定外エラーが発生しても返信チェック全体を止めず、
+    // エラーになったユーザーも対象外として記録して次のユーザーへ進む
+    try {
     // ─── キャラ別停止時間チェック ──────────────────────────────────
     if (process.env.DISABLE_STOP_TIME !== 'true' && isInStopTime(kid)) {
       console.log(`[SKIP] ${userName}: 停止時間帯のためスキップ (k_id=${kid})`);
@@ -2448,6 +2451,15 @@ async function processUsers(page) {
     } else {
       console.log(`[SKIP] ${userName} スキップ`);
       recordSkip('LINEでスキップを選択');
+    }
+    } catch (e) {
+      console.error(`[ERROR] ${userName}: 処理中にエラーが発生しました: ${e.message}`, e.stack);
+      skippedUsers.push({
+        userName,
+        uid,
+        reason: `エラー: ${e.message.slice(0, 50)}`,
+      });
+      continue;
     }
   }
 }
