@@ -438,6 +438,7 @@ function getReplyFromCSV(charaId, sinkoNum, fileId) {
 // useCurrentRow=true → ヒット行自身を返す / false → 次の行を返す（デフォルト）
 function getReplyFromCSVByTarget(charaId, searchTarget, useCurrentRow, fileId) {
   const { csvPath } = resolveCsvPath(charaId, fileId);
+  console.log(`[CSV-TARGET] 使用CSVファイル: ${csvPath}`);
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
   const rows = parseCSV(csvPath);
   const title = rows[0] ? (rows[0][0] || '') : '';
