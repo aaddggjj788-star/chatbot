@@ -50,6 +50,20 @@
         "searchTarget": "12677yu1/sinko/1",
         "useCurrentRow": true
       }
+    },
+    "yu2pm": {
+      "fileId": "12677yu2pmsinko",
+      "ho": {
+        "searchTarget": "12677yu2pm/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu2": {
+      "fileId": "12677yu2sinko",
+      "ho": {
+        "searchTarget": "12677yu2/sinko/1",
+        "useCurrentRow": true
+      }
     }
   }
 }
