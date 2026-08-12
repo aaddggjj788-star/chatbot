@@ -64,6 +64,13 @@
         "searchTarget": "12677yu2/sinko/1",
         "useCurrentRow": true
       }
+    },
+    "yu3": {
+      "fileId": "12677yu3sinko",
+      "ho": {
+        "searchTarget": "12677yu3/sinko/1",
+        "useCurrentRow": true
+      }
     }
   }
 }
