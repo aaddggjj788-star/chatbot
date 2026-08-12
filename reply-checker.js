@@ -1098,12 +1098,14 @@ async function saveMemo1(frame, userText, dryRun) {
 }
 
 // saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存（最新1件のみ）
-async function saveNickname(frame, userText, dryRun) {
-  const { nickname } = extractNickname([userText]);
+async function saveNickname(frame, userText, dryRun, sendLine, waitForLineReply) {
+  let { nickname } = extractNickname([userText]);
 
   if (!nickname) {
-    console.log('[SPECIAL] saveNickname: ニックネームを抽出できず → スキップ');
-    return;
+    await sendLine('【ニックネーム未取得】\nニックネームを抽出できませんでした。\n手動で入力するニックネームを送信してください。\n（スキップする場合は「スキップ」）');
+    const reply = await waitForLineReply();
+    if (reply === 'スキップ' || !reply) return;
+    nickname = reply;
   }
   console.log(`[SPECIAL] saveNickname: 抽出ニックネーム="${nickname}"`);
 
@@ -1147,7 +1149,7 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bod
       if (proc === 'saveMemo1') {
         await saveMemo1(mainFrame, latestUserText, dryRun);
       } else if (proc === 'saveNickname') {
-        await saveNickname(mainFrame, latestUserText, dryRun);
+        await saveNickname(mainFrame, latestUserText, dryRun, sendLine, waitForLineReply);
       } else {
         console.log(`[SPECIAL] 未実装のprocess: "${proc}"`);
       }
