@@ -1956,23 +1956,30 @@ async function processUsers(page) {
         // phaseCfg（ho phase設定）にfileIdがあればそれを優先してCSVを解決する
         const hoRootFileId = hoPhaseCfg?.fileId ?? null;
         const { resolvedCharaId } = resolveCsvPath(charaId, hoRootFileId);
-        console.log(`[JSON] ho 根底ルール: charaId=${charaId} fileId=${hoRootFileId} → resolvedCharaId=${resolvedCharaId}`);
+        // 履歴検索・sinko/1 fallback用のcharaId。
+        // fileId指定時はresolvedCharaIdがfileId自体（例: 12677yu3sinko）になり
+        // 履歴検索が「12677yu3sinko/sinko/○」になってしまうため、
+        // fileId末尾のsinko/hisを除去したbaseCharaId（例: 12677yu3）を検索キーに使う。
+        const searchCharaId = hoRootFileId
+          ? hoRootFileId.replace(/sinko$|his$/, '') // 末尾のsinko/hisを除去
+          : resolvedCharaId;
+        console.log(`[JSON] ho 根底ルール: charaId=${charaId} fileId=${hoRootFileId} → resolvedCharaId=${resolvedCharaId} searchCharaId=${searchCharaId}`);
 
         // STEP3
         const historyComments = analysis.allKanteishiComments || [];
         let historySinkoComments = historyComments.filter(c => {
-          if (!c.startsWith(resolvedCharaId + '/')) return false;
+          if (!c.startsWith(searchCharaId + '/')) return false;
           return /(?:sinko|his\w*)\/?(\d+)/.test(c);
         });
-        console.log(`[DEBUG] resolvedCharaId=${resolvedCharaId} のsinko/hisコメント件数(表示中履歴): ${historySinkoComments.length}`);
+        console.log(`[DEBUG] searchCharaId=${searchCharaId} のsinko/hisコメント件数(表示中履歴): ${historySinkoComments.length}`);
 
         if (historySinkoComments.length === 0) {
           // 表示中の履歴にsinko/hisコメントが見つからない場合、
           // mg_k_rireki.php（履歴100件ページ）を開いて再検索する
-          console.log(`[JSON] ho: 表示中の履歴に${resolvedCharaId}のsinko/hisコメントなし → mg_k_rireki.php で再検索`);
+          console.log(`[JSON] ho: 表示中の履歴に${searchCharaId}のsinko/hisコメントなし → mg_k_rireki.php で再検索`);
           let rirekiResult = null;
           try {
-            rirekiResult = await searchSinkoFromRirekiHistory(page, resolvedCharaId);
+            rirekiResult = await searchSinkoFromRirekiHistory(page, searchCharaId);
           } catch (e) {
             console.error(`[ERROR] ho 履歴再検索失敗 (${userName}): ${e.message}`);
           }
@@ -1992,19 +1999,19 @@ async function processUsers(page) {
             return m && parseInt(m[1], 10) === maxSinko;
           }) || hoComment;
 
-          console.log(`[COMMENT] ${userName}: /ho 根底ルール sinko+1 resolvedCharaId=${resolvedCharaId} maxSinko=${maxSinko}`);
+          console.log(`[COMMENT] ${userName}: /ho 根底ルール sinko+1 searchCharaId=${searchCharaId} fileId=${hoRootFileId} maxSinko=${maxSinko}`);
           try {
-            replyData = getReplyFromCSV(resolvedCharaId, maxSinko);
+            replyData = getReplyFromCSV(searchCharaId, maxSinko, hoRootFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
             recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else {
-          console.log(`[COMMENT] ${userName}: /ho 根底ルール 履歴になし → ${resolvedCharaId}/sinko/1 を送信`);
+          console.log(`[COMMENT] ${userName}: /ho 根底ルール 履歴になし → ${searchCharaId}/sinko/1 を送信`);
           historyNotFound = true;
           try {
-            replyData = getReplyFromCSVByTarget(resolvedCharaId, `${resolvedCharaId}/sinko/1`, true);
+            replyData = getReplyFromCSVByTarget(searchCharaId, `${searchCharaId}/sinko/1`, true, hoRootFileId);
           } catch (e) {
             console.error(`[ERROR] ho 根底ルール sinko/1取得失敗 (${userName}): ${e.message}`);
             recordSkip(`エラー: ${e.message.slice(0, 50)}`);
