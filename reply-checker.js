@@ -971,7 +971,13 @@ function extractNickname(userTexts) {
     candidate = (candidate || '').trim();
     if (!candidate) return null;
 
-    // スペース区切りフルネーム（例: 田中 花子、佐々木 小次郎）
+    // ひらがなのみ → そのまま使用（例: たろう→たろう）
+    if (/^[ぁ-んー]+$/.test(candidate)) return candidate;
+    // カタカナのみ → そのまま使用（例: タロウ→タロウ）
+    if (/^[ァ-ヶー]+$/.test(candidate)) return candidate;
+
+    // スペース区切りフルネーム（例: 田中 花子→花子、佐々木 小次郎→佐々木）
+    // 苗字+名前が分かれている場合は名前部分のみを抽出（男性名は苗字呼びのため苗字を採用）
     const spaceMatch = candidate.match(/^([^\s　]{1,6})[\s　]+([^\s　]{1,6})$/);
     if (spaceMatch) {
       const [, surname, givenName] = spaceMatch;
@@ -979,16 +985,16 @@ function extractNickname(userTexts) {
       const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
       if (hasMale)   return surname;
       if (hasFemale) return givenName;
-      return surname;
+      return givenName; // 不明時も名前部分（後半）を採用
     }
 
-    // 漢字+ひらがな/カタカナのスペースなしフルネーム（例: 桐林みよこ）
-    // ひらがな/カタカナの名前は女性名として名前（後半）を登録
-    const kanjiKanaMatch = candidate.match(/^([一-龥々]{1,3})([ぁ-んァ-ヶー]{2,4})$/);
+    // 漢字+ひらがな/カタカナのスペースなしフルネーム（例: 田中たろう→たろう、桐林みよこ→みよこ）
+    // 苗字（漢字）+名前（かな）が繋がっている場合はかな部分（名前）のみを抽出する
+    const kanjiKanaMatch = candidate.match(/^([一-龥々]{1,4})([ぁ-んァ-ヶー]{2,6})$/);
     if (kanjiKanaMatch) return kanjiKanaMatch[2];
 
-    // 漢字のみスペースなしフルネーム（例: 佐々木小次郎、田中太郎）
-    // 苗字2-3文字 + 名前2-3文字 で分割して男女判定
+    // 漢字のみスペースなしフルネーム（例: 佐藤花子→花子、佐々木小次郎→佐々木）
+    // 苗字2-3文字 + 名前2-3文字 で分割し、名前部分のみを抽出（男性名は苗字呼び）
     const kanjiOnlyMatch = candidate.match(/^([一-龥々]{2,3})([一-龥々]{2,3})$/);
     if (kanjiOnlyMatch) {
       const [, surname, givenName] = kanjiOnlyMatch;
@@ -996,7 +1002,7 @@ function extractNickname(userTexts) {
       const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
       if (hasMale)   return surname;
       if (hasFemale) return givenName;
-      return surname;
+      return givenName; // 不明時も名前部分（後半）を採用
     }
 
     return candidate; // スペースなし単独名/ニックネーム → そのまま
@@ -1102,7 +1108,16 @@ async function saveNickname(frame, userText, dryRun, sendLine, waitForLineReply)
   let { nickname } = extractNickname([userText]);
 
   if (!nickname) {
-    await sendLine('【ニックネーム未取得】\nニックネームを抽出できませんでした。\n手動で入力するニックネームを送信してください。\n（スキップする場合は「スキップ」）');
+    await sendLine(
+      `【ニックネーム未取得】\n\n` +
+      `ユーザーメッセージ：\n` +
+      `---\n` +
+      `${userText}\n` +
+      `---\n` +
+      `ニックネームを抽出できませんでした。\n` +
+      `手動で入力するニックネームを送信してください。\n` +
+      `（スキップする場合は「スキップ」）`
+    );
     const reply = await waitForLineReply();
     if (reply === 'スキップ' || !reply) return;
     nickname = reply;
@@ -1587,6 +1602,7 @@ async function processUsers(page) {
               replyData = getReplyFromCSVByTarget(charaId, parsed.comment, false, doFileId);
             } catch (e) {
               console.error(`[ERROR] /do CSV取得失敗 (${userName}): ${e.message}`);
+              recordSkip(`エラー: ${e.message.slice(0, 50)}`);
               skipUser = true;
             }
             break;
@@ -1635,6 +1651,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(parsed.charaId, actionCfg.searchTarget, useCurrentRow, fileId);
           } catch (e) {
             console.error(`[ERROR] subAction searchTarget CSV取得失敗 (${userName}): ${e.message} | charaId=${parsed.charaId} fileId=${fileId} target=${actionCfg.searchTarget}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             skipUser = true;
           }
         }
@@ -1650,6 +1667,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(parsed.charaId, branchTarget, true, fileId);
           } catch (e) {
             console.error(`[ERROR] subAction branch CSV取得失敗 (${userName}): ${e.message} | charaId=${parsed.charaId} fileId=${fileId} target=${branchTarget}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             skipUser = true;
           }
         }
@@ -1684,6 +1702,7 @@ async function processUsers(page) {
               replyData = getReplyFromCSV(parsed.charaId, maxSinko);
             } catch (e) {
               console.error(`[ERROR] subAction useHistorySearch CSV取得失敗 (${userName}): ${e.message}`);
+              recordSkip(`エラー: ${e.message.slice(0, 50)}`);
               skipUser = true;
             }
           }
@@ -1794,6 +1813,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(charaId, branchTarget, true, hoFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else if (hoActionCfg.timeBasedSearch) {
@@ -1824,6 +1844,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, selectedFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else if (hoActionCfg.searchTarget) {
@@ -1833,6 +1854,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.searchTarget, useCurrentRow, hoFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else if (hoActionCfg.nextTarget) {
@@ -1841,6 +1863,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.nextTarget, true, hoFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else if (hoActionCfg.useCurrentRow) {
@@ -1851,6 +1874,7 @@ async function processUsers(page) {
             currentRowData = getReplyFromCSVByTarget(charaId, hoComment, true, hoFileId);
           } catch (e) {
             console.error(`[ERROR] ho useCurrentRow CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
           if (!currentRowData) {
@@ -1883,6 +1907,7 @@ async function processUsers(page) {
               historyNextData = getReplyFromCSV(charaId, maxSinko, hoFileId);
             } catch (e) {
               console.error(`[ERROR] ho workflowMarker 履歴次行取得失敗 (${userName}): ${e.message}`);
+              recordSkip(`エラー: ${e.message.slice(0, 50)}`);
               continue;
             }
             if (!historyNextData) {
@@ -1970,6 +1995,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSV(resolvedCharaId, maxSinko);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else {
@@ -1979,6 +2005,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(resolvedCharaId, `${resolvedCharaId}/sinko/1`, true);
           } catch (e) {
             console.error(`[ERROR] ho 根底ルール sinko/1取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
           latestComment = hoComment;
@@ -2050,6 +2077,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(charaId, branchTarget, true, effectiveFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else if (actionCfg.timeBasedSearch) {
@@ -2081,6 +2109,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, effectiveFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else if (actionCfg.searchTarget) {
@@ -2091,6 +2120,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(charaId, actionCfg.searchTarget, useCurrentRow, effectiveFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else if (actionCfg.nextTarget) {
@@ -2100,6 +2130,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVByTarget(charaId, actionCfg.nextTarget, true, effectiveFileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else if (actionCfg.checkPattern) {
@@ -2183,6 +2214,7 @@ async function processUsers(page) {
               replyData = getReplyFromCSVByTarget(resolvedCharaId, fallbackTarget, true);
             } catch (e) {
               console.error(`[ERROR] sinko useHistorySearch フォールバック取得失敗 (${userName}): ${e.message}`);
+              recordSkip(`エラー: ${e.message.slice(0, 50)}`);
               continue;
             }
           }
@@ -2240,6 +2272,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSVBySpan(charaId, spanWord, fileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         } else {
@@ -2248,6 +2281,7 @@ async function processUsers(page) {
             replyData = getReplyFromCSV(charaId, maxSinkoNum, fileId);
           } catch (e) {
             console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
         }
