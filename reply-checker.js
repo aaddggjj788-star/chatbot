@@ -1953,8 +1953,10 @@ async function processUsers(page) {
         }
 
         // STEP2
-        const { resolvedCharaId } = resolveCsvPath(charaId);
-        console.log(`[JSON] ho 根底ルール: charaId=${charaId} → resolvedCharaId=${resolvedCharaId}`);
+        // phaseCfg（ho phase設定）にfileIdがあればそれを優先してCSVを解決する
+        const hoRootFileId = hoPhaseCfg?.fileId ?? null;
+        const { resolvedCharaId } = resolveCsvPath(charaId, hoRootFileId);
+        console.log(`[JSON] ho 根底ルール: charaId=${charaId} fileId=${hoRootFileId} → resolvedCharaId=${resolvedCharaId}`);
 
         // STEP3
         const historyComments = analysis.allKanteishiComments || [];
