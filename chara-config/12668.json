@@ -9,7 +9,9 @@
     "12668mu1/sinko/4",
     "12668mu1/sinko/5",
     "12668mu2/his/3",
-    "12668mu3/his/2"
+    "12668mu3/his/2",
+    "12668mu2/his/3/A",
+    "12668mu2/his/3/B"
   ],
   "phases": {
     "mu1": {
@@ -53,12 +55,12 @@
         }
       }
     },
-    "mu2zenhan": {
-      "fileId": "12668mu2zenhansinko",
+    "mu2am": {
+      "fileId": "12668mu2amsinko",
       "activeUntil": "16:30",
       "stopAfter": "16:30",
       "ho1": {
-        "searchTarget": "12668mu2/zenhan/sinko/1",
+        "searchTarget": "12668mu2am/sinko/1",
         "useCurrentRow": true
       },
       "ho2": {
