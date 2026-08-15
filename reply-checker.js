@@ -1636,7 +1636,29 @@ async function processUsers(page) {
         // actionCfg自身にfileIdがあれば、phase共通のfileIdより優先する
         // （同一phase内の特定actionだけ別CSVを参照させたいケース用）
         const fileId = actionCfg.fileId ?? phaseCfg.fileId ?? null;
-        console.log(`[JSON] subAction charaId="${parsed.charaId}" fileId="${fileId}" actionKey="${parsed.actionKey}"`);
+
+        // timeBasedSearchが設定されている場合（hisuMtm等でbranchと併用）、
+        // まず時間帯に応じたfileIdを取得してからbranch/searchTargetを実行する。
+        // timeBasedSearch内の各時間帯にfileIdがある場合はphaseCfg.fileIdより優先する。
+        let effectiveFileId = fileId;
+        if (actionCfg.timeBasedSearch) {
+          const now = new Date();
+          const curMin = now.getHours() * 60 + now.getMinutes();
+          for (const [cKey, cVal] of Object.entries(actionCfg.timeBasedSearch)) {
+            const bm = cKey.match(/^before(\d{3,4})$/);
+            const am = cKey.match(/^after(\d{3,4})$/);
+            if (bm) {
+              const t = bm[1].padStart(4, '0');
+              const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+              if (curMin < tMin && cVal.fileId) { effectiveFileId = cVal.fileId; break; }
+            } else if (am) {
+              const t = am[1].padStart(4, '0');
+              const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+              if (curMin >= tMin && cVal.fileId) { effectiveFileId = cVal.fileId; break; }
+            }
+          }
+        }
+        console.log(`[JSON] subAction charaId="${parsed.charaId}" fileId="${fileId}" effectiveFileId="${effectiveFileId}" actionKey="${parsed.actionKey}"`);
 
         // specialProcessがある場合はbranch/searchTargetの前に実行
         if (actionCfg.specialProcess) {
@@ -1648,9 +1670,9 @@ async function processUsers(page) {
           const useCurrentRow = actionCfg.useCurrentRow === true;
           console.log(`[JSON] subAction searchTarget="${actionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
           try {
-            replyData = getReplyFromCSVByTarget(parsed.charaId, actionCfg.searchTarget, useCurrentRow, fileId);
+            replyData = getReplyFromCSVByTarget(parsed.charaId, actionCfg.searchTarget, useCurrentRow, effectiveFileId);
           } catch (e) {
-            console.error(`[ERROR] subAction searchTarget CSV取得失敗 (${userName}): ${e.message} | charaId=${parsed.charaId} fileId=${fileId} target=${actionCfg.searchTarget}`);
+            console.error(`[ERROR] subAction searchTarget CSV取得失敗 (${userName}): ${e.message} | charaId=${parsed.charaId} fileId=${effectiveFileId} target=${actionCfg.searchTarget}`);
             recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             skipUser = true;
           }
@@ -1662,11 +1684,11 @@ async function processUsers(page) {
           console.log(`[BRANCH] 判定対象テキスト: "${latestText.slice(0, 60)}"`);
           const branchChoice = detectBranchChoice([latestText]);
           const branchTarget = branchChoice === 'A' ? actionCfg.branch.positive : actionCfg.branch.negative;
-          console.log(`[JSON] subAction branch自動判定: ${branchChoice} → ${branchTarget} (charaId=${parsed.charaId} fileId=${fileId})`);
+          console.log(`[JSON] subAction branch自動判定: ${branchChoice} → ${branchTarget} (charaId=${parsed.charaId} fileId=${effectiveFileId})`);
           try {
-            replyData = getReplyFromCSVByTarget(parsed.charaId, branchTarget, true, fileId);
+            replyData = getReplyFromCSVByTarget(parsed.charaId, branchTarget, true, effectiveFileId);
           } catch (e) {
-            console.error(`[ERROR] subAction branch CSV取得失敗 (${userName}): ${e.message} | charaId=${parsed.charaId} fileId=${fileId} target=${branchTarget}`);
+            console.error(`[ERROR] subAction branch CSV取得失敗 (${userName}): ${e.message} | charaId=${parsed.charaId} fileId=${effectiveFileId} target=${branchTarget}`);
             recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             skipUser = true;
           }
