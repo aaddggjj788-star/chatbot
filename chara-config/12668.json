@@ -154,6 +154,19 @@
         "useCurrentRow": true
       }
     },
+    "mu2": {
+       "fileId": "12668mu2hispm",
+       "ho2": {
+        "specialProcess": [
+          "saveMemo1",
+          "saveNickname"
+        ],
+        "branch": {
+          "positive": "12668mu2/his/3/A",
+          "negative": "12668mu2/his/3/B"
+        }
+      }
+    },
     "mu3his": {
       "fileId": "12668mu3his",
       "his1": {
@@ -178,7 +191,7 @@
       "his5": {
         "timeBasedSearch": {
           "before1630": {
-            "searchTarget": "12668mu3/hiru/sinko/1",
+            "searchTarget": "12668mu3hiru/sinko/1",
             "useCurrentRow": true
           },
           "after1631": {
@@ -188,7 +201,7 @@
         }
       },
       "his6": {
-        "searchTarget": "12668mu3/yoru/sinko/1",
+        "searchTarget": "12668mu3yoru/sinko/1",
         "useCurrentRow": true
       }
     },
@@ -208,26 +221,26 @@
       "fileId": "12668mu3hirusinko",
       "stopAfter": "16:40",
       "hiruHo1": {
-        "searchTarget": "12668mu3/hiru/sinko/1",
+        "searchTarget": "12668mu3hiru/sinko/1",
         "useCurrentRow": true
       },
       "hiruHo2": {
-        "searchTarget": "12668mu3/hiru/sinko/1",
+        "searchTarget": "12668mu3hiru/sinko/1",
         "useCurrentRow": true
       }
     },
     "mu3yorusinko": {
       "fileId": "12668mu3yorusinko",
       "yoruHo1": {
-        "searchTarget": "12668mu3/yoru/sinko/1",
+        "searchTarget": "12668mu3yoru/sinko/1",
         "useCurrentRow": true
       },
       "yoruHo2": {
-        "searchTarget": "12668mu3/yoru/sinko/1",
+        "searchTarget": "12668mu3yoru/sinko/1",
         "useCurrentRow": true
       },
       "yoruNoresHo": {
-        "searchTarget": "12668mu3/yoru/sinko/1",
+        "searchTarget": "12668mu3yoru/sinko/1",
         "useCurrentRow": true
       }
     },
