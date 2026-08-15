@@ -72,13 +72,6 @@ const LOG_DIR = resolveLogDir();
 // ─── 日付ユーティリティ ───────────────────────────────────────────
 function pad2(n) { return String(n).padStart(2, '0'); }
 
-// 指定日数だけ過去の日付を { year, month, day } で返す
-function dateBefore(days) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return { year: String(d.getFullYear()), month: String(d.getMonth() + 1), day: String(d.getDate()) };
-}
-
 function stamp(d = new Date()) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
@@ -244,18 +237,29 @@ async function memberSearch(page) {
   await setField(page, '#ReceiveCharaID', RECEIVE_CHARA_ID);
   await setField(page, '#charaMessNoMin', CHARA_MESS_NO_MIN);
 
-  // トリガー発動履歴 期間: 始点=7日前 / 終点=6日前
-  const start = dateBefore(7);
-  const end   = dateBefore(6);
-  log(`  期間: ${start.year}/${start.month}/${start.day} 〜 ${end.year}/${end.month}/${end.day}`);
-  await setField(page, '[name="in_year[1002]"]',  start.year);
-  await setField(page, '[name="in_month[1002]"]', start.month);
-  await setField(page, '[name="in_day[1002]"]',   start.day);
-  await setField(page, '[name="in_year[1003]"]',  end.year);
-  await setField(page, '[name="in_month[1003]"]', end.month);
-  await setField(page, '[name="in_day[1003]"]',   end.day);
+  // トリガー発動履歴 期間: 始点=7日前 00:00 / 終点=6日前 23:59
+  // 日付フィールドは text input のため page.fill で直接入力する（selectではない）
+  const today = new Date();
+  const d7 = new Date(today); d7.setDate(today.getDate() - 7);
+  const d6 = new Date(today); d6.setDate(today.getDate() - 6);
+  log(`  期間: ${d7.getFullYear()}/${d7.getMonth() + 1}/${d7.getDate()} 00:00 〜 ${d6.getFullYear()}/${d6.getMonth() + 1}/${d6.getDate()} 23:59`);
 
-  await setField(page, '[name="triggerhistory"]', TRIGGER_HISTORY);
+  // 始点（7日前）
+  await page.fill('input[name="in_year[1002]"]',  String(d7.getFullYear()));
+  await page.fill('input[name="in_month[1002]"]', String(d7.getMonth() + 1));
+  await page.fill('input[name="in_day[1002]"]',   String(d7.getDate()));
+  await page.fill('input[name="in_toki[1002]"]',  '0');
+  await page.fill('input[name="in_hun[1002]"]',   '0');
+
+  // 終点（6日前）
+  await page.fill('input[name="in_year[1003]"]',  String(d6.getFullYear()));
+  await page.fill('input[name="in_month[1003]"]', String(d6.getMonth() + 1));
+  await page.fill('input[name="in_day[1003]"]',   String(d6.getDate()));
+  await page.fill('input[name="in_toki[1003]"]',  '23');
+  await page.fill('input[name="in_hun[1003]"]',   '59');
+
+  // トリガーID
+  await page.fill('input[name="triggerhistory"]', TRIGGER_HISTORY);
 
   if (!(await clickByText(page, 'ユーザー検索'))) {
     throw new Error('「ユーザー検索」ボタンが見つかりません');
