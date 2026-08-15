@@ -157,20 +157,22 @@ function parseCSV(filePath) {
 }
 
 // コメント文字列を分解する
-// 単純形式: "12668mu1/sinko/2"    → { baseId:"12668", typeNum:"mu1", sub:null, type:"sinko", num:2 }
+// 単純形式: "12668mu1/sinko/2"    → { baseId:"12668", typeNum:"mu1", sub:null, type:"sinko", num:2, suffix:null }
 //           "12668mu1/his/2"     → { ..., type:"his", num:2 }
 //           "12668mu1/hisu/2"    → { ..., type:"his", num:2 }（his*はhisに正規化）
-// 複合形式: "12668mu2/zenhan/sinko/1" → { baseId:"12668", typeNum:"mu2", sub:"zenhan", type:"sinko", num:1 }
+//           "12668mu2/his/3/B"   → { ..., type:"his", num:3, suffix:"B" }（数字後の/A,/B等のsuffix対応）
+// 複合形式: "12668mu2/zenhan/sinko/1" → { baseId:"12668", typeNum:"mu2", sub:"zenhan", type:"sinko", num:1, suffix:null }
+// ※ numは数値のみ（span範囲比較・actionKey生成のため）。/A,/B等のsuffixはsuffixフィールドに保持する。
 function parseCommentStr(commentStr) {
-  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/(sinko|his\w*)\/?(\d+)$/);
+  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/(sinko|his\w*)\/?(\d+)(?:\/?([a-zA-Z]+))?$/);
   if (m) {
     const type = m[3].startsWith('his') ? 'his' : m[3];
-    return { baseId: m[1], typeNum: m[2], sub: null, type, num: parseInt(m[4], 10) };
+    return { baseId: m[1], typeNum: m[2], sub: null, type, num: parseInt(m[4], 10), suffix: m[5] || null };
   }
-  m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-z]+)\/(sinko|his\w*)\/?(\d+)$/);
+  m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-z]+)\/(sinko|his\w*)\/?(\d+)(?:\/?([a-zA-Z]+))?$/);
   if (m) {
     const type = m[4].startsWith('his') ? 'his' : m[4];
-    return { baseId: m[1], typeNum: m[2], sub: m[3], type, num: parseInt(m[5], 10) };
+    return { baseId: m[1], typeNum: m[2], sub: m[3], type, num: parseInt(m[5], 10), suffix: m[6] || null };
   }
   return null;
 }

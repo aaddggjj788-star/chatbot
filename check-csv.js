@@ -213,16 +213,18 @@ function loadCharaConfig(charaId) {
 }
 
 // reply-checker.js の parseCommentStr と同じロジック
+// 数字後の/A,/B等のアルファベットsuffix形式（例: "12668mu2/his/3/B"）にも対応する。
+// numは数値のみ（actionKey生成のため）、suffixは別フィールドに保持する。
 function parseCommentStr(commentStr) {
-  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/(sinko|his\w*)\/?(\d+)$/);
+  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/(sinko|his\w*)\/?(\d+)(?:\/?([a-zA-Z]+))?$/);
   if (m) {
     const type = m[3].startsWith('his') ? 'his' : m[3];
-    return { baseId: m[1], typeNum: m[2], sub: null, type, num: parseInt(m[4], 10) };
+    return { baseId: m[1], typeNum: m[2], sub: null, type, num: parseInt(m[4], 10), suffix: m[5] || null };
   }
-  m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-z]+)\/(sinko|his\w*)\/?(\d+)$/);
+  m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-z]+)\/(sinko|his\w*)\/?(\d+)(?:\/?([a-zA-Z]+))?$/);
   if (m) {
     const type = m[4].startsWith('his') ? 'his' : m[4];
-    return { baseId: m[1], typeNum: m[2], sub: m[3], type, num: parseInt(m[5], 10) };
+    return { baseId: m[1], typeNum: m[2], sub: m[3], type, num: parseInt(m[5], 10), suffix: m[6] || null };
   }
   return null;
 }
