@@ -41,6 +41,7 @@ const path = require('path');
 const SYSTEM_URL     = process.env.BATCH_SYSTEM_URL || 'http://manager.online-777.jp/mg/mg_index.php';
 const BASE_URL       = SYSTEM_URL.replace(/[^/]+$/, ''); // 例: http://manager.online-777.jp/mg/
 const MEMBER_SEARCH_URL = process.env.BATCH_MEMBER_SEARCH_URL || (BASE_URL + 'mg_kyoseitaikai_list.php');
+const CHARA_TOGO_URL    = process.env.BATCH_CHARA_TOGO_URL || (BASE_URL + 'mg_charaTogo.php');
 const BASIC_AUTH_ID  = process.env.BATCH_BASIC_AUTH_ID;
 const BASIC_AUTH_PASS= process.env.BATCH_BASIC_AUTH_PASS;
 const LOGIN_ID       = process.env.BATCH_LOGIN_ID;
@@ -188,24 +189,27 @@ async function login(page) {
   return page.url();
 }
 
-// 会員検索ページを開く
-// 実HTML: <a href="mg_kyoseitaikai_list.php" target="main" onclick="Nowplace('.23')">会員検索</a>
-// target="main" のためiframe内にある可能性がある。href直クリック→フレーム内探索→URL直接オープンの順で試す。
-async function openMemberSearch(page) {
-  const searchPath = 'mg_kyoseitaikai_list.php';
-  const hrefSel = `a[href*="${searchPath}"]`;
+// 左メニューのphpリンク（target="main"でiframe内の可能性あり）を開く汎用ヘルパー。
+// href直クリック→フレーム内探索→URL直接オープンの順で試し、
+// verifySelector がトップレベルに現れるまで担保する。
+//   phpFile:        リンクのhref（例: 'mg_charaTogo.php'）
+//   verifySelector: 遷移先で存在すべき要素（例: '#ReceiveCharaID'）
+//   directUrl:      フォールバックで開くURL
+//   label:          ログ表示名
+async function openMainPage(page, phpFile, verifySelector, directUrl, label) {
+  const hrefSel = `a[href*="${phpFile}"]`;
 
   // 1. ページ直下のリンクを探す
   let clicked = false;
   if (await page.locator(hrefSel).count() > 0) {
-    log('  会員検索リンク（href）をクリック');
+    log(`  ${label}リンク（href）をクリック`);
     await page.locator(hrefSel).first().click().catch(() => {});
     clicked = true;
   } else {
     // 2. iframe（target="main"等）内のリンクを探す
     for (const frame of page.frames()) {
       if (await frame.locator(hrefSel).count() > 0) {
-        log('  会員検索リンク（フレーム内）をクリック');
+        log(`  ${label}リンク（フレーム内）をクリック`);
         await frame.locator(hrefSel).first().click().catch(() => {});
         clicked = true;
         break;
@@ -214,16 +218,22 @@ async function openMemberSearch(page) {
   }
   if (clicked) await page.waitForLoadState('networkidle').catch(() => {});
 
-  // 3. 検索フォームがトップレベルに出ていなければURLを直接開く
+  // 3. 対象フォームがトップレベルに出ていなければURLを直接開く
   //    （リンク未検出、または target="main" でiframe内に開いた場合のフォールバック）
-  if (await page.locator('#ReceiveCharaID').count() === 0) {
-    log(`  検索フォーム未検出 → URL直接オープン: ${MEMBER_SEARCH_URL}`);
-    await page.goto(MEMBER_SEARCH_URL, { waitUntil: 'networkidle' });
+  if (await page.locator(verifySelector).count() === 0) {
+    log(`  ${label}フォーム未検出 → URL直接オープン: ${directUrl}`);
+    await page.goto(directUrl, { waitUntil: 'networkidle' });
   }
 
-  if (await page.locator('#ReceiveCharaID').count() === 0) {
-    throw new Error(`会員検索フォームを開けません（${MEMBER_SEARCH_URL}）`);
+  if (await page.locator(verifySelector).count() === 0) {
+    throw new Error(`${label}ページを開けません（${directUrl}）`);
   }
+}
+
+// 会員検索ページを開く
+// 実HTML: <a href="mg_kyoseitaikai_list.php" target="main" onclick="Nowplace('.23')">会員検索</a>
+async function openMemberSearch(page) {
+  await openMainPage(page, 'mg_kyoseitaikai_list.php', '#ReceiveCharaID', MEMBER_SEARCH_URL, '会員検索');
 }
 
 // ─── STEP2: 会員検索 ──────────────────────────────────────────────
@@ -267,8 +277,9 @@ async function fetchIdList(page) {
   if (await idlistLoc.count() === 0) {
     throw new Error('textarea[name="idlist"] が見つかりません（対象0件の可能性）');
   }
+  // idlist は「ID番号,」のカンマ区切り形式。カンマで分割し数字のみを抽出する。
   const rawText = (await idlistLoc.first().inputValue()) || '';
-  const ids = rawText.split(/[\r\n,\s]+/).map(s => s.trim()).filter(Boolean);
+  const ids = rawText.split(',').map(s => s.trim()).filter(s => /^\d+$/.test(s));
   log(`  取得ID件数: ${ids.length}`);
 
   // ブラウザバックでメインページへ戻る
@@ -277,20 +288,14 @@ async function fetchIdList(page) {
 }
 
 // ─── STEP4: サポートキャラ統合 ────────────────────────────────────
-async function integrate(page, mainUrl, idData) {
+async function integrate(page, idData) {
   log('STEP4: サポートキャラ統合開始');
   // 予期しない confirm ダイアログは自動承認
   page.on('dialog', d => d.accept().catch(() => {}));
 
-  if (!(await clickByText(page, 'サポートキャラ統合'))) {
-    // メニューが見当たらなければメインページへ戻ってから再試行
-    log('  メニュー未検出 → メインページへ戻って再試行');
-    await page.goto(mainUrl, { waitUntil: 'networkidle' }).catch(() => {});
-    if (!(await clickByText(page, 'サポートキャラ統合'))) {
-      throw new Error('左メニュー「サポートキャラ統合」が見つかりません');
-    }
-  }
-  await page.waitForLoadState('networkidle');
+  // 実HTML: <a href="mg_charaTogo.php" target="main" onclick="Nowplace('.45')">サポートキャラ統合</a>
+  // href直クリック→フレーム内探索→URL直接オープンの順で開く
+  await openMainPage(page, 'mg_charaTogo.php', '[name="botai"]', CHARA_TOGO_URL, 'サポートキャラ統合');
 
   await setField(page, '[name="botai"]', PARENT_CHARA_ID);
   await setField(page, '[name="ko"]', CHILD_CHARA_ID);
@@ -349,10 +354,10 @@ async function runWeeklyBatch() {
 
   try {
     const page = await context.newPage();
-    const mainUrl = await login(page);
+    await login(page);
     await memberSearch(page);
     const idData = await fetchIdList(page);
-    await integrate(page, mainUrl, idData);
+    await integrate(page, idData);
 
     const notification = buildNotification(idData, executedAt);
     await sendLine(notification);
