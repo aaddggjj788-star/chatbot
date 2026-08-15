@@ -39,6 +39,8 @@ const path = require('path');
 
 // ─── 設定 ─────────────────────────────────────────────────────────
 const SYSTEM_URL     = process.env.BATCH_SYSTEM_URL || 'http://manager.online-777.jp/mg/mg_index.php';
+const BASE_URL       = SYSTEM_URL.replace(/[^/]+$/, ''); // 例: http://manager.online-777.jp/mg/
+const MEMBER_SEARCH_URL = process.env.BATCH_MEMBER_SEARCH_URL || (BASE_URL + 'mg_kyoseitaikai_list.php');
 const BASIC_AUTH_ID  = process.env.BATCH_BASIC_AUTH_ID;
 const BASIC_AUTH_PASS= process.env.BATCH_BASIC_AUTH_PASS;
 const LOGIN_ID       = process.env.BATCH_LOGIN_ID;
@@ -186,13 +188,48 @@ async function login(page) {
   return page.url();
 }
 
+// 会員検索ページを開く
+// 実HTML: <a href="mg_kyoseitaikai_list.php" target="main" onclick="Nowplace('.23')">会員検索</a>
+// target="main" のためiframe内にある可能性がある。href直クリック→フレーム内探索→URL直接オープンの順で試す。
+async function openMemberSearch(page) {
+  const searchPath = 'mg_kyoseitaikai_list.php';
+  const hrefSel = `a[href*="${searchPath}"]`;
+
+  // 1. ページ直下のリンクを探す
+  let clicked = false;
+  if (await page.locator(hrefSel).count() > 0) {
+    log('  会員検索リンク（href）をクリック');
+    await page.locator(hrefSel).first().click().catch(() => {});
+    clicked = true;
+  } else {
+    // 2. iframe（target="main"等）内のリンクを探す
+    for (const frame of page.frames()) {
+      if (await frame.locator(hrefSel).count() > 0) {
+        log('  会員検索リンク（フレーム内）をクリック');
+        await frame.locator(hrefSel).first().click().catch(() => {});
+        clicked = true;
+        break;
+      }
+    }
+  }
+  if (clicked) await page.waitForLoadState('networkidle').catch(() => {});
+
+  // 3. 検索フォームがトップレベルに出ていなければURLを直接開く
+  //    （リンク未検出、または target="main" でiframe内に開いた場合のフォールバック）
+  if (await page.locator('#ReceiveCharaID').count() === 0) {
+    log(`  検索フォーム未検出 → URL直接オープン: ${MEMBER_SEARCH_URL}`);
+    await page.goto(MEMBER_SEARCH_URL, { waitUntil: 'networkidle' });
+  }
+
+  if (await page.locator('#ReceiveCharaID').count() === 0) {
+    throw new Error(`会員検索フォームを開けません（${MEMBER_SEARCH_URL}）`);
+  }
+}
+
 // ─── STEP2: 会員検索 ──────────────────────────────────────────────
 async function memberSearch(page) {
   log('STEP2: 会員検索開始');
-  if (!(await clickByText(page, '会員検索'))) {
-    throw new Error('左メニュー「会員検索」が見つかりません');
-  }
-  await page.waitForLoadState('networkidle');
+  await openMemberSearch(page);
 
   await setField(page, '#ReceiveCharaID', RECEIVE_CHARA_ID);
   await setField(page, '#charaMessNoMin', CHARA_MESS_NO_MIN);
