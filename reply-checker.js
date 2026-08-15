@@ -2271,7 +2271,40 @@ async function processUsers(page) {
 
         if (ovPhase?.searchOverride) {
           const overrideCfg = ovPhase.searchOverride[latestComment];
-          if (overrideCfg?.searchTarget) {
+          if (overrideCfg?.timeBasedSearch) {
+            // 時間帯に応じてfileId/searchTargetを選択
+            const now = new Date();
+            const curMin = now.getHours() * 60 + now.getMinutes();
+            let selected = null;
+            for (const [cKey, cVal] of Object.entries(overrideCfg.timeBasedSearch)) {
+              const bm = cKey.match(/^before(\d{3,4})$/);
+              const am = cKey.match(/^after(\d{3,4})$/);
+              if (bm) {
+                const t = bm[1].padStart(4, '0');
+                const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+                if (curMin < tMin) { selected = cVal; break; }
+              } else if (am) {
+                const t = am[1].padStart(4, '0');
+                const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+                if (curMin >= tMin) { selected = cVal; break; }
+              }
+            }
+            if (!selected) {
+              console.log(`[JSON] searchOverride timeBasedSearch: 一致する時間帯なし → スキップ`);
+              continue;
+            }
+            if (selected.searchTarget) {
+              const useCurrentRow = selected.useCurrentRow === true;
+              const selectedFileId = selected.fileId ?? ovFileId;
+              console.log(`[JSON] searchOverride timeBasedSearch: "${latestComment}" → searchTarget="${selected.searchTarget}" useCurrentRow=${useCurrentRow} fileId=${selectedFileId}`);
+              try {
+                replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, selectedFileId);
+              } catch (e) {
+                console.error(`[ERROR] CSV取得失敗 (${userName}): ${e.message}`);
+                continue;
+              }
+            }
+          } else if (overrideCfg?.searchTarget) {
             const useCurrentRow = overrideCfg.useCurrentRow === true;
             console.log(`[JSON] searchOverride: "${latestComment}" → searchTarget="${overrideCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
             try {
