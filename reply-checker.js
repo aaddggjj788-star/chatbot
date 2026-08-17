@@ -1440,9 +1440,9 @@ async function processUsers(page) {
     const receivedAt = parseMessageTime(analysis.latestUserTime || '');
     if (receivedAt) {
       const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
-      if (elapsedMin < 20) {
-        console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 20分未満のためスキップ`);
-        recordSkip(`受信から${elapsedMin.toFixed(1)}分（20分未満）のためスキップ`);
+      if (elapsedMin < 15) {
+        console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 15分未満のためスキップ`);
+        recordSkip(`受信から${elapsedMin.toFixed(1)}分（15分未満）のためスキップ`);
         continue;
       }
       console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 処理続行`);
