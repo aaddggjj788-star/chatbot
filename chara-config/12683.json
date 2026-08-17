@@ -13,11 +13,11 @@
         "useCurrentRow": true
       }
     },
-    "mu2": {
-      "fileId": "12683mu2sinko",
-      "his": {
+    "mu2his": {
       "fileId": "12683mu2his"
       },
+    "mu2": {
+      "fileId": "12683mu2sinko",
       "ho1": {
         "searchTarget": "12683mu2/sinko/1",
         "useCurrentRow": true
