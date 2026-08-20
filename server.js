@@ -2,6 +2,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const fs = require('fs');
+const crypto = require('crypto');
 
 // reply-checker.js との連携用（LINEから「送信」「スキップ」を受け取りポーリング通知）
 const REPLY_STATE_FILE = '/tmp/rune-reply-state.json';
@@ -64,7 +65,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const INQUIRY_POST_URL = ''; // 後で設定
 
-app.use(express.json());
+// Slackの署名検証には生のリクエストボディが必要なため、verifyで保持しておく
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.static('public'));
 
 const client = new Anthropic({
@@ -485,28 +487,27 @@ async function runMemberCommand(uid, command) {
   }
 }
 
-async function handleEvent(event) {
-  if (event.type !== 'message' || event.message.type !== 'text') return;
+// ─── コマンド処理の共通ロジック（LINE / Slack 両対応）───────────────
+// text: 受信メッセージ本文
+// reply: 即時応答を送る関数（LINEはlineReply、SlackはsendSlack）
+// source: ログ表示用のソース名（'LINE' / 'SLACK'）
+async function processCommand(text, reply, source = 'LINE') {
+  console.log(`[${source}] 受信:`, JSON.stringify(text));
 
-  const text = event.message.text.trim();
-  const replyToken = event.replyToken;
-
-  console.log('[LINE] 受信:', JSON.stringify(text));
-
-  // 停止コマンドはLINE返信待ち中でも即座に効くよう、state file転送より先に判定する
+  // 停止コマンドは返信待ち中でも即座に効くよう、state file転送より先に判定する
   if (text === '停止') {
     stopReplies();
     stopContacts();
     stopSupport();
-    return lineReply(replyToken, '全チェック処理を停止しました');
+    return reply('全チェック処理を停止しました');
   }
   if (text === '返信チェック停止') {
     stopReplies();
-    return lineReply(replyToken, '返信チェックを停止しました');
+    return reply('返信チェックを停止しました');
   }
   if (text === 'コンタクトチェック停止') {
     stopContacts();
-    return lineReply(replyToken, 'コンタクトチェックを停止しました');
+    return reply('コンタクトチェックを停止しました');
   }
 
   // reply-checker.js/support-checker.js/contact-checker.js が返信待ち中なら
@@ -534,7 +535,7 @@ async function handleEvent(event) {
   // ─── 「返信対象外チェック」───────────────────────────────────
   // 直近の返信チェックでSKIPになったユーザーと理由を一覧通知する
   if (text === '返信対象外チェック') {
-    return lineReply(replyToken, buildSkippedUsersMessage());
+    return reply(buildSkippedUsersMessage());
   }
 
   // ─── 「会員:{uid} {操作コマンド}」直接操作 ───────────────────────
@@ -544,10 +545,10 @@ async function handleEvent(event) {
   if (memberMatch) {
     const uid = memberMatch[1];
     const command = memberMatch[2].trim();
-    console.log(`[LINE] 会員直接操作: uid=${uid} command="${command}"`);
+    console.log(`[${source}] 会員直接操作: uid=${uid} command="${command}"`);
     runMemberCommand(uid, command)
       .catch(err => console.error('[MEMBER-CMD] 実行エラー:', err.message));
-    return lineReply(replyToken, `【会員操作】会員ID：${uid}\nコマンド：${command}\n処理を開始しました`);
+    return reply(`【会員操作】会員ID：${uid}\nコマンド：${command}\n処理を開始しました`);
   }
 
   // ─── 「{uid} {金額}円 入金」手動入金処理 ─────────────────────────
@@ -561,52 +562,127 @@ async function handleEvent(event) {
   if (paymentMatch) {
     const uid = paymentMatch[1];
     const amount = parseInt(paymentMatch[2].replace(/,/g, ''), 10);
-    console.log(`[LINE] 手動入金処理: uid=${uid} amount=${amount}円`);
+    console.log(`[${source}] 手動入金処理: uid=${uid} amount=${amount}円`);
     const { runPaymentCommand } = require('./utils');
     runPaymentCommand(uid, amount, lineBroadcast, process.env.DRY_RUN === 'true')
       .catch(err => console.error('[PAYMENT-CMD] 実行エラー:', err.message));
-    return lineReply(replyToken, `【入金処理】会員ID：${uid}\n入金額：${amount}円\n処理を開始しました`);
+    return reply(`【入金処理】会員ID：${uid}\n入金額：${amount}円\n処理を開始しました`);
   }
 
   if (text === '返信チェック開始') {
     if (isReplyCheckerRunning) {
-      return lineReply(replyToken, '【返信チェック】既に動作中です');
+      return reply('【返信チェック】既に動作中です');
     }
     isReplyCheckerRunning = true;
     checkReplies()
       .catch(err => console.error('[REPLY] エラー:', err.message))
       .finally(() => { isReplyCheckerRunning = false; });
-    return lineReply(replyToken, '返信チェックを開始しました');
+    return reply('返信チェックを開始しました');
   }
 
   if (text === 'サポートチェック開始') {
     checkSupport().catch(err => console.error('[SUPPORT] エラー:', err.message));
-    return lineReply(replyToken, 'サポートチェックを開始しました');
+    return reply('サポートチェックを開始しました');
   }
 
   if (text === 'コンタクトチェック開始') {
     if (isContactCheckerRunning) {
-      return lineReply(replyToken, '【コンタクトチェック】既に動作中です');
+      return reply('【コンタクトチェック】既に動作中です');
     }
     isContactCheckerRunning = true;
     checkContacts()
       .catch(err => console.error('[CONTACT] エラー:', err.message))
       .finally(() => { isContactCheckerRunning = false; });
-    return lineReply(replyToken, 'コンタクトチェックを開始しました');
+    return reply('コンタクトチェックを開始しました');
   }
 
   if (text === 'ステータス') {
-    return lineReply(replyToken, isMailCheckRunning() ? '入金処理稼働中' : '入金処理停止中');
+    return reply(isMailCheckRunning() ? '入金処理稼働中' : '入金処理停止中');
   }
 
   // 未対応メッセージはエコー返信
-  return lineReply(replyToken, '受け取りました：' + text);
+  return reply('受け取りました：' + text);
+}
+
+// ─── LINE Webhook からのイベントを共通ロジックへ渡す ────────────────
+async function handleEvent(event) {
+  if (event.type !== 'message' || event.message.type !== 'text') return;
+  const text = event.message.text.trim();
+  const replyToken = event.replyToken;
+  return processCommand(text, (msg) => lineReply(replyToken, msg), 'LINE');
 }
 
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200); // LINEは即時200が必要
   const events = req.body.events || [];
   await Promise.all(events.map(handleEvent));
+});
+
+// ─── Slack Event API 署名検証 ─────────────────────────────────────
+// https://api.slack.com/authentication/verifying-requests-from-slack
+// v0:{timestamp}:{生ボディ} を SLACK_SIGNING_SECRET でHMAC-SHA256し、
+// X-Slack-Signature ヘッダー（v0=...）と一致するか検証する
+function verifySlackSignature(req) {
+  const signingSecret = process.env.SLACK_SIGNING_SECRET;
+  if (!signingSecret) {
+    console.warn('[SLACK] SLACK_SIGNING_SECRET が未設定のため検証できません');
+    return false;
+  }
+  const signature = req.headers['x-slack-signature'];
+  const timestamp = req.headers['x-slack-request-timestamp'];
+  if (!signature || !timestamp) return false;
+
+  // リプレイ攻撃対策: 5分以上前のリクエストは拒否する
+  const fiveMinutes = 60 * 5;
+  if (Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp)) > fiveMinutes) {
+    console.warn('[SLACK] タイムスタンプが古すぎます');
+    return false;
+  }
+
+  const body = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
+  const baseString = `v0:${timestamp}:${body}`;
+  const hmac = crypto.createHmac('sha256', signingSecret).update(baseString).digest('hex');
+  const expected = `v0=${hmac}`;
+
+  const sigBuf = Buffer.from(signature);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expBuf);
+}
+
+// ─── Slack Event API エンドポイント ───────────────────────────────
+// LINEと同じコマンドをSlackのメッセージからも受け取れるようにする
+app.post('/slack/events', async (req, res) => {
+  // URL検証チャレンジ（Slack App登録時のエンドポイント確認）
+  if (req.body && req.body.type === 'url_verification') {
+    return res.status(200).send(req.body.challenge);
+  }
+
+  // 署名検証
+  if (!verifySlackSignature(req)) {
+    console.warn('[SLACK] 署名検証に失敗しました');
+    return res.sendStatus(401);
+  }
+
+  res.sendStatus(200); // Slackは3秒以内の200が必要（以降は非同期処理）
+
+  const event = req.body.event;
+  if (!event) return;
+
+  // メッセージイベントのみ処理する
+  // ・event.bot_id あり → ボット自身/他ボットの発言なので無視（無限ループ防止）
+  // ・event.subtype あり → メッセージ編集/参加通知など通常発言以外なので無視
+  if (event.type !== 'message' || event.bot_id || event.subtype) return;
+
+  const text = (event.text || '').trim();
+  if (!text) return;
+
+  try {
+    // STEP4: コマンド実行結果は sendSlack() で同じチャンネルに通知する
+    await processCommand(text, (msg) => sendSlack(msg), 'SLACK');
+  } catch (err) {
+    console.error('[SLACK] コマンド処理エラー:', err.message);
+  }
 });
 
 // 未捕捉の例外・Promise拒否でプロセスが落ちないようにする
