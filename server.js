@@ -653,13 +653,18 @@ function verifySlackSignature(req) {
 // ─── Slack Event API エンドポイント ───────────────────────────────
 // LINEと同じコマンドをSlackのメッセージからも受け取れるようにする
 app.post('/slack/events', async (req, res) => {
+  console.log('[SLACK] リクエスト受信:', req.headers['user-agent'], req.body);
+
   // URL検証チャレンジ（Slack App登録時のエンドポイント確認）
   if (req.body && req.body.type === 'url_verification') {
     return res.status(200).send(req.body.challenge);
   }
 
   // 署名検証
-  if (!verifySlackSignature(req)) {
+  console.log('[SLACK] 署名検証開始');
+  const result = verifySlackSignature(req);
+  console.log('[SLACK] 署名検証結果:', result);
+  if (!result) {
     console.warn('[SLACK] 署名検証に失敗しました');
     return res.sendStatus(401);
   }
