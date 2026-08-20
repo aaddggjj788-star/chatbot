@@ -7,6 +7,8 @@
  * 配置場所: /root/rune-bot/utils.js
  */
 
+const { chromium } = require('playwright');
+
 /**
  * 会員詳細ページを開く共通関数
  * コンタクトメール画面・返信補助画面どちらのリンクにも対応
@@ -419,9 +421,128 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
   return { totalAmount, totalActual, grandTotal, diff, reply };
 }
 
+// ─── 入金処理（ポイント追加）─────────────────────────────────────────
+// mail-checker.js の addPointsViaPlaywright（銀行入金メール検知時の処理）を
+// 移動したもの。会員IDと入金額から会員詳細ページを直接開き、ポイント追加
+// フォームを操作する。自前でブラウザを起動・ログインするため、Page不要で
+// 単独実行できる（mail-checker.js / server.js / contact-checker.js /
+// support-checker.js から共通で使用する）。
+// ※ログインフォームのセレクター/認証情報は mail-checker.js と同一のものを
+//   使用する（他のチェッカーの login() とはセレクターが異なる点に注意）
+
+// プルダウンに存在するプリセット金額（円）
+const PRESET_AMOUNTS = [1000, 1500, 3000, 5000, 10000, 15000, 20000, 30000, 50000, 70000, 100000];
+
+// ポイント計算: 入金額÷10 + 入金額×0.5%（端数切り捨て）
+function calcPaymentPoints(amount) {
+  return Math.floor(amount / 10 + amount * 0.005);
+}
+
+async function processPayment(memberId, amount, points) {
+  const BASE_URL = 'http://manager.x7j4l2p9m1.com/mg/';
+
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+  const page = await context.newPage();
+
+  try {
+    // ── ログインページを開く（ベーシック認証はコンテキストで処理）──
+    await page.goto(BASE_URL + 'mg_ope.php', { waitUntil: 'networkidle' });
+    console.log('[PAYMENT] ページタイトル:', await page.title());
+
+    // ── セッション切れページの検知・回避 ──
+    const sessionLink = page.locator('a[href*="s_system"]');
+    if (await sessionLink.count() > 0) {
+      console.log('[PAYMENT] セッション切れページを検知 → リンクをクリックしてログインページへ遷移');
+      await sessionLink.first().click();
+      await page.waitForLoadState('networkidle');
+    }
+
+    // ── ログインフォームを入力・送信 ──
+    await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.SYSTEM_LOGIN_ID);
+    await page.fill(process.env.SEL_LOGIN_PASS  || '[name="password"]', process.env.SYSTEM_LOGIN_PASS);
+    await page.click(process.env.SEL_LOGIN_SUBMIT || '[type="submit"]');
+    await page.waitForLoadState('networkidle');
+
+    // ── 会員詳細ページへ直接アクセス（検索不要）──
+    const detailUrl = `${BASE_URL}mg_kyoseitaikai.php?ken=1&ken_id=${encodeURIComponent(memberId)}`;
+    await page.goto(detailUrl, { waitUntil: 'networkidle' });
+
+    // iframeがあればその中、なければページ直接で操作
+    const frame = page.frame({ name: 'main' }) || page;
+
+    // ── ポイント追加フォームを操作 ──
+    const isPreset = PRESET_AMOUNTS.includes(amount);
+
+    if (isPreset) {
+      // プルダウンの値形式は「金額-ポイント数」（例: 1000-105）なので前方一致で選択
+      const optionValue = await frame.evaluate((amt) => {
+        const sel = document.querySelector('select[name="point_in"]');
+        const opt = Array.from(sel.options).find(o => o.value.startsWith(amt + '-'));
+        return opt ? opt.value : null;
+      }, String(amount));
+
+      if (!optionValue) throw new Error(`プルダウンに ${amount}円 の選択肢が見つかりません`);
+      await frame.selectOption('select[name="point_in"]', optionValue);
+    } else {
+      // 自由入力
+      await frame.click('input[name="ginkoRadio"][value="1"]');
+      await frame.fill('input[name="ginkoNedan"]', String(amount));
+      await frame.fill('input[name="ginkoPoint"]', String(points));
+    }
+
+    // ── ポイント追加ボタンをクリック ──
+    await frame.click('input[name="point_bg2"]');
+    await frame.waitForLoadState('networkidle');
+
+    // 成功確認
+    const errorEl = frame.locator('.error, .alert-danger, [class*="error"]');
+    const hasError = await errorEl.count() > 0;
+    if (hasError) {
+      const errorText = await errorEl.first().textContent();
+      throw new Error(`システムエラー: ${errorText}`);
+    }
+
+    return true;
+  } finally {
+    await browser.close();
+  }
+}
+
+// ─── 手動入金コマンド共通処理 ─────────────────────────────────────────
+// 「{uid} {金額}円 入金」コマンドの実処理。ポイントを計算して processPayment で
+// 追加し、完了/エラーを sendLine で通知する（server.js / contact-checker.js /
+// support-checker.js から共通で使用）。
+// sendLine: 通知関数（各ファイルの sendLine / lineBroadcast を渡す）
+async function runPaymentCommand(uid, amount, sendLine, DRY_RUN = false) {
+  const points = calcPaymentPoints(amount);
+  const now = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+  console.log(`[PAYMENT-CMD] uid=${uid} 入金額=${amount}円 → ${points}pt`);
+
+  if (DRY_RUN) {
+    console.log(`[DRY RUN] uid=${uid}: 入金処理(${amount}円 → ${points}pt)をスキップ`);
+    await sendLine(`【DRY RUN】入金処理をスキップしました\n会員ID：${uid}\n入金額：${amount}円`);
+    return;
+  }
+
+  try {
+    await processPayment(uid, amount, points);
+    await sendLine(`【入金処理完了】\n会員ID：${uid}\n入金額：${amount}円\n処理日時：${now}`);
+  } catch (err) {
+    console.error(`[PAYMENT-CMD] uid=${uid}: 入金処理に失敗:`, err.message);
+    await sendLine(`【入金処理エラー】\n会員ID：${uid}\n入金額：${amount}円\nエラー：${err.message}`);
+  }
+}
+
 module.exports = {
   openKyouseitaikai, openKyouseitaikaiBySearch,
   adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
+  calcPaymentPoints, processPayment, runPaymentCommand,
 };

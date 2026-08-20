@@ -11,8 +11,10 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const imapSimple = require('imap-simple');
 const { simpleParser } = require('mailparser');
-const { chromium } = require('playwright');
 const axios = require('axios');
+// 入金処理（ポイント追加）のロジックは utils.js に集約し、
+// contact-checker.js / support-checker.js / server.js と共通化する
+const { processPayment, calcPaymentPoints } = require('./utils');
 
 // ─── 設定 ─────────────────────────────────────────────────────────
 const TARGET_SUBJECT = '[SUI 銀行口座決済サービス] 入金のお知らせ';
@@ -20,9 +22,6 @@ const CHECK_INTERVAL_MS = 60 * 1000; // 1分ごとにチェック
 const DRY_RUN = process.env.DRY_RUN === 'true';
 const MAX_PROCESS = parseInt(process.env.MAX_PROCESS || '0', 10); // 0 = 無制限
 const TEST_MODE = process.env.TEST_MODE === 'true';
-
-// プルダウンに存在するプリセット金額（円）
-const PRESET_AMOUNTS = [1000, 1500, 3000, 5000, 10000, 15000, 20000, 30000, 50000, 70000, 100000];
 
 // 除外ID（処理しない・通知もしない）
 const EXCLUDED_IDS = [
@@ -54,11 +53,6 @@ function extractMemberId(name) {
   const half = toHalfWidth(name).trim();
   const match = half.match(/\d+/);
   return match ? match[0] : null;
-}
-
-// ポイント計算: 入金額÷10 + 入金額×0.5%（端数切り捨て）
-function calcPoints(amount) {
-  return Math.floor(amount / 10 + amount * 0.005);
 }
 
 // LINE Messaging API（broadcast）へ通知
@@ -115,85 +109,8 @@ async function connectImapWithRetry(imapConfig, maxRetries = 3) {
 }
 
 // ─── Playwright: ポイント追加処理 ───────────────────────────────────
-
-async function addPointsViaPlaywright(memberId, amount, points) {
-  const BASE_URL = 'http://manager.x7j4l2p9m1.com/mg/';
-
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  const context = await browser.newContext({
-    httpCredentials: {
-      username: process.env.BASIC_AUTH_ID,
-      password: process.env.BASIC_AUTH_PASS,
-    },
-  });
-  const page = await context.newPage();
-
-  try {
-    // ── ログインページを開く（ベーシック認証はコンテキストで処理）──
-    await page.goto(BASE_URL + 'mg_ope.php', { waitUntil: 'networkidle' });
-    console.log('[DEBUG] ページタイトル:', await page.title());
-    await page.screenshot({ path: '/tmp/login-debug.png' });
-    console.log('[DEBUG] スクリーンショット保存: /tmp/login-debug.png');
-
-    // ── セッション切れページの検知・回避 ──
-    const sessionLink = page.locator('a[href*="s_system"]');
-    if (await sessionLink.count() > 0) {
-      console.log('[DEBUG] セッション切れページを検知 → リンクをクリックしてログインページへ遷移');
-      await sessionLink.first().click();
-      await page.waitForLoadState('networkidle');
-      console.log('[DEBUG] 遷移後タイトル:', await page.title());
-    }
-
-    // ── ログインフォームを入力・送信 ──
-    await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.SYSTEM_LOGIN_ID);
-    await page.fill(process.env.SEL_LOGIN_PASS  || '[name="password"]', process.env.SYSTEM_LOGIN_PASS);
-    await page.click(process.env.SEL_LOGIN_SUBMIT || '[type="submit"]');
-    await page.waitForLoadState('networkidle');
-
-    // ── 会員詳細ページへ直接アクセス（検索不要）──
-    const detailUrl = `${BASE_URL}mg_kyoseitaikai.php?ken=1&ken_id=${encodeURIComponent(memberId)}`;
-    await page.goto(detailUrl, { waitUntil: 'networkidle' });
-
-    // iframeがあればその中、なければページ直接で操作
-    const frame = page.frame({ name: 'main' }) || page;
-
-    // ── ポイント追加フォームを操作 ──
-    const isPreset = PRESET_AMOUNTS.includes(amount);
-
-    if (isPreset) {
-      // プルダウンの値形式は「金額-ポイント数」（例: 1000-105）なので前方一致で選択
-      const optionValue = await frame.evaluate((amt) => {
-        const sel = document.querySelector('select[name="point_in"]');
-        const opt = Array.from(sel.options).find(o => o.value.startsWith(amt + '-'));
-        return opt ? opt.value : null;
-      }, String(amount));
-
-      if (!optionValue) throw new Error(`プルダウンに ${amount}円 の選択肢が見つかりません`);
-      await frame.selectOption('select[name="point_in"]', optionValue);
-    } else {
-      // 自由入力
-      await frame.click('input[name="ginkoRadio"][value="1"]');
-      await frame.fill('input[name="ginkoNedan"]', String(amount));
-      await frame.fill('input[name="ginkoPoint"]', String(points));
-    }
-
-    // ── ポイント追加ボタンをクリック ──
-    await frame.click('input[name="point_bg2"]');
-    await frame.waitForLoadState('networkidle');
-
-    // 成功確認
-    const errorEl = frame.locator('.error, .alert-danger, [class*="error"]');
-    const hasError = await errorEl.count() > 0;
-    if (hasError) {
-      const errorText = await errorEl.first().textContent();
-      throw new Error(`システムエラー: ${errorText}`);
-    }
-
-    return true;
-  } finally {
-    await browser.close();
-  }
-}
+// addPointsViaPlaywright / calcPoints は utils.js の processPayment /
+// calcPaymentPoints に移動し、他ファイルと共通化した
 
 // ─── IMAPメールチェック ───────────────────────────────────────────
 
@@ -314,7 +231,7 @@ async function checkMail() {
       }
 
       // 優先順位4: 通常処理
-      const points = calcPoints(amount);
+      const points = calcPaymentPoints(amount);
       console.log(`  → 会員ID: ${memberId}  追加ポイント: ${points}pt`);
 
       if (DRY_RUN) {
@@ -323,7 +240,7 @@ async function checkMail() {
       } else {
         console.log(`  [STEP] ポイント追加処理 開始 会員ID:${memberId} ${amount}円 → ${points}pt`);
         try {
-          await addPointsViaPlaywright(memberId, amount, points);
+          await processPayment(memberId, amount, points);
           console.log(`  [STEP] ポイント追加処理 完了 会員ID:${memberId}`);
 
           console.log('  [STEP] LINE通知 開始');

@@ -12,26 +12,25 @@
  *   STEP1: mg_contactMail.php を開く（メインページのリンクをクリック）
  *   STEP2: 「実行」ボタンをクリックして一覧を表示
  *   STEP3: background-color: #ffaaaa の行を未処理として取得
- *   STEP4: mg_mail_contact.php?u_mail=&uid={uid}（「スレッド確認」の
- *          実際の遷移先）を新しいページとして開き、
- *          スレッド内の最新メッセージを取得。取得した内容と会員情報
- *          （ポイント数・レベル・当日購入履歴）をまず
- *          「【問い合わせ受信】」としてLINEに表示する
+ *   STEP4: mg_contact_edit.php?uid={uid}（スレッド確認ページ）を新しい
+ *          ページとして開き、background-color: #aaaaff のtrを全件取得して
+ *          各tr内の textarea[name^="mess["] から問い合わせ内容を取得する。
+ *          取得した内容と会員情報（ポイント数・レベル・当日購入履歴）を
+ *          まず「【問い合わせ受信】」としてLINEに表示する
  *   STEP4.5: 問い合わせ内容にポイント関連キーワードが含まれる場合のみ、
  *          uidの本日配信メールからキャンペーンを解析し、
  *          1) 割引率調整（utils.jsのcheckAndApplyDiscount）
  *          2) ポイント差異調整（utils.jsのcheckPointDiff、差異があれば
  *             「調整する」で調整）の順で実行する
  *          （support-checker.jsのSTEP4-6・11-15相当）
- *   STEP4.6: contact-templates.json のテンプレートにClaude APIで
- *          自動マッチングを試みる。一致すればLINEで送信確認のみ行い、
- *          「送信」ならそのまま送信して次のコンタクトへ
- *          （「スキップ」・未一致・タイムアウトなら手動対応フローへ）
- *   STEP4.7: テンプレート該当なし（templateId=null）の場合、STEP4.5で
- *          実施した割引率・ポイント調整の内容をプロンプトに含めた上で
- *          Claude APIで返答文を自動生成しLINEで確認。「送信」でそのまま
- *          送信、「差し替え#文章」で内容を変更して送信、それ以外は
- *          手動対応フローへ
+ *   STEP4.6: 返答方法はコマンドで明示的に指定する（テンプレート自動照合は廃止）。
+ *          「テンプレート{番号}」→ contact-templates.json の該当番号の
+ *            テンプレートを使用（送信確認後に送信）
+ *          「開始」→ STEP4.5で実施した割引率・ポイント調整の内容を
+ *            プロンプトに含めた上でClaude APIで返答文を自動生成しLINEで確認。
+ *            「送信」でそのまま送信、「差し替え#文章」で内容を変更して送信、
+ *            それ以外は手動対応フローへ
+ *          「開始#補足」→ 補足を踏まえてClaude APIで返答文を自動生成
  *   STEP5: LINEに問い合わせ内容を通知し、返答内容の入力を依頼
  *   STEP6: LINEからの返答を受け取る（5分タイムアウト、「スキップ」で次へ）
  *   STEP7: テンプレートに差し込んだ送信内容をLINEで確認
@@ -54,6 +53,7 @@ const {
   openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
+  runPaymentCommand,
 } = require('./utils');
 
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
@@ -138,8 +138,9 @@ function waitForLineReply() {
 }
 
 // ─── 処理コマンド解析 ─────────────────────────────────────────────
-// 「開始」「開始#補足」「スキップ」「〇pt追加」「〇pt減算」「レベル変更:〇」
-// 「メール確認」「決済確認」「絆変更:{キャラID}:{value}」および上記の組み合わせ
+// 「開始」「開始#補足」「テンプレート{番号}」「スキップ」「〇pt追加」「〇pt減算」
+// 「レベル変更:〇」「メール確認」「決済確認」「絆変更:{キャラID}:{value}」
+// 「{uid} {金額}円 入金」および上記の組み合わせ
 // （例:「メール確認 決済確認 開始」）に対応する。
 // 各コマンドは末尾に来る組み合わせもあるためincludesで判定する。
 // ポイント操作は「ポイント」の接頭辞を省略でき、追加/減算のどちらも指定できる
@@ -154,6 +155,8 @@ function parseCommand(reply) {
     level:      body.match(/レベル変更:(\d+)/)?.[1] ?? null,
     start:      body.includes('開始'),
     supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
+    template:   (m => (m ? parseInt(m[1], 10) : null))(body.match(/テンプレート(\d+)/)),
+    payment:    (m => (m ? { uid: m[1], amount: parseInt(m[2].replace(/,/g, ''), 10) } : null))(body.match(/(\d+)\s+([\d,]+)円\s*入金/)),
     mail:       body.includes('メール確認'),
     bank:       body.includes('決済確認'),
     skip:       body.includes('スキップ'),
@@ -254,16 +257,30 @@ async function collectMemberInfo(page, uid) {
 
 // 処理コマンド待ちでLINEに表示するコマンド一覧
 const COMMAND_HELP_LINES = [
-  '「開始」：返答生成へ',
-  '「開始#補足」：補足を踏まえた返答生成へ',
+  '「開始」：AIで返答を自動生成',
+  '「開始#補足」：補足を踏まえてAIで返答を自動生成',
+  '「テンプレート{番号}」：指定番号のテンプレートで返答',
   '「スキップ」：このユーザーをスキップ',
   '「{数値}pt追加」「{数値}pt減算」：ポイント増減のみ',
   '「レベル変更:{数値}」：レベル変更のみ',
   '「メール確認」：当日配信メールを通知',
   '「決済確認」：当日決済履歴を通知',
   '「絆変更:{キャラID}:{value}」：絆レベル変更のみ',
+  '「{uid} {金額}円 入金」：手動で入金処理を実行',
   '（例）「メール確認 決済確認 開始」',
 ];
+
+// contact-templates.json のテンプレート一覧を「番号: id」形式で返す
+// （「テンプレート{番号}」コマンドで指定できるよう問い合わせ受信時に表示する）
+function buildTemplateListLines() {
+  try {
+    const templates = JSON.parse(fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')).templates;
+    return ['【テンプレート一覧】', ...templates.map((t, i) => `${i + 1}: ${t.id}`)];
+  } catch (e) {
+    console.log('[TEMPLATE] テンプレート一覧の読み込みに失敗:', e.message);
+    return [];
+  }
+}
 
 // ─── 「絆変更:{キャラID}:{value}」コマンド ─────────────────────────
 // 指定キャラIDの絆レベルを確認なしで即時変更する
@@ -371,6 +388,8 @@ async function runSubCommands(page, uid, cmd) {
   if (cmd.mail) await notifyTodayMails(page, uid);
   if (cmd.bank) await notifyBankHistory(page, uid);
   if (cmd.love) await applyLoveLevel(page, uid, cmd.love.charaId, cmd.love.value);
+  // 「{uid} {金額}円 入金」手動入金処理（コマンド内のuidを使用する）
+  if (cmd.payment) await runPaymentCommand(cmd.payment.uid, cmd.payment.amount, sendLine, DRY_RUN);
 
   if ((cmd.point || cmd.level) && !uid) {
     console.log('[WARN] uid未取得のためポイント/レベル操作をスキップ');
@@ -494,13 +513,13 @@ async function getUnprocessedContacts(contactPage) {
   return contacts;
 }
 
-// ─── STEP4: mg_mail_contact.php を新しいページとして開き最新メッセージを取得 ──
-// 「スレッド確認」リンクの実際の遷移先は mg_mail_contact.php?u_mail=&uid={uid}
-// であることが判明したため、そのURLを直接新しいページとして開く
+// ─── STEP4: mg_contact_edit.php（スレッド確認ページ）を新しいページで開く ──
+// スレッド確認ページの遷移先は mg_contact_edit.php?uid={uid} であるため、
+// そのURLを直接新しいページとして開く
 
 async function openContactThread(contactPage, uid) {
-  const url = `${BASE_URL}mg_mail_contact.php?u_mail=&uid=${encodeURIComponent(uid)}`;
-  console.log(`[STEP4] mg_mail_contact.php を新しいページで開く: ${url}`);
+  const url = `${BASE_URL}mg_contact_edit.php?uid=${encodeURIComponent(uid)}`;
+  console.log(`[STEP4] mg_contact_edit.php を新しいページで開く: ${url}`);
 
   const threadPage = await contactPage.context().newPage();
   await threadPage.goto(url, { waitUntil: 'networkidle' }).catch(async () => {
@@ -511,7 +530,7 @@ async function openContactThread(contactPage, uid) {
   return threadPage;
 }
 
-// STEP4で開いたthreadPage（mg_mail_contact.php）から全メッセージ本文を取得する。
+// STEP4で開いたthreadPage（mg_contact_edit.php）から全メッセージ本文を取得する。
 // background-color: #aaaaffのtr内のtextarea（name="mess[...]"）から
 // 各メッセージの本文を取得し、"---"区切りで連結する
 async function getLatestThreadMessage(page, previewText) {
@@ -791,43 +810,6 @@ ${actionLines.join('\n')}
   return text || null;
 }
 
-// ─── STEP4.6: contact-templates.json からテンプレートIDをClaude APIで判定 ──
-// 該当なし・判定失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
-async function matchTemplate(inquiryText) {
-  const response = await claudeClient.messages.create({
-    model: 'claude-sonnet-5',
-    max_tokens: 100,
-    system: 'テンプレートIDのみをJSON形式で返してください。',
-    messages: [{
-      role: 'user',
-      content: `以下の問い合わせに最も近いテンプレートIDを返してください。
-該当なしの場合はnullを返してください。
-
-テンプレートID一覧：
-withdraw: 退会したい・退会申請
-mail_open: メールが開けない・メールが見れない・メールボックスが開かない
-no_reply: 先生から返事が来ない・返信がない・連絡がない
-unclear: 問い合わせ内容が意味不明・何を聞いているかわからない
-message_to_teacher: 先生への伝言・先生に伝えてほしい
-login: ログインできない・サイトに入れない
-point_purchase: ポイントの買い方・購入方法・決済方法を知りたい
-free_period: 無料期間はいつまでか・無料はどのくらいか
-discount_ticket: 割引チケット・ガチャチケット・クーポンの使い方
-
-ポイントの残高・計算・反映などに関する問い合わせはnullを返してください。
-購入方法を聞いている場合のみpoint_purchaseを選択してください。
-
-問い合わせ内容：${inquiryText}
-
-{"templateId": "ID"} の形式で返してください。`,
-    }],
-  });
-
-  const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
-  const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-  return parsed.templateId || null;
-}
-
 // STEP8 / 自動返答で共通の送信処理（件名・本文を入力してgotoHeavenをクリック）
 // 成功時はtrue、失敗時はfalseを返す
 async function submitContactReply(threadPage, bodyText, uid, label) {
@@ -910,6 +892,8 @@ async function processContacts(page) {
               content,
               '---',
               ...(memberInfoLines.length > 0 ? [...memberInfoLines, ''] : []),
+              ...buildTemplateListLines(),
+              '',
               '処理コマンドを入力してください：',
               ...COMMAND_HELP_LINES,
             ].join('\n')
@@ -936,10 +920,11 @@ async function processContacts(page) {
         // 照会・更新系コマンド（メール確認/決済確認/絆変更/ポイント/レベル）を実行
         await runSubCommands(page, contact.uid, parsed);
 
-        // 照会コマンドが含まれ、かつ「開始」「スキップ」の指示がなければ
-        // 結果を確認したうえで次のコマンドを入力できるようコマンド待ちに戻る
-        if ((parsed.mail || parsed.bank) && !parsed.start && !parsed.skip) {
-          console.log(`[CMD] uid=${contact.uid}: 照会コマンドのみ → 再度コマンド待ちへ`);
+        // 照会・入金コマンドが含まれ、かつ「開始」「テンプレート」「スキップ」の
+        // 指示がなければ、結果を確認したうえで次のコマンドを入力できるよう
+        // コマンド待ちに戻る
+        if ((parsed.mail || parsed.bank || parsed.payment) && !parsed.start && !parsed.template && !parsed.skip) {
+          console.log(`[CMD] uid=${contact.uid}: 照会/入金コマンドのみ → 再度コマンド待ちへ`);
           continue;
         }
 
@@ -948,12 +933,49 @@ async function processContacts(page) {
       }
       if (timedOut) continue;
 
-      const { start: startMatch, supplement } = cmd;
+      const { start: startMatch, supplement, template: templateNum } = cmd;
       const startReply = cmd.reply;
+
+      // ─── STEP4.6a: 「テンプレート{番号}」指定時は該当テンプレートで返答 ──
+      // テンプレートの自動照合は廃止し、番号による明示指定のみを受け付ける
+      if (templateNum) {
+        const templates = JSON.parse(fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')).templates;
+        const template = templates[templateNum - 1];
+        if (!template) {
+          console.log(`[TEMPLATE] uid=${contact.uid}: テンプレート${templateNum}は存在しません`);
+          await sendLine(`【エラー】テンプレート${templateNum}は存在しません（1〜${templates.length}で指定してください）`);
+          continue;
+        }
+        await sendLine([
+          '【テンプレート返答候補】',
+          `テンプレート${templateNum}：${template.id}`,
+          '---',
+          template.response,
+          '---',
+          '「送信」：そのまま送信',
+          '「スキップ」：手動対応へ',
+        ].join('\n'));
+
+        let tReply = null;
+        try {
+          tReply = await waitForLineReply();
+        } catch (e) {
+          console.log(`[TIMEOUT] uid=${contact.uid}: テンプレート確認 5分タイムアウト → 次のユーザーへ`);
+          continue;
+        }
+        console.log(`[LINE] テンプレート確認返信: ${tReply}`);
+
+        if (tReply === '送信') {
+          await submitContactReply(threadPage, template.response, contact.uid, `テンプレート${templateNum}（${template.id}）`);
+        } else {
+          console.log(`[TEMPLATE] uid=${contact.uid}: テンプレート送信をスキップ`);
+        }
+        continue;
+      }
 
       // 3. 「開始」がなければ（スキップ含む）次のユーザーへ
       if (!startMatch) {
-        console.log(`[SKIP] uid=${contact.uid}: 開始コマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
+        console.log(`[SKIP] uid=${contact.uid}: 開始/テンプレートコマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
         continue;
       }
 
@@ -973,49 +995,10 @@ async function processContacts(page) {
         console.log(`[CAMPAIGN] uid=${contact.uid}: ポイント関連キーワードなし → STEP4.5をスキップ`);
       }
 
-      // ─── STEP4.6: テンプレート自動判定 ─────────────────────────
-      let templateId = null;
-      try {
-        templateId = await matchTemplate(content);
-      } catch (e) {
-        console.log(`[TEMPLATE] uid=${contact.uid}: テンプレート判定に失敗: ${e.message}`);
-      }
-      console.log(`[TEMPLATE] uid=${contact.uid}: templateId=${templateId}`);
-
-      if (templateId) {
-        const templates = JSON.parse(fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')).templates;
-        const template = templates.find(t => t.id === templateId);
-        if (!template) {
-          console.log(`[TEMPLATE] uid=${contact.uid}: templateId="${templateId}" に一致するテンプレートが見つかりません`);
-        } else {
-          await sendLine([
-            '【自動返答候補】',
-            `テンプレート：${template.id}`,
-            '---',
-            template.response,
-            '---',
-            '「送信」：そのまま送信',
-            '「スキップ」：手動対応へ',
-          ].join('\n'));
-
-          let autoReply = null;
-          try {
-            autoReply = await waitForLineReply();
-          } catch (e) {
-            console.log(`[TIMEOUT] uid=${contact.uid}: 自動返答確認 5分タイムアウト → 手動対応へ`);
-          }
-          console.log(`[LINE] 自動返答確認返信: ${autoReply}`);
-
-          if (autoReply === '送信') {
-            await submitContactReply(threadPage, template.response, contact.uid, `自動返答（${template.id}）`);
-            continue;
-          }
-          console.log(`[TEMPLATE] uid=${contact.uid}: 自動返答をスキップ → 手動対応フローへ`);
-        }
-      }
-
-      // ─── STEP4.7: テンプレート該当なし → Claude APIで返答文を自動生成 ──
-      if (!templateId) {
+      // ─── STEP4.6b: 「開始」→ Claude APIで返答文を自動生成 ─────────
+      // テンプレート自動照合は廃止したため、開始コマンドは常にAI生成を行う。
+      // STEP4.5で実施した割引率・ポイント調整の内容・補足をプロンプトに反映する
+      {
         let aiReplyText = null;
         try {
           aiReplyText = await generateReplyWithClaude(content, campaignResult, supplement);

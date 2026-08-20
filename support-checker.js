@@ -33,6 +33,7 @@ const {
   openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
+  runPaymentCommand,
 } = require('./utils');
 
 const anthropic = new Anthropic();
@@ -119,8 +120,8 @@ function waitForLineReply() {
 
 // ─── 処理コマンド解析 ─────────────────────────────────────────────
 // 「開始」「開始#補足」「手動対応」「スキップ」「〇pt追加」「〇pt減算」「レベル変更:〇」
-// 「メール確認」「決済確認」「絆変更:{キャラID}:{value}」および上記の組み合わせ
-// （例:「メール確認 決済確認 開始」）に対応する。
+// 「メール確認」「決済確認」「絆変更:{キャラID}:{value}」「{uid} {金額}円 入金」
+// および上記の組み合わせ（例:「メール確認 決済確認 開始」）に対応する。
 // 各コマンドは末尾に来る組み合わせもあるためincludesで判定する。
 // ポイント操作は「ポイント」の接頭辞を省略でき、追加/減算のどちらも指定できる
 // （point: { amount, sign } / signは追加なら '+'、減算なら '-'）
@@ -135,6 +136,7 @@ function parseCommand(reply) {
     start:      body.includes('開始'),
     supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
     manual:     body.includes('手動対応'),
+    payment:    (m => (m ? { uid: m[1], amount: parseInt(m[2].replace(/,/g, ''), 10) } : null))(body.match(/(\d+)\s+([\d,]+)円\s*入金/)),
     mail:       body.includes('メール確認'),
     bank:       body.includes('決済確認'),
     skip:       body.includes('スキップ'),
@@ -251,6 +253,7 @@ function commandHelpLines(startLabel) {
     '「メール確認」：当日配信メールを通知',
     '「決済確認」：当日決済履歴を通知',
     '「絆変更:{キャラID}:{value}」：絆レベル変更のみ',
+    '「{uid} {金額}円 入金」：手動で入金処理を実行',
     '（例）「メール確認 決済確認 開始」',
   ];
 }
@@ -262,6 +265,8 @@ async function runSubCommands(page, uid, cmd) {
   if (cmd.mail) await notifyTodayMails(page, uid);
   if (cmd.bank) await notifyBankHistory(page, uid);
   if (cmd.love) await applyLoveLevel(page, uid, cmd.love.charaId, cmd.love.value);
+  // 「{uid} {金額}円 入金」手動入金処理（コマンド内のuidを使用する）
+  if (cmd.payment) await runPaymentCommand(cmd.payment.uid, cmd.payment.amount, sendLine, DRY_RUN);
 
   if ((cmd.point || cmd.level) && !uid) {
     console.log('[WARN] uid未取得のためポイント/レベル操作をスキップ');
@@ -340,10 +345,10 @@ async function waitForCommand(page, candidate, headerLines, startLabel) {
     // 照会・更新系コマンド（メール確認/決済確認/絆変更/ポイント/レベル）を実行
     await runSubCommands(page, candidate.uid, parsed);
 
-    // 照会コマンドが含まれ、かつ「開始」「手動対応」「スキップ」の指示がなければ
-    // 結果を確認したうえで次のコマンドを入力できるようコマンド待ちに戻る
-    if ((parsed.mail || parsed.bank) && !parsed.start && !parsed.manual && !parsed.skip) {
-      console.log(`[CMD] ${candidate.userName}: 照会コマンドのみ → 再度コマンド待ちへ`);
+    // 照会・入金コマンドが含まれ、かつ「開始」「手動対応」「スキップ」の指示が
+    // なければ、結果を確認したうえで次のコマンドを入力できるようコマンド待ちに戻る
+    if ((parsed.mail || parsed.bank || parsed.payment) && !parsed.start && !parsed.manual && !parsed.skip) {
+      console.log(`[CMD] ${candidate.userName}: 照会/入金コマンドのみ → 再度コマンド待ちへ`);
       continue;
     }
 

@@ -524,6 +524,24 @@ async function handleEvent(event) {
     return lineReply(replyToken, `【会員操作】会員ID：${uid}\nコマンド：${command}\n処理を開始しました`);
   }
 
+  // ─── 「{uid} {金額}円 入金」手動入金処理 ─────────────────────────
+  // 例:「1042287 10000円 入金」
+  // 入金メール（mail-checker.js）と同じロジック（utils.js の processPayment）で
+  // ポイントを付与する。処理には時間がかかりreplyTokenが失効するため、
+  // 受付だけ即返信し、結果はブロードキャストで通知する。
+  // ※チェッカーが返信待ち中の場合は上のstate file転送で先にチェッカーへ渡るため、
+  //   ここに来るのはチェッカー非稼働時（単独コマンド）のみ
+  const paymentMatch = text.match(/^(\d+)\s+([\d,]+)円\s+入金$/);
+  if (paymentMatch) {
+    const uid = paymentMatch[1];
+    const amount = parseInt(paymentMatch[2].replace(/,/g, ''), 10);
+    console.log(`[LINE] 手動入金処理: uid=${uid} amount=${amount}円`);
+    const { runPaymentCommand } = require('./utils');
+    runPaymentCommand(uid, amount, lineBroadcast, process.env.DRY_RUN === 'true')
+      .catch(err => console.error('[PAYMENT-CMD] 実行エラー:', err.message));
+    return lineReply(replyToken, `【入金処理】会員ID：${uid}\n入金額：${amount}円\n処理を開始しました`);
+  }
+
   if (text === '返信チェック開始') {
     if (isReplyCheckerRunning) {
       return lineReply(replyToken, '【返信チェック】既に動作中です');
