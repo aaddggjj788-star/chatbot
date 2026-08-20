@@ -264,7 +264,26 @@ app.post('/inquiry', async (req, res) => {
 
 // ─── LINE Bot Webhook ─────────────────────────────────────────────
 
+// Slackへ通知する。SLACK_WEBHOOK_URL が未設定なら何もしない
+async function sendSlack(text) {
+  if (!process.env.SLACK_WEBHOOK_URL) return;
+  await fetch(process.env.SLACK_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  }).catch(err => console.error('Slack通知エラー:', err.message));
+}
+
+// SLACK_ONLY=true のときはLINE送信をスキップしてSlackのみに通知する
+const SLACK_ONLY = process.env.SLACK_ONLY === 'true';
+
 async function lineReply(replyToken, text) {
+  // Slackにも通知する（SLACK_WEBHOOK_URL設定時のみ動作）
+  await sendSlack(text);
+
+  // SLACK_ONLY のときはLINE返信を行わない
+  if (SLACK_ONLY) return;
+
   await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: {
@@ -279,7 +298,14 @@ async function lineReply(replyToken, text) {
 }
 
 // LINEへブロードキャスト送信する（replyTokenが使えない非同期処理の完了通知用）
+// SLACK_WEBHOOK_URL設定時はSlackにも通知し、SLACK_ONLY=true時はSlackのみに通知する
 async function lineBroadcast(text) {
+  // Slackにも通知する（SLACK_WEBHOOK_URL設定時のみ動作）
+  await sendSlack(text);
+
+  // SLACK_ONLY のときはLINEブロードキャストを行わない
+  if (SLACK_ONLY) return;
+
   await fetch('https://api.line.me/v2/bot/message/broadcast', {
     method: 'POST',
     headers: {
