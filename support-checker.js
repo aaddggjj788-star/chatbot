@@ -1259,11 +1259,11 @@ async function checkSupport() {
       console.log('[DEBUG] allCampaigns:', JSON.stringify(allCampaigns));
 
       console.log('[STEP10-14] ブラウザバック→ポイント増減履歴から当日の銀行振込履歴を取得');
-      const { bankRows, historyPage } = await getBankHistory(page, mainFrame);
+      const { bankRows, historyPage, couponLevel } = await getBankHistory(page, mainFrame);
       console.log(`[STEP14] 時間・ポイント・金額の抽出成功: ${bankRows.length}件`);
 
       console.log('[STEP15] ポイント計算と照合（当日の入金合計で判定）');
-      const { totalAmount, diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN);
+      const { totalAmount, diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN, couponLevel);
 
       if (diff !== 0) {
         if (reply === '調整する' && !DRY_RUN) {

@@ -116,6 +116,28 @@ async function getPointLevel(kyouseiPage) {
 }
 
 /**
+ * ポイントくじクーポンのレベルを取得する共通関数
+ * 会員詳細ページ（mg_kyoseitaikai.php）の select[name="autoLv[116]"] の値を返す
+ */
+async function getCouponLevel(kyouseiPage) {
+  return await kyouseiPage.evaluate(() => {
+    const select = document.querySelector('select[name="autoLv[116]"]');
+    return select ? parseInt(select.value) : null;
+  });
+}
+
+// ポイントくじクーポンのレベル → 付与ポイント/必要入金額の対応表
+// 当日の購入合計金額が minAmount 以上の場合のみ pt を期待値に加算する
+const couponLevelMap = {
+  3:  { pt: 300,  minAmount: 5000 },
+  4:  { pt: 500,  minAmount: 10000 },
+  5:  { pt: 700,  minAmount: 10000 },
+  6:  { pt: 1000, minAmount: 15000 },
+  57: { pt: 1500, minAmount: 15000 },
+  58: { pt: 2000, minAmount: 15000 },
+};
+
+/**
  * 割引率チェックと適用フロー
  * campaigns: support-checker.jsで取得したキャンペーン情報
  * totalAmount: 当日の購入累計金額
@@ -329,6 +351,16 @@ async function getBankHistory(topPage, target) {
   await target.evaluate(() => window.history.back());
   await new Promise(r => setTimeout(r, 2000));
 
+  // 会員詳細ページに戻ったこのタイミングでポイントくじクーポンのLvを取得しておく
+  // （この後ポイント増減履歴へ遷移すると autoLv[116] が参照できなくなるため）
+  let couponLevel = null;
+  try {
+    couponLevel = await getCouponLevel(target);
+    console.log(`[UTILS] ポイントくじクーポンLv: ${couponLevel}`);
+  } catch (e) {
+    console.log('[UTILS] ポイントくじクーポンLvの取得に失敗:', e.message);
+  }
+
   console.log(`[UTILS] ポイント増減履歴を開く前のURL: ${target.url()}`);
   console.log('[UTILS] 「ポイント増減履歴」を開く');
   const popupPromise = topPage.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
@@ -373,28 +405,34 @@ async function getBankHistory(topPage, target) {
   }).filter(r => !Number.isNaN(r.point) && r.amount > 0);
 
   console.log(`[UTILS] 銀行振込履歴取得: ${parsedBankRows.length}件`);
-  return { bankRows: parsedBankRows, historyPage };
+  return { bankRows: parsedBankRows, historyPage, couponLevel };
 }
 
 // ─── STEP15相当: ポイント差異チェック ─────────────────────────────
 // 期待ポイントと実際のポイントを照合し、差異があればLINEに確認通知して
 // 返信を待つ。実際の調整（adjustPoint呼び出し）は呼び出し側で行う
-async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, DRY_RUN) {
+async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, DRY_RUN, couponLevel = null) {
   const totalAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
   const totalActual = bankRows.reduce((sum, r) => sum + r.point, 0);
-  const totalExpected = bankRows.reduce((sum, r) => {
-    const normalPt = Math.floor(r.amount / 10);
-    const servicePt = r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0;
-    return sum + normalPt + servicePt;
-  }, 0);
+  const normalPt = bankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
+  const servicePt = bankRows.reduce(
+    (sum, r) => sum + (r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0), 0);
   const campaignBonus = calcExpectedPoints(totalAmount, campaigns).campaignBonus;
-  const grandTotal = totalExpected + campaignBonus;
+
+  // ポイントくじクーポン: 当日の購入合計金額が minAmount 以上なら期待値に加算する
+  let couponPt = 0;
+  const couponInfo = couponLevel != null ? couponLevelMap[couponLevel] : null;
+  if (couponInfo && totalAmount >= couponInfo.minAmount) {
+    couponPt = couponInfo.pt;
+  }
+
+  const grandTotal = normalPt + servicePt + campaignBonus + couponPt;
   const diff = totalActual - grandTotal;
-  console.log(`[UTILS] 入金合計=${totalAmount}円 期待値合計=${grandTotal}pt（通常+サービス${totalExpected}+補助${campaignBonus}） 実際合計=${totalActual}pt 差異=${diff}`);
+  console.log(`[UTILS] 入金合計=${totalAmount}円 期待値合計=${grandTotal}pt（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}+くじクーポン${couponPt}(Lv.${couponLevel}）） 実際合計=${totalActual}pt 差異=${diff}`);
 
   if (diff === 0) {
     console.log('[UTILS] 一致 → 問題なし');
-    return { totalAmount, totalActual, grandTotal, diff: 0, reply: null };
+    return { totalAmount, totalActual, grandTotal, couponPt, couponLevel, diff: 0, reply: null };
   }
 
   const diffLabel = diff < 0 ? '不足' : '過剰';
@@ -403,6 +441,10 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
   await sendLine(
     `【ポイント確認】\n` +
     `入金合計：${totalAmount.toLocaleString('en-US')}円\n` +
+    `通常付与：${normalPt}pt\n` +
+    `サービスpt：${servicePt}pt\n` +
+    `キャンペーン補助：${campaignBonus}pt\n` +
+    `くじクーポン：${couponPt}pt（Lv.${couponLevel != null ? couponLevel : '-'}）\n` +
     `期待ポイント合計：${grandTotal}pt\n` +
     `実際のポイント合計：${totalActual}pt\n` +
     `差異：${diffAbs}pt（${diffLabel}）\n` +
@@ -418,7 +460,7 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
 
   if (reply !== null) console.log(`[UTILS] LINE返信: ${reply}`);
 
-  return { totalAmount, totalActual, grandTotal, diff, reply };
+  return { totalAmount, totalActual, grandTotal, couponPt, couponLevel, diff, reply };
 }
 
 // ─── 入金処理（ポイント追加）─────────────────────────────────────────
@@ -541,7 +583,7 @@ async function runPaymentCommand(uid, amount, sendLine, DRY_RUN = false) {
 
 module.exports = {
   openKyouseitaikai, openKyouseitaikaiBySearch,
-  adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, setLoveLevel,
+  adjustPoint, setPointLevel, getPointLevel, getCouponLevel, getCurrentPoint, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
   calcPaymentPoints, processPayment, runPaymentCommand,

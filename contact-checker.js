@@ -711,7 +711,7 @@ async function checkCampaignAndPoints(page, contact) {
       return result;
     }
 
-    const { bankRows, historyPage } = await getBankHistory(page, kyouseiPage);
+    const { bankRows, historyPage, couponLevel } = await getBankHistory(page, kyouseiPage);
     console.log(`[CAMPAIGN] uid=${contact.uid}: 銀行振込履歴 ${bankRows.length}件`);
     if (bankRows.length === 0) return result;
 
@@ -730,7 +730,7 @@ async function checkCampaignAndPoints(page, contact) {
     }
 
     // ─── ポイント調整 ────────────────────────────────────────
-    const { diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN);
+    const { diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN, couponLevel);
     if (diff !== 0 && reply === '調整する') {
       if (historyPage !== kyouseiPage) {
         await historyPage.close().catch(() => {});
