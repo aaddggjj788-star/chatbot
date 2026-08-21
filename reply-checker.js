@@ -28,6 +28,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { parse: parseCSVSync } = require('csv-parse/sync');
+const { sendSlack } = require('./slack-notify');
 
 const LOGIN_URL   = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const BASE_URL    = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
@@ -77,9 +78,13 @@ function buildSkippedMessage() {
   ].join('\n');
 }
 
-// ─── LINE 送信 ────────────────────────────────────────────────────
+// ─── LINE / Slack 送信 ────────────────────────────────────────────
 
 async function sendLine(message) {
+  // LINE通知に加えてSlackへも同じ内容を送る。
+  // SLACK_WEBHOOK_URL未設定なら何もしない。以降のLINE送信処理には影響しない。
+  await sendSlack(message);
+
   const MAX_RETRY = 3;
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     try {

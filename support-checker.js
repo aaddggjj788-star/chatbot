@@ -35,6 +35,7 @@ const {
   calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
   runPaymentCommand,
 } = require('./utils');
+const { sendSlack } = require('./slack-notify');
 
 const anthropic = new Anthropic();
 
@@ -52,9 +53,13 @@ const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 let _shouldStop = false;
 
-// ─── LINE 送信 ────────────────────────────────────────────────────
+// ─── LINE / Slack 送信 ────────────────────────────────────────────
 
 async function sendLine(message) {
+  // LINE通知に加えてSlackへも同じ内容を送る。
+  // SLACK_WEBHOOK_URL未設定なら何もしない。以降のLINE送信処理には影響しない。
+  await sendSlack(message);
+
   const MAX_RETRY = 3;
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     try {
