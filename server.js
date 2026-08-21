@@ -276,8 +276,10 @@ async function sendSlack(text) {
   }).catch(err => console.error('Slack通知エラー:', err.message));
 }
 
-// SLACK_ONLY=true のときはLINE送信をスキップしてSlackのみに通知する
-const SLACK_ONLY = process.env.SLACK_ONLY === 'true';
+// SLACK_ONLY=true のときはLINE送信をスキップしてSlackのみに通知する。
+// ただしSLACK_WEBHOOK_URL未設定時は無効とする（Slackにも送れずLINEも止まると
+// 通知が完全に消えてしまうため）。各チェッカーの isSlackOnly() と同じ判定。
+const SLACK_ONLY = process.env.SLACK_ONLY === 'true' && Boolean(process.env.SLACK_WEBHOOK_URL);
 
 async function lineReply(replyToken, text) {
   // Slackにも通知する（SLACK_WEBHOOK_URL設定時のみ動作）
