@@ -15,7 +15,7 @@ const axios = require('axios');
 // 入金処理（ポイント追加）のロジックは utils.js に集約し、
 // contact-checker.js / support-checker.js / server.js と共通化する
 const { processPayment, calcPaymentPoints } = require('./utils');
-const { sendSlack } = require('./slack-notify');
+const { sendSlack, isSlackOnly } = require('./slack-notify');
 
 // ─── 設定 ─────────────────────────────────────────────────────────
 const TARGET_SUBJECT = '[SUI 銀行口座決済サービス] 入金のお知らせ';
@@ -58,9 +58,12 @@ function extractMemberId(name) {
 
 // LINE Messaging API（broadcast）へ通知（あわせてSlackへも通知）
 async function sendLine(message) {
-  // LINE通知に加えてSlackへも同じ内容を送る。
-  // SLACK_WEBHOOK_URL未設定なら何もしない。以降のLINE送信処理には影響しない。
+  // Slackへ同じ内容を送る（SLACK_WEBHOOK_URL未設定なら何もしない）
   await sendSlack(message);
+
+  // SLACK_ONLY=true かつ SLACK_WEBHOOK_URL設定ありのときはLINE送信を行わない。
+  // それ以外（SLACK_ONLY=false / SLACK_WEBHOOK_URL未設定）は従来どおりLINEへ送る。
+  if (isSlackOnly()) return;
 
   try {
     await axios.post(

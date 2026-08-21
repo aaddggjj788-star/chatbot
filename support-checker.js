@@ -35,7 +35,7 @@ const {
   calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
   runPaymentCommand,
 } = require('./utils');
-const { sendSlack } = require('./slack-notify');
+const { sendSlack, isSlackOnly } = require('./slack-notify');
 
 const anthropic = new Anthropic();
 
@@ -56,9 +56,12 @@ let _shouldStop = false;
 // ─── LINE / Slack 送信 ────────────────────────────────────────────
 
 async function sendLine(message) {
-  // LINE通知に加えてSlackへも同じ内容を送る。
-  // SLACK_WEBHOOK_URL未設定なら何もしない。以降のLINE送信処理には影響しない。
+  // Slackへ同じ内容を送る（SLACK_WEBHOOK_URL未設定なら何もしない）
   await sendSlack(message);
+
+  // SLACK_ONLY=true かつ SLACK_WEBHOOK_URL設定ありのときはLINE送信を行わない。
+  // それ以外（SLACK_ONLY=false / SLACK_WEBHOOK_URL未設定）は従来どおりLINEへ送る。
+  if (isSlackOnly()) return;
 
   const MAX_RETRY = 3;
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
