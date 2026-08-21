@@ -650,8 +650,105 @@ function verifySlackSignature(req) {
   return crypto.timingSafeEqual(sigBuf, expBuf);
 }
 
-// ─── Slack Event API エンドポイント ───────────────────────────────
-// LINEと同じコマンドをSlackのメッセージからも受け取れるようにする
+// ─── Slackメッセージイベントの共通処理 ─────────────────────────────
+// Socket Mode / Request URL のどちらで受信しても同じ処理を通す。
+// event: Slack Events API の event オブジェクト
+async function handleSlackMessageEvent(event) {
+  if (!event) return;
+
+  // メッセージイベントのみ処理する
+  // ・event.bot_id あり → ボット自身/他ボットの発言なので無視（無限ループ防止）
+  // ・event.subtype あり → メッセージ編集/参加通知など通常発言以外なので無視
+  // ※人間からの通常発言には bot_id も subtype も付かないため除外されない
+  if (event.type !== 'message' || event.bot_id || event.subtype) {
+    console.log('[SLACK] 対象外のイベントのため無視:',
+      { type: event.type, bot_id: event.bot_id, subtype: event.subtype });
+    return;
+  }
+
+  const text = (event.text || '').trim();
+  if (!text) return;
+
+  console.log(`[SLACK] コマンド処理へ渡します channel=${event.channel} user=${event.user} text=${JSON.stringify(text)}`);
+
+  try {
+    // コマンド実行結果は sendSlack() で通知する
+    await processCommand(text, (msg) => sendSlack(msg), 'SLACK');
+  } catch (err) {
+    console.error('[SLACK] コマンド処理エラー:', err.message);
+  }
+}
+
+// ─── Slack Socket Mode 受信 ───────────────────────────────────────
+// Slack App側で Socket Mode = ON にしたため、Slackからのイベントは
+// 公開Request URL（POST /slack/events）ではなくWebSocket経由で届く。
+// 接続にはApp-Level Token（xapp-... / connections:write）が必要。
+//   SLACK_APP_TOKEN  … Socket Mode接続専用（xapp-...）
+//   SLACK_BOT_TOKEN  … Bot APIの呼び出し用（chat:write / channels:history）
+//   SLACK_WEBHOOK_URL… VPS→Slackの既存通知用（sendSlack）
+// ※ Request URL方式の POST /slack/events は既存機能への影響を避けるため
+//    残してあるが、Socket Mode有効時はSlackからHTTP送信されない。
+let slackSocket = null;
+
+function startSlackSocketMode() {
+  const appToken = process.env.SLACK_APP_TOKEN;
+  if (!appToken) {
+    console.warn('[SLACK] SLACK_APP_TOKEN が未設定のため Socket Mode を開始しません');
+    return;
+  }
+  if (!appToken.startsWith('xapp-')) {
+    console.warn('[SLACK] SLACK_APP_TOKEN が xapp- で始まっていません（App-Level Tokenを設定してください）');
+  }
+  if (!process.env.SLACK_BOT_TOKEN) {
+    console.warn('[SLACK] SLACK_BOT_TOKEN が未設定です（Bot API利用時は設定が必要）');
+  }
+
+  let SocketModeClient;
+  try {
+    ({ SocketModeClient } = require('@slack/socket-mode'));
+  } catch (e) {
+    console.error('[SLACK] @slack/socket-mode のロードに失敗しました（npm install が必要です）:', e.message);
+    return;
+  }
+
+  slackSocket = new SocketModeClient({ appToken });
+
+  // 受信できない場合の切り分け用に接続状態をログ出力する
+  slackSocket.on('authenticated', () => console.log('[SLACK] Socket Mode 認証成功'));
+  slackSocket.on('connected',     () => console.log('[SLACK] Socket Mode 接続完了（イベント受信待機中）'));
+  slackSocket.on('reconnecting',  () => console.warn('[SLACK] Socket Mode 再接続中...'));
+  slackSocket.on('disconnected',  () => console.warn('[SLACK] Socket Mode 切断されました'));
+
+  // 全イベントをここで受ける（type別ハンドラとの二重ack を避けるため一本化）
+  slackSocket.on('slack_event', async ({ ack, type, body }) => {
+    // Slackは3秒以内にackが無いとリトライするため、処理より先にackを返す
+    try {
+      await ack();
+    } catch (e) {
+      console.error('[SLACK] ack送信エラー:', e.message);
+    }
+
+    if (type !== 'events_api') {
+      console.log(`[SLACK] Socket Mode 受信（Events API以外のため未処理）: type=${type}`);
+      return;
+    }
+
+    const event = body?.event;
+    console.log(`[SLACK] Socket Mode 受信: event.type=${event?.type} channel=${event?.channel}`);
+
+    // message.channels 以外（app_home_opened など）はackのみで終了する
+    if (event?.type !== 'message') return;
+
+    await handleSlackMessageEvent(event);
+  });
+
+  slackSocket.start()
+    .then(() => console.log('[SLACK] Socket Mode を開始しました'))
+    .catch(err => console.error('[SLACK] Socket Mode 開始エラー:', err.message));
+}
+
+// ─── Slack Event API エンドポイント（Request URL方式・互換用）───────
+// Socket Mode有効時はSlackから呼ばれないが、既存機能への影響を避けるため残す
 app.post('/slack/events', async (req, res) => {
   console.log('[SLACK] リクエスト受信:', req.headers['user-agent'], req.body);
 
@@ -671,23 +768,8 @@ app.post('/slack/events', async (req, res) => {
 
   res.sendStatus(200); // Slackは3秒以内の200が必要（以降は非同期処理）
 
-  const event = req.body.event;
-  if (!event) return;
-
-  // メッセージイベントのみ処理する
-  // ・event.bot_id あり → ボット自身/他ボットの発言なので無視（無限ループ防止）
-  // ・event.subtype あり → メッセージ編集/参加通知など通常発言以外なので無視
-  if (event.type !== 'message' || event.bot_id || event.subtype) return;
-
-  const text = (event.text || '').trim();
-  if (!text) return;
-
-  try {
-    // STEP4: コマンド実行結果は sendSlack() で同じチャンネルに通知する
-    await processCommand(text, (msg) => sendSlack(msg), 'SLACK');
-  } catch (err) {
-    console.error('[SLACK] コマンド処理エラー:', err.message);
-  }
+  // 受信方式が違うだけで、以降の処理はSocket Modeと共通
+  await handleSlackMessageEvent(req.body.event);
 });
 
 // 未捕捉の例外・Promise拒否でプロセスが落ちないようにする
@@ -702,6 +784,8 @@ const server = app.listen(PORT, () => {
   console.log(`サーバー起動: http://localhost:${PORT}`);
   startMailCheck();
   console.log('[MAIL] 入金処理を自動開始しました');
+  // SlackイベントはSocket Mode（WebSocket）で受信する
+  startSlackSocketMode();
 });
 server.on('error', (err) => {
   console.error('[SERVER] listenエラー:', err.message);
