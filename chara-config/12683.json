@@ -54,6 +54,13 @@
     },
     "yu4": {
       "fileId": "12683yu1sinko"
+    } ,
+    "yu5": {
+      "fileId": "12683yu5sinko",
+      "ho": {
+        "searchTarget": "12683yu5/sinko/1",
+        "useCurrentRow": true
+      }
     }    
-  }
+  }  
 }
