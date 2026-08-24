@@ -539,7 +539,7 @@ async function processPayment(memberId, amount, points) {
     }
 
     // ── ポイント追加ボタンをクリック ──
-    await frame.click('input[name="point_bg2"]');
+    await frame.click('input[name="point_bg1"]');
     await frame.waitForLoadState('networkidle');
 
     // 成功確認
