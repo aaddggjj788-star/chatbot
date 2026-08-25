@@ -39,7 +39,11 @@
       }
     },
     "yu2": {
-      "fileId": "12676yu2sinko"
+      "fileId": "12676yu2sinko",
+      "ho": {
+        "searchTarget": "12676yu2/sinko/2",
+        "useCurrentRow": true
+      }
     },
     "yu5": {
       "ho": {
