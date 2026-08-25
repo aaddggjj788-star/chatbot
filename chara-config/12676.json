@@ -104,6 +104,7 @@
     "yu21": {
       "fileId": "12676yu19sinko",
       "ho": {
+        "fileId": "12676yu19sinko",
         "replaceHeader": "お返事確認しました。\n\n多くは語りません。\n\n確実に前に進むことで、今日にでも全ての情報を揃える事が出来ると感じています。\n\nではこちらをお願いします。\n",
         "fallback": {
           "searchTarget": "12676yu19/sinko/3",
