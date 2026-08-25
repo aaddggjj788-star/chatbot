@@ -26,6 +26,41 @@
                 "searchTarget": "12686yu1/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu2": {
+            "fileId": "12686yu2sinko",
+            "ho": {
+                "searchTarget": "12686yu2/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4": {
+            "fileId": "12686yu4sinko",
+            "ho": {
+                "searchTarget": "12686yu4/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu5": {
+            "fileId": "12686yu5sinko",
+            "ho": {
+                "searchTarget": "12686yu5/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu8": {
+            "fileId": "12686yu8sinko",
+            "ho": {
+                "searchTarget": "12686yu8/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu9": {
+            "fileId": "12686yu9sinko",
+            "ho": {
+                "searchTarget": "12686yu9/sinko/1",
+                "useCurrentRow": true
+            }
         }
     }
 }
