@@ -1976,7 +1976,9 @@ async function processUsers(page) {
       //   STEP3: resolvedCharaIdのsinko/hisコメントを履歴から検索する
       //          （表示中の履歴になければmg_k_rireki.phpで100件から再検索）
       //   STEP4: 見つかれば最新sinko+1を送信、見つからなければ
-      //          resolvedCharaId/sinko/1 を送信する
+      //          ・JSONにfallback.searchTargetがあればそのコメントアウトを
+      //            CSVから検索して取得（useCurrentRowで同行/次行を選択）
+      //          ・なければ従来通り resolvedCharaId/sinko/1 を送信する
       if (!replyData) {
         if (!charaId) {
           console.log(`[SKIP] ${userName}: /hoあり・charaIdを特定できません`);
@@ -2039,6 +2041,23 @@ async function processUsers(page) {
             recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
+        } else if (hoActionCfg?.fallback?.searchTarget) {
+          // 履歴にsinkoが見つからず、JSONのfallback.searchTargetが指定されている
+          // 場合は、そのコメントアウトをCSVから検索して取得する
+          // （searchTargetの通常処理と同様にcharaId・hoFileIdで解決する）
+          const fbCfg = hoActionCfg.fallback;
+          const fbUseCurrentRow = fbCfg.useCurrentRow === true;
+          const fbFileId = fbCfg.fileId ?? hoFileId;
+          console.log(`[COMMENT] ${userName}: /ho 根底ルール 履歴になし → fallback.searchTarget="${fbCfg.searchTarget}" useCurrentRow=${fbUseCurrentRow} fileId=${fbFileId}`);
+          historyNotFound = true;
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, fbCfg.searchTarget, fbUseCurrentRow, fbFileId);
+          } catch (e) {
+            console.error(`[ERROR] ho 根底ルール fallback.searchTarget取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
+            continue;
+          }
+          latestComment = fbCfg.searchTarget;
         } else {
           console.log(`[COMMENT] ${userName}: /ho 根底ルール 履歴になし → ${searchCharaId}/sinko/1 を送信`);
           historyNotFound = true;
