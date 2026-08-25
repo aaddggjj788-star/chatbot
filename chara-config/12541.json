@@ -25,6 +25,13 @@
         "searchTarget": "12541mu2/sinko/0",
         "useCurrentRow": true
       }
+    },
+    "yu8": {
+      "fileId": "12541yu8sinko",
+      "ho": {
+        "searchTarget": "12541yu8/sinko/1",
+        "useCurrentRow": true
+      }
     }
   }    
 }
