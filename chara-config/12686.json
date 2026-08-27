@@ -4,7 +4,7 @@
         "start": "23:00",
         "end": "09:00"
     },
-    "spanMatchExclude": [],
+    "spanMatchExclude": ["12686yu1/sinko/5"],
     "phases": {
         "mu1": {
             "fileId": "12686mu1sinko",
