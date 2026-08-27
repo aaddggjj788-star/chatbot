@@ -35,7 +35,8 @@
  *   STEP6: LINEからの返答を受け取る（5分タイムアウト、「スキップ」で次へ）
  *   STEP7: テンプレートに差し込んだ送信内容をLINEで確認
  *   STEP8: 「送信」の場合、STEP4で開いたthreadPageのフォーム
- *          （input#messTempTitle等）に入力して送信
+ *          （textarea#messTempBody）に入力して送信
+ *          ※件名は本文の1行目が自動的に使われるため入力しない
  *
  * 【LINE返信待ちの仕組み】
  *   reply-checker.js と同じ /tmp/rune-reply-state.json を共有し、
@@ -562,8 +563,8 @@ async function getLatestThreadMessage(page, previewText) {
   return previewText;
 }
 
-// STEP8用: 指定した候補セレクターを順に試し、最初に見つかった要素に入力する。
-// input#messTempTitleがタイムアウトするケースに備え、代替セレクターへ
+// 指定した候補セレクターを順に試し、最初に見つかった要素に入力する。
+// 特定のセレクターがタイムアウトするケースに備え、代替セレクターへ
 // フォールバックする。1候補あたりの待機は短めにして無駄なタイムアウトの
 // 積み重ねを防ぐ
 async function fillFirstAvailable(page, selectors, value, timeoutPerSelector = 5000) {
@@ -818,7 +819,8 @@ ${actionLines.join('\n')}
   return text || null;
 }
 
-// STEP8 / 自動返答で共通の送信処理（件名・本文を入力してgotoHeavenをクリック）
+// STEP8 / 自動返答で共通の送信処理（本文を入力してgotoHeavenをクリック）
+// 件名は本文の1行目が自動的に使われるため、件名欄への入力は行わない
 // 成功時はtrue、失敗時はfalseを返す
 async function submitContactReply(threadPage, bodyText, uid, label) {
   if (DRY_RUN) {
@@ -828,17 +830,6 @@ async function submitContactReply(threadPage, bodyText, uid, label) {
   }
 
   console.log('[DEBUG] 送信前URL:', threadPage.url());
-
-  const titleFilled = await fillFirstAvailable(
-    threadPage,
-    ['input#messTempTitle', 'input[name="title"]', '#messTempTitle'],
-    'RUNEインフォメーションです。'
-  );
-  if (!titleFilled) {
-    console.log(`[ERROR] uid=${uid}: 件名入力欄が見つかりません（現在URL: ${threadPage.url()}）`);
-    await sendLine(`【エラー】uid=${uid}: 件名入力欄が見つからず送信できませんでした`);
-    return false;
-  }
 
   await threadPage.fill('textarea#messTempBody', bodyText);
   await threadPage.click('input#gotoHeaven');
