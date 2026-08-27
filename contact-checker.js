@@ -831,8 +831,24 @@ async function submitContactReply(threadPage, bodyText, uid, label) {
 
   console.log('[DEBUG] 送信前URL:', threadPage.url());
 
-  await threadPage.fill('textarea#messTempBody', bodyText);
-  await threadPage.click('input#gotoHeaven');
+  // mg_contact_edit.phpはiframe構成で、返信フォーム（messTempBody /
+  // gotoHeaven）とメッセージ履歴（#aaaaff）が別々のiframeにある。
+  // threadPage直下には無いため、フォームを持つiframeを探して操作する
+  const frames = threadPage.frames();
+  let formFrame = null;
+  for (const frame of frames) {
+    const hasForm = await frame.locator('textarea#messTempBody').count().catch(() => 0);
+    if (hasForm > 0) {
+      formFrame = frame;
+      break;
+    }
+  }
+  if (!formFrame) {
+    throw new Error('返信フォームのiframeが見つかりません');
+  }
+
+  await formFrame.fill('textarea#messTempBody', bodyText);
+  await formFrame.click('input#gotoHeaven');
   await threadPage.waitForLoadState('networkidle').catch(() => {});
   console.log(`[SEND] uid=${uid} ${label}送信完了`);
   await sendLine(`【送信完了】uid=${uid}へ${label}を送信しました`);
