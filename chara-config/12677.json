@@ -130,6 +130,9 @@
         "useCurrentRow": true
       }
     },
+    "yu14": {
+        "fileId": "12677yu12sinko"
+    },
     "yu15": {
       "ho": {
         "fileId": "12677yu15sinko",
@@ -144,6 +147,9 @@
         "useCurrentRow": true
       }
     },
+    "yu18": {
+        "fileId": "12677yu15sinko"
+    },
     "yu19": {
       "ho": {
         "fileId": "12677yu19sinko",
@@ -157,6 +163,9 @@
         "searchTarget": "12677yu21pm/sinko/1",
         "useCurrentRow": true
       }
+    },
+    "yu21": {
+        "fileId": "12677yu19sinko"
     },
     "yu22": {
       "ho": {
