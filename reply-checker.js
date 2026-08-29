@@ -2721,8 +2721,16 @@ async function sendManualReply(uid, replyText, sendLine, waitForLineReply, DRY_R
     console.log(`[MANUAL-REPLY] uid=${uid} 最新コメントアウト: "${latestComment}"`);
 
     // 返信文の末尾に最新コメントアウトを付与したものを、確認通知・実送信の
-    // 両方で使用する（コメントアウトが無い場合は返信文のみとする）
-    const finalReplyText = latestComment ? `${replyText}\n${latestComment}` : replyText;
+    // 両方で使用する。latestComment はプレーンテキスト（例:「12686yu1/sinko/2」）の
+    // 場合があるため、コメントアウト形式（<!--...-->）に整えてから付与する
+    // （コメントアウトが無い場合は返信文のみとする）
+    let finalReplyText = replyText;
+    if (latestComment) {
+      const commentTag = latestComment.startsWith('<!--')
+        ? latestComment
+        : `<!--${latestComment}-->`;
+      finalReplyText = `${replyText}\n${commentTag}`;
+    }
 
     // ── LINE/Slackへ確認通知して返信を待つ ─────────────────────────
     await sendLine([
