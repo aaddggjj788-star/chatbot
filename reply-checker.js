@@ -2649,6 +2649,10 @@ async function getLatestKanteishiComment(page) {
 async function sendManualReply(uid, replyText, sendLine, waitForLineReply, DRY_RUN = false) {
   console.log(`[MANUAL-REPLY] uid=${uid} 返信文="${(replyText || '').slice(0, 40)}"`);
 
+  // 前回の停止要求が残っていると waitForLineReply が即座に停止扱いになるため、
+  // 確認の返信待ちを行う前に停止フラグをリセットする
+  _shouldStop = false;
+
   if (!uid || !replyText) {
     await sendLine('【エラー】対象外返信: uidまたは返信文章が指定されていません');
     return;
