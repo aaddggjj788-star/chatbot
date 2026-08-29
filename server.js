@@ -25,10 +25,12 @@ try {
 // reply-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let checkReplies = () => console.warn('reply-checker 未ロード');
 let stopReplies  = () => console.warn('reply-checker 未ロード');
+let sendManualReply = async () => console.warn('reply-checker 未ロード（sendManualReply）');
 try {
   const rc = require('./reply-checker');
   checkReplies = rc.checkReplies;
   stopReplies  = rc.stopReplies;
+  sendManualReply = rc.sendManualReply;
 } catch (e) {
   console.warn('reply-checker のロードに失敗しました:', e.message);
 }
@@ -538,6 +540,21 @@ async function processCommand(text, reply, source = 'LINE') {
   // 直近の返信チェックでSKIPになったユーザーと理由を一覧通知する
   if (text === '返信対象外チェック') {
     return reply(buildSkippedUsersMessage());
+  }
+
+  // ─── 「対象外返信:{uid} {返信文章}」対象外ユーザーへの手動返信 ─────────
+  // 例:「対象外返信:1042287 ご返信ありがとうございます。」
+  // 返信チェックで対象外となったユーザーへ、指定文章を手動で送信する。
+  // 処理には時間がかかりreplyTokenが失効するため、受付だけ即返信し、
+  // 実行結果（完了/エラー）はreply-checker側のsendLineで通知する
+  const manualReplyMatch = text.match(/^対象外返信[:：]\s*(\d+)\s+([\s\S]+)$/);
+  if (manualReplyMatch) {
+    const uid = manualReplyMatch[1];
+    const replyText = manualReplyMatch[2].trim();
+    console.log(`[${source}] 対象外返信: uid=${uid} text="${replyText.slice(0, 40)}"`);
+    sendManualReply(uid, replyText, process.env.DRY_RUN === 'true')
+      .catch(err => console.error('[MANUAL-REPLY] 実行エラー:', err.message));
+    return reply(`【対象外返信】会員ID：${uid}\n処理を開始しました`);
   }
 
   // ─── 「会員:{uid} {操作コマンド}」直接操作 ───────────────────────

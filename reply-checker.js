@@ -2593,6 +2593,107 @@ async function processUsers(page) {
   }
 }
 
+// ─── 対象外ユーザーへの手動返信 ─────────────────────────────────────
+// LINE/Slackコマンド「対象外返信:{uid} {返信文章}」から呼び出す。
+// 返信チェックで対象外となったユーザー（サポート左一覧には残っている）へ、
+// 指定した返信文章を手動で送信する。
+// 手順は processUsers 内の送信ロジックと同じ:
+//   ログイン → サポート画面 → 対象ユーザー一覧からuid一致行を特定 →
+//   ope_menuのformをsubmitしてope_mainに会話を表示 →
+//   ope_mainフレームの textarea#mess_body に入力して #chara_mail_send で送信
+// ※自前でブラウザを起動・ログインするため単独実行できる（server.jsから呼ぶ）
+async function sendManualReply(uid, replyText, DRY_RUN = false) {
+  console.log(`[MANUAL-REPLY] uid=${uid} 返信文="${(replyText || '').slice(0, 40)}"`);
+
+  if (!uid || !replyText) {
+    await sendLine('【エラー】対象外返信: uidまたは返信文章が指定されていません');
+    return;
+  }
+
+  if (DRY_RUN) {
+    console.log(`[DRY RUN] uid=${uid}: 対象外返信の送信をスキップ`);
+    await sendLine(`【DRY RUN】対象外返信をスキップしました\n会員ID：${uid}\n返信内容：${replyText}`);
+    return;
+  }
+
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  try {
+    const page = await context.newPage();
+    await login(page);
+    const supportPage = await openSupportPage(page);
+
+    // 対象ユーザー一覧からuid一致の行を特定する（processUsersと同じ絞り込み）
+    const targets = await getTargetUsers(supportPage);
+    const target = targets.find(t => String(t.uid) === String(uid));
+    if (!target) {
+      console.log(`[MANUAL-REPLY] uid=${uid}: 対象ユーザー一覧に見つかりません`);
+      await sendLine(
+        `【エラー】対象外返信\n会員ID：${uid} が対象ユーザー一覧に見つかりませんでした\n` +
+        '（既に対応済みか、一覧から外れた可能性があります）'
+      );
+      return;
+    }
+    const { userName, kid, stringID } = target;
+    console.log(`[MANUAL-REPLY] 対象特定: ${userName} (k_id=${kid}, u_id=${uid}, stringID=${stringID})`);
+
+    const menuFrame = supportPage.frame({ name: 'ope_menu' });
+    const mainFrame = supportPage.frame({ name: 'ope_main' });
+    if (!menuFrame || !mainFrame) {
+      await sendLine(`【エラー】対象外返信\n会員ID：${uid} のフレーム取得に失敗しました`);
+      return;
+    }
+
+    // submit前に#bodyKakuninを空にして前候補の内容の誤検知を防ぐ
+    await mainFrame.evaluate(() => {
+      const el = document.querySelector('#bodyKakunin');
+      if (el) el.innerHTML = '';
+    });
+
+    // ope_menuフレームでformをsubmit → Ajaxでope_mainに会話を表示
+    await menuFrame.evaluate((sid) => {
+      const form = document.getElementById(sid);
+      if (!form) throw new Error(`id="${sid}" のformが見つかりません`);
+      form.submit();
+    }, stringID);
+
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      await mainFrame.waitForFunction(() => {
+        const el = document.querySelector('#bodyKakunin');
+        const trCount = document.querySelectorAll('tr').length;
+        return el !== null && el.innerHTML.length > 0 && trCount >= 20;
+      }, { timeout: 15000 });
+    } catch (_) {
+      console.log(`[MANUAL-REPLY] ${userName}: #bodyKakunin のタイムアウト（送信は続行）`);
+    }
+
+    // ope_mainフレームのフォームに入力して送信する（sendReplyTextと同じ手順）
+    const sendFrame = supportPage.frame({ name: 'ope_main' });
+    if (!sendFrame) {
+      await sendLine(`【エラー】対象外返信\n会員ID：${uid} の送信フレーム取得に失敗しました`);
+      return;
+    }
+    await sendFrame.fill('textarea#mess_body', replyText);
+    await sendFrame.click('#chara_mail_send');
+    await sendFrame.waitForLoadState('networkidle').catch(() => {});
+    console.log(`[MANUAL-REPLY] uid=${uid} (${userName}) 送信完了`);
+
+    await sendLine(`【対象外返信完了】\n会員ID：${uid}\n返信内容：${replyText}`);
+  } catch (err) {
+    console.error(`[MANUAL-REPLY] uid=${uid}: 送信に失敗: ${err.message}`, err.stack);
+    await sendLine(`【エラー】対象外返信に失敗しました\n会員ID：${uid}\nエラー：${err.message}`);
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 // ─── エントリポイント ─────────────────────────────────────────────
 
 function stopReplies() {
@@ -2636,4 +2737,4 @@ if (require.main === module) {
   checkReplies();
 }
 
-module.exports = { checkReplies, stopReplies };
+module.exports = { checkReplies, stopReplies, sendManualReply };
