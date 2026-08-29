@@ -2593,26 +2593,64 @@ async function processUsers(page) {
   }
 }
 
+// ─── ope_mainフレームから最新の鑑定士コメントアウトを取得する ──────────
+// analyzeMessages と同じDOM走査（緑背景 #90EE90 が鑑定士メッセージ）で、
+// DOM最上位＝最新の鑑定士メッセージの本文からコメントアウト（<!--...-->）を
+// 抽出して返す。target判定に依存せず、返信済み等の対象外ユーザーでも取得できる。
+// 複数コメントがある場合は ", " で結合。鑑定士メッセージ/コメントが無ければ ''。
+async function getLatestKanteishiComment(page) {
+  const mainFrame = page.frame({ name: 'ope_main' });
+  if (!mainFrame) return '';
+  return await mainFrame.evaluate(() => {
+    function normStyle(el) {
+      return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
+    }
+    for (const trEl of document.querySelectorAll('tr')) {
+      const trBg = normStyle(trEl);
+      const tdBg = Array.from(trEl.querySelectorAll('td')).map(td => normStyle(td)).join('');
+      const bg = trBg + tdBg;
+      if (!(bg.includes('90ee90') || bg.includes('144,238,144'))) continue;
+
+      // 最新（DOM最上位）の鑑定士メッセージを発見 → 本文を取得
+      const bodyInput = trEl.querySelector('input[type="hidden"][id^="body_"]');
+      let bodyText;
+      if (bodyInput) {
+        bodyText = bodyInput.value;
+      } else {
+        const bodyNaibuEl = trEl.querySelector('div.bodyNaibu');
+        bodyText = bodyNaibuEl ? (bodyNaibuEl.textContent || '') : '';
+      }
+      const decodedBody = bodyText
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+        .replace(/\x3C/g, '<').replace(/\x3E/g, '>');
+      const comments = [];
+      const cre = /<!--([^>]+)-->/g;
+      let cm;
+      while ((cm = cre.exec(decodedBody)) !== null) comments.push(cm[1].trim());
+      return comments.length > 0 ? comments.join(', ') : '';
+    }
+    return ''; // 鑑定士メッセージなし
+  });
+}
+
 // ─── 対象外ユーザーへの手動返信 ─────────────────────────────────────
 // LINE/Slackコマンド「対象外返信:{uid} {返信文章}」から呼び出す。
 // 返信チェックで対象外となったユーザー（サポート左一覧には残っている）へ、
-// 指定した返信文章を手動で送信する。
-// 手順は processUsers 内の送信ロジックと同じ:
+// 指定した返信文章を確認のうえ手動で送信する。
+// 手順:
 //   ログイン → サポート画面 → 対象ユーザー一覧からuid一致行を特定 →
 //   ope_menuのformをsubmitしてope_mainに会話を表示 →
-//   ope_mainフレームの textarea#mess_body に入力して #chara_mail_send で送信
-// ※自前でブラウザを起動・ログインするため単独実行できる（server.jsから呼ぶ）
-async function sendManualReply(uid, replyText, DRY_RUN = false) {
+//   最新の鑑定士コメントアウトを取得 → LINE/Slackへ確認通知 → 返信待ち →
+//   「送信」の場合のみ ope_mainフレームの textarea#mess_body に入力して
+//   #chara_mail_send で送信する
+// sendLine / waitForLineReply は呼び出し側（server.js）から渡す
+// （LINE/Slack通知・返信待ちの仕組みを共有するため）
+// ※自前でブラウザを起動・ログインするため単独実行できる
+async function sendManualReply(uid, replyText, sendLine, waitForLineReply, DRY_RUN = false) {
   console.log(`[MANUAL-REPLY] uid=${uid} 返信文="${(replyText || '').slice(0, 40)}"`);
 
   if (!uid || !replyText) {
     await sendLine('【エラー】対象外返信: uidまたは返信文章が指定されていません');
-    return;
-  }
-
-  if (DRY_RUN) {
-    console.log(`[DRY RUN] uid=${uid}: 対象外返信の送信をスキップ`);
-    await sendLine(`【DRY RUN】対象外返信をスキップしました\n会員ID：${uid}\n返信内容：${replyText}`);
     return;
   }
 
@@ -2671,10 +2709,48 @@ async function sendManualReply(uid, replyText, DRY_RUN = false) {
         return el !== null && el.innerHTML.length > 0 && trCount >= 20;
       }, { timeout: 15000 });
     } catch (_) {
-      console.log(`[MANUAL-REPLY] ${userName}: #bodyKakunin のタイムアウト（送信は続行）`);
+      console.log(`[MANUAL-REPLY] ${userName}: #bodyKakunin のタイムアウト（続行）`);
     }
 
-    // ope_mainフレームのフォームに入力して送信する（sendReplyTextと同じ手順）
+    // ── 最新の鑑定士コメントアウトを取得 ───────────────────────────
+    const latestComment = await getLatestKanteishiComment(supportPage);
+    console.log(`[MANUAL-REPLY] uid=${uid} 最新コメントアウト: "${latestComment}"`);
+
+    // ── LINE/Slackへ確認通知して返信を待つ ─────────────────────────
+    await sendLine([
+      '【対象外返信確認】',
+      `会員ID：${uid}`,
+      `最終コメントアウト：${latestComment || '（なし）'}`,
+      '返信内容：',
+      '---',
+      replyText,
+      '---',
+      '「送信」または「スキップ」',
+    ].join('\n'));
+
+    let reply;
+    try {
+      reply = await waitForLineReply();
+    } catch (e) {
+      console.log(`[MANUAL-REPLY] uid=${uid}: 確認待ちタイムアウト → 中止: ${e.message}`);
+      await sendLine(`【対象外返信】会員ID：${uid}\n確認がタイムアウトしたため中止しました`);
+      return;
+    }
+    console.log(`[MANUAL-REPLY] uid=${uid} 確認返信: ${reply}`);
+
+    if (reply !== '送信') {
+      console.log(`[MANUAL-REPLY] uid=${uid}: 「送信」以外 → スキップ`);
+      await sendLine(`【対象外返信】会員ID：${uid}\nスキップしました`);
+      return;
+    }
+
+    if (DRY_RUN) {
+      console.log(`[DRY RUN] uid=${uid}: 対象外返信の送信をスキップ`);
+      await sendLine(`【DRY RUN】対象外返信の送信をスキップしました\n会員ID：${uid}`);
+      return;
+    }
+
+    // ── 「送信」→ ope_mainフレームのフォームに入力して送信 ───────────
     const sendFrame = supportPage.frame({ name: 'ope_main' });
     if (!sendFrame) {
       await sendLine(`【エラー】対象外返信\n会員ID：${uid} の送信フレーム取得に失敗しました`);
@@ -2685,7 +2761,7 @@ async function sendManualReply(uid, replyText, DRY_RUN = false) {
     await sendFrame.waitForLoadState('networkidle').catch(() => {});
     console.log(`[MANUAL-REPLY] uid=${uid} (${userName}) 送信完了`);
 
-    await sendLine(`【対象外返信完了】\n会員ID：${uid}\n返信内容：${replyText}`);
+    await sendLine(`【対象外返信完了】\n会員ID：${uid}`);
   } catch (err) {
     console.error(`[MANUAL-REPLY] uid=${uid}: 送信に失敗: ${err.message}`, err.stack);
     await sendLine(`【エラー】対象外返信に失敗しました\n会員ID：${uid}\nエラー：${err.message}`);
@@ -2737,4 +2813,4 @@ if (require.main === module) {
   checkReplies();
 }
 
-module.exports = { checkReplies, stopReplies, sendManualReply };
+module.exports = { checkReplies, stopReplies, sendManualReply, sendLine, waitForLineReply };

@@ -26,11 +26,16 @@ try {
 let checkReplies = () => console.warn('reply-checker 未ロード');
 let stopReplies  = () => console.warn('reply-checker 未ロード');
 let sendManualReply = async () => console.warn('reply-checker 未ロード（sendManualReply）');
+// sendManualReply へ渡す通知・返信待ち関数（reply-checker側の実装を共有する）
+let rcSendLine = async () => console.warn('reply-checker 未ロード（sendLine）');
+let rcWaitForLineReply = async () => { throw new Error('reply-checker 未ロード（waitForLineReply）'); };
 try {
   const rc = require('./reply-checker');
   checkReplies = rc.checkReplies;
   stopReplies  = rc.stopReplies;
   sendManualReply = rc.sendManualReply;
+  rcSendLine = rc.sendLine;
+  rcWaitForLineReply = rc.waitForLineReply;
 } catch (e) {
   console.warn('reply-checker のロードに失敗しました:', e.message);
 }
@@ -544,15 +549,17 @@ async function processCommand(text, reply, source = 'LINE') {
 
   // ─── 「対象外返信:{uid} {返信文章}」対象外ユーザーへの手動返信 ─────────
   // 例:「対象外返信:1042287 ご返信ありがとうございます。」
-  // 返信チェックで対象外となったユーザーへ、指定文章を手動で送信する。
-  // 処理には時間がかかりreplyTokenが失効するため、受付だけ即返信し、
-  // 実行結果（完了/エラー）はreply-checker側のsendLineで通知する
+  // 返信チェックで対象外となったユーザーへ、最新コメントアウトと返信内容を
+  // 確認したうえで手動送信する。処理には時間がかかりreplyTokenが失効するため、
+  // 受付だけ即返信し、確認通知・完了/エラーはreply-checker側のsendLineで通知する。
+  // 確認返信（「送信」「スキップ」）は返信待ち中のstate file転送で
+  // sendManualReply内のwaitForLineReplyへ渡る。
   const manualReplyMatch = text.match(/^対象外返信[:：]\s*(\d+)\s+([\s\S]+)$/);
   if (manualReplyMatch) {
     const uid = manualReplyMatch[1];
     const replyText = manualReplyMatch[2].trim();
     console.log(`[${source}] 対象外返信: uid=${uid} text="${replyText.slice(0, 40)}"`);
-    sendManualReply(uid, replyText, process.env.DRY_RUN === 'true')
+    sendManualReply(uid, replyText, rcSendLine, rcWaitForLineReply, process.env.DRY_RUN === 'true')
       .catch(err => console.error('[MANUAL-REPLY] 実行エラー:', err.message));
     return reply(`【対象外返信】会員ID：${uid}\n処理を開始しました`);
   }
