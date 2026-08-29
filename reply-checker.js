@@ -2720,6 +2720,10 @@ async function sendManualReply(uid, replyText, sendLine, waitForLineReply, DRY_R
     const latestComment = await getLatestKanteishiComment(supportPage);
     console.log(`[MANUAL-REPLY] uid=${uid} 最新コメントアウト: "${latestComment}"`);
 
+    // 返信文の末尾に最新コメントアウトを付与したものを、確認通知・実送信の
+    // 両方で使用する（コメントアウトが無い場合は返信文のみとする）
+    const finalReplyText = latestComment ? `${replyText}\n${latestComment}` : replyText;
+
     // ── LINE/Slackへ確認通知して返信を待つ ─────────────────────────
     await sendLine([
       '【対象外返信確認】',
@@ -2727,7 +2731,7 @@ async function sendManualReply(uid, replyText, sendLine, waitForLineReply, DRY_R
       `最終コメントアウト：${latestComment || '（なし）'}`,
       '返信内容：',
       '---',
-      replyText,
+      finalReplyText,
       '---',
       '「送信」または「スキップ」',
     ].join('\n'));
@@ -2760,7 +2764,7 @@ async function sendManualReply(uid, replyText, sendLine, waitForLineReply, DRY_R
       await sendLine(`【エラー】対象外返信\n会員ID：${uid} の送信フレーム取得に失敗しました`);
       return;
     }
-    await sendFrame.fill('textarea#mess_body', replyText);
+    await sendFrame.fill('textarea#mess_body', finalReplyText);
     await sendFrame.click('#chara_mail_send');
     await sendFrame.waitForLoadState('networkidle').catch(() => {});
     console.log(`[MANUAL-REPLY] uid=${uid} (${userName}) 送信完了`);
