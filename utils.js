@@ -106,6 +106,31 @@ async function getCurrentPoint(kyouseiPage) {
 }
 
 /**
+ * 会員基本情報を取得する共通関数
+ * kyouseiPage: 会員詳細ページ（mg_kyoseitaikai.php）
+ * 取得項目: ニックネーム / 所持ポイント / 会員レベル(sub_lv選択テキスト) /
+ *           ポイントレベル(lv選択テキスト) / プロフィール2(prof2選択テキスト) /
+ *           非公開メモ1(上部3行のうち「@」を含む行を除外して結合) / 最終購入時間
+ */
+async function getMemberBasicInfo(kyouseiPage) {
+  return await kyouseiPage.evaluate(() => {
+    const nickname = document.querySelector('input[name="update[name]"]')?.value || '';
+    const currentPoint = document.querySelector('input[name="update[point]"]')?.value || '';
+    const subLvSelect = document.querySelector('select[name="update[sub_lv]"]');
+    const memberLevel = subLvSelect?.selectedOptions[0]?.textContent?.trim() || '';
+    const lvSelect = document.querySelector('select[name="update[lv]"]');
+    const pointLevel = lvSelect?.selectedOptions[0]?.textContent?.trim() || '';
+    const prof2Select = document.querySelector('select[name="update[prof2]"]');
+    const profile2 = prof2Select?.selectedOptions[0]?.textContent?.trim() || '';
+    const memoRaw = document.querySelector('textarea[name="update[memo]"]')?.value || '';
+    const memoLines = memoRaw.split('\n').slice(0, 3).filter(line => !line.includes('@'));
+    const memo = memoLines.join('\n');
+    const lastPurchase = document.querySelector('input[name="update[kounyu_go]"]')?.value || '';
+    return { nickname, currentPoint, memberLevel, pointLevel, profile2, memo, lastPurchase };
+  });
+}
+
+/**
  * 現在のポイントレベルを取得する共通関数
  */
 async function getPointLevel(kyouseiPage) {
@@ -583,7 +608,7 @@ async function runPaymentCommand(uid, amount, sendLine, DRY_RUN = false) {
 
 module.exports = {
   openKyouseitaikai, openKyouseitaikaiBySearch,
-  adjustPoint, setPointLevel, getPointLevel, getCouponLevel, getCurrentPoint, setLoveLevel,
+  adjustPoint, setPointLevel, getPointLevel, getCouponLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
   calcPaymentPoints, processPayment, runPaymentCommand,
