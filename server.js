@@ -528,9 +528,10 @@ async function processCommand(text, reply, source = 'LINE') {
   //   絆変更:{キャラID}:{value} の組み合わせ）や
   // contact-checker.js のSTEP6（返答内容の自由入力）、
   // 「会員:{uid} {操作コマンド}」形式の直接操作コマンド、
-  // 「返信対象外チェック」にも対応するため、
+  // 「返信対象外チェック」「対象外ID:{番号} {返信文章}」にも対応するため、
   // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」「会員:〜」
-  // 「返信対象外チェック」もそのままstate fileへ書き込まれる）
+  // 「返信対象外チェック」「対象外ID:〜」もそのままstate fileへ書き込まれる。
+  // これにより対象外返信の確認待ち中の「送信」「スキップ」も転送される）
   if (fs.existsSync(REPLY_STATE_FILE)) {
     try {
       const state = JSON.parse(fs.readFileSync(REPLY_STATE_FILE, 'utf8'));
@@ -547,21 +548,23 @@ async function processCommand(text, reply, source = 'LINE') {
     return reply(buildSkippedUsersMessage());
   }
 
-  // ─── 「対象外返信:{uid} {返信文章}」対象外ユーザーへの手動返信 ─────────
-  // 例:「対象外返信:1042287 ご返信ありがとうございます。」
-  // 返信チェックで対象外となったユーザーへ、最新コメントアウトと返信内容を
-  // 確認したうえで手動送信する。処理には時間がかかりreplyTokenが失効するため、
-  // 受付だけ即返信し、確認通知・完了/エラーはreply-checker側のsendLineで通知する。
+  // ─── 「対象外ID:{番号} {返信文章}」対象外ユーザーへの手動返信 ─────────
+  // 例:「対象外ID:2 ご返信ありがとうございます。」
+  // 返信チェック完了時に通知した対象外一覧の番号を指定して、最新コメントアウトと
+  // 返信内容を確認したうえで手動送信する。番号→uid/kidの解決は
+  // reply-checker側で /tmp/rune-skipped-list.json を読んで行う。
+  // 処理には時間がかかりreplyTokenが失効するため、受付だけ即返信し、
+  // 確認通知・完了/エラーはreply-checker側のsendLineで通知する。
   // 確認返信（「送信」「スキップ」）は返信待ち中のstate file転送で
   // sendManualReply内のwaitForLineReplyへ渡る。
-  const manualReplyMatch = text.match(/^対象外返信[:：]\s*(\d+)\s+([\s\S]+)$/);
+  const manualReplyMatch = text.match(/^対象外ID[:：]\s*(\d+)\s+([\s\S]+)$/);
   if (manualReplyMatch) {
-    const uid = manualReplyMatch[1];
+    const index = manualReplyMatch[1];
     const replyText = manualReplyMatch[2].trim();
-    console.log(`[${source}] 対象外返信: uid=${uid} text="${replyText.slice(0, 40)}"`);
-    sendManualReply(uid, replyText, rcSendLine, rcWaitForLineReply, process.env.DRY_RUN === 'true')
+    console.log(`[${source}] 対象外返信: 対象外ID=${index} text="${replyText.slice(0, 40)}"`);
+    sendManualReply(index, replyText, rcSendLine, rcWaitForLineReply, process.env.DRY_RUN === 'true')
       .catch(err => console.error('[MANUAL-REPLY] 実行エラー:', err.message));
-    return reply(`【対象外返信】会員ID：${uid}\n処理を開始しました`);
+    return reply(`【対象外返信】対象外ID：${index}\n処理を開始しました`);
   }
 
   // ─── 「会員:{uid} {操作コマンド}」直接操作 ───────────────────────

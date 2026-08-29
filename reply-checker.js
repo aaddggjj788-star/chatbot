@@ -39,23 +39,27 @@ const CHARA_CONFIG_DIR = path.join(__dirname, 'chara-config');
 const DRY_RUN = process.env.DRY_RUN === 'true';
 
 const STATE_FILE = '/tmp/rune-reply-state.json';
+// 返信チェック完了時の対象外ユーザー一覧（番号付き）を保存するファイル。
+// 「対象外ID:{番号} {返信文章}」コマンドで番号→uid/kidを解決するために使う。
+const SKIPPED_LIST_FILE = '/tmp/rune-skipped-list.json';
 const POLL_INTERVAL_MS = 2000;
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 let _shouldStop = false;
 
 // 今回の返信チェックで対象外となったユーザー
-// [{ userName, uid, reason }]
+// [{ userName, uid, kid, reason }]
 let skippedUsers = [];
 
 // 返信チェック完了時にLINEへ通知する対象外ユーザー一覧を組み立てる
+// 連番（1始まり）・u_id・k_id・理由を1行ずつ番号付きで表示する
 function buildSkippedMessage() {
   if (skippedUsers.length === 0) {
     return '【返信チェック完了】\n対象外ユーザーはいませんでした';
   }
 
   const lines = skippedUsers.map(
-    u => `・${u.userName}（u_id: ${u.uid || '不明'}）\n  理由：${u.reason}`
+    (u, i) => `${i + 1}. ${u.userName}（u_id: ${u.uid || '不明'}, k_id: ${u.kid || '不明'}）理由：${u.reason}`
   );
 
   // LINEの1メッセージ上限（5000文字）を超えると送信できないため、
@@ -76,6 +80,34 @@ function buildSkippedMessage() {
     ...shown,
     ...(rest > 0 ? [`（ほか${rest}件は文字数上限のため省略）`] : []),
   ].join('\n');
+}
+
+// 対象外ユーザー一覧を番号付きで SKIPPED_LIST_FILE に保存する。
+// 「対象外ID:{番号} {返信文章}」コマンドで番号→uid/kidを解決するために使う。
+// 保存形式: [{ index, uid, kid, userName }, ...]（indexはbuildSkippedMessageの番号と一致）
+function saveSkippedList() {
+  const list = skippedUsers.map((u, i) => ({
+    index: i + 1,
+    uid: u.uid || '',
+    kid: u.kid || '',
+    userName: u.userName || '',
+  }));
+  try {
+    fs.writeFileSync(SKIPPED_LIST_FILE, JSON.stringify(list, null, 2));
+    console.log(`[SKIPPED-LIST] ${list.length}件を ${SKIPPED_LIST_FILE} に保存`);
+  } catch (e) {
+    console.error(`[SKIPPED-LIST] 保存に失敗: ${e.message}`);
+  }
+}
+
+// 対象外一覧ファイルを空配列でリセットする（新しい返信チェック開始時に上書き）
+function resetSkippedList() {
+  try {
+    fs.writeFileSync(SKIPPED_LIST_FILE, JSON.stringify([], null, 2));
+    console.log(`[SKIPPED-LIST] ${SKIPPED_LIST_FILE} をリセット`);
+  } catch (e) {
+    console.error(`[SKIPPED-LIST] リセットに失敗: ${e.message}`);
+  }
 }
 
 // ─── LINE / Slack 送信 ────────────────────────────────────────────
@@ -1354,6 +1386,8 @@ async function searchSinkoFromRirekiHistory(page, charaId) {
 async function processUsers(page) {
   // 今回の実行分だけを記録するため、開始時にリセットする
   skippedUsers = [];
+  // 対象外一覧ファイルも新しい返信チェック開始時に上書きリセットする
+  resetSkippedList();
 
   // page = mg_ope.php（親フレームページ）
   // ope_menuフレームから対象ユーザーを取得
@@ -1372,7 +1406,7 @@ async function processUsers(page) {
     }
 
     // 返信対象外となった理由を記録する（ログ出力は各判定箇所の[SKIP]をそのまま使う）
-    const recordSkip = (reason) => skippedUsers.push({ userName, uid, reason });
+    const recordSkip = (reason) => skippedUsers.push({ userName, uid, kid, reason });
 
     // 1ユーザーの処理中に想定外エラーが発生しても返信チェック全体を止めず、
     // エラーになったユーザーも対象外として記録して次のユーザーへ進む
@@ -2586,6 +2620,7 @@ async function processUsers(page) {
       skippedUsers.push({
         userName,
         uid,
+        kid,
         reason: `エラー: ${e.message.slice(0, 50)}`,
       });
       continue;
@@ -2646,17 +2681,36 @@ async function getLatestKanteishiComment(page) {
 // sendLine / waitForLineReply は呼び出し側（server.js）から渡す
 // （LINE/Slack通知・返信待ちの仕組みを共有するため）
 // ※自前でブラウザを起動・ログインするため単独実行できる
-async function sendManualReply(uid, replyText, sendLine, waitForLineReply, DRY_RUN = false) {
-  console.log(`[MANUAL-REPLY] uid=${uid} 返信文="${(replyText || '').slice(0, 40)}"`);
+async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY_RUN = false) {
+  console.log(`[MANUAL-REPLY] 対象外ID=${index} 返信文="${(replyText || '').slice(0, 40)}"`);
 
   // 前回の停止要求が残っていると waitForLineReply が即座に停止扱いになるため、
   // 確認の返信待ちを行う前に停止フラグをリセットする
   _shouldStop = false;
 
-  if (!uid || !replyText) {
-    await sendLine('【エラー】対象外返信: uidまたは返信文章が指定されていません');
+  if (!index || !replyText) {
+    await sendLine('【エラー】対象外返信: 番号または返信文章が指定されていません');
     return;
   }
+
+  // 対象外一覧ファイル（番号付き）から番号→uid/kidを解決する
+  let entry = null;
+  try {
+    const list = JSON.parse(fs.readFileSync(SKIPPED_LIST_FILE, 'utf8'));
+    if (Array.isArray(list)) entry = list.find(e => String(e.index) === String(index));
+  } catch (e) {
+    console.log(`[MANUAL-REPLY] 対象外一覧ファイルの読み込みに失敗: ${e.message}`);
+  }
+  if (!entry) {
+    await sendLine(
+      `【エラー】対象外返信\n対象外ID：${index} が一覧に見つかりませんでした\n` +
+      '（返信チェック未実施か、番号が範囲外の可能性があります）'
+    );
+    return;
+  }
+  const uid = String(entry.uid);
+  const kid = String(entry.kid);
+  console.log(`[MANUAL-REPLY] 対象外ID=${index} → uid=${uid} kid=${kid} userName=${entry.userName}`);
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({
@@ -2671,18 +2725,18 @@ async function sendManualReply(uid, replyText, sendLine, waitForLineReply, DRY_R
     await login(page);
     const supportPage = await openSupportPage(page);
 
-    // 対象ユーザー一覧からuid一致の行を特定する（processUsersと同じ絞り込み）
+    // 対象ユーザー一覧から uid・kid の両方が一致する行を特定する
     const targets = await getTargetUsers(supportPage);
-    const target = targets.find(t => String(t.uid) === String(uid));
+    const target = targets.find(t => String(t.uid) === uid && String(t.kid) === kid);
     if (!target) {
-      console.log(`[MANUAL-REPLY] uid=${uid}: 対象ユーザー一覧に見つかりません`);
+      console.log(`[MANUAL-REPLY] 対象外ID=${index}: uid=${uid} kid=${kid} が対象ユーザー一覧に見つかりません`);
       await sendLine(
-        `【エラー】対象外返信\n会員ID：${uid} が対象ユーザー一覧に見つかりませんでした\n` +
+        `【エラー】対象外返信\n対象外ID：${index}（u_id: ${uid}, k_id: ${kid}）が対象ユーザー一覧に見つかりませんでした\n` +
         '（既に対応済みか、一覧から外れた可能性があります）'
       );
       return;
     }
-    const { userName, kid, stringID } = target;
+    const { userName, stringID } = target;
     console.log(`[MANUAL-REPLY] 対象特定: ${userName} (k_id=${kid}, u_id=${uid}, stringID=${stringID})`);
 
     const menuFrame = supportPage.frame({ name: 'ope_menu' });
@@ -2813,7 +2867,9 @@ async function checkReplies() {
     await login(page);
     const supportPage = await openSupportPage(page);
     await processUsers(supportPage);
+    // 対象外一覧を番号付きでファイルに保存（対象外ID返信コマンド用）してから
     // 対象外となったユーザーと理由をまとめてLINEへ通知する
+    saveSkippedList();
     await sendLine(buildSkippedMessage());
     console.log('=== reply-checker 完了 ===');
   } catch (err) {
