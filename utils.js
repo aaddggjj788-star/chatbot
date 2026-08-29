@@ -364,9 +364,11 @@ async function getMailRows(target, testMode = false) {
 // ポイント増減履歴から当日の銀行振込履歴を取得する
 // topPage: popupイベント検知用の最上位Page（Frameはwaitで使えないため必須）
 // target: クリック対象（Page または Frame。mg_mail_edit.phpから戻る操作もここで行う）
-// 戻り値: { bankRows, historyPage } historyPageはSTEP17の調整操作で使う
-//   （popupで開いた場合はtargetと異なるオブジェクトになるため呼び出し側で
-//   close/戻る操作を行い分ける必要がある）
+// 戻り値: { paymentRows, actionRows, manualRows, historyPage, couponLevel }
+//   ポイント増減履歴ページの各行を背景色で分類して全件取得する：
+//     payment(#ccffcc)=決済 / action(#ccccff)=行動履歴 / manual(#ffcccc)=手動操作
+//   historyPageはSTEP17の調整操作で使う（popupで開いた場合はtargetと異なる
+//   オブジェクトになるため呼び出し側でclose/戻る操作を行い分ける必要がある）
 // ※以前は履歴表示前に所持ポイントを+1していたが、参照のみのはずの処理で
 //   会員のポイントが増えてしまうため削除した
 async function getBankHistory(topPage, target) {
@@ -406,43 +408,107 @@ async function getBankHistory(topPage, target) {
   await historyPage.click('input[name="search"][value="表示"]');
   await new Promise(r => setTimeout(r, 3000));
 
-  const bankRows = await historyPage.evaluate(() => {
+  // 背景色ごとに全行を取得する（決済金額を含む行のみ、という従来の絞り込みは廃止）。
+  // 背景色はtr/tdのstyle属性・bgcolor属性いずれに付与されていても拾えるよう、
+  // 行内の全セル分のスタイル文字列を結合して判定する。
+  const allRows = await historyPage.evaluate(() => {
+    function rowStyleText(tr) {
+      let s = (tr.getAttribute('style') || '') + ' ' + (tr.getAttribute('bgcolor') || '');
+      for (const td of tr.querySelectorAll('td')) {
+        s += ' ' + (td.getAttribute('style') || '') + ' ' + (td.getAttribute('bgcolor') || '');
+      }
+      return s.toLowerCase();
+    }
     const rows = Array.from(document.querySelectorAll('tr'));
     const results = [];
     for (const tr of rows) {
       const cells = Array.from(tr.querySelectorAll('td')).map(td => (td.textContent || '').trim());
       if (cells.length === 0) continue;
-      const rowText = cells.join(' | ');
-      if (!rowText.includes('決済金額')) continue;
-      results.push({ cells, rowText });
+      const style = rowStyleText(tr);
+      let type = null;
+      if (style.includes('ccffcc')) type = 'payment';       // 決済
+      else if (style.includes('ccccff')) type = 'action';    // 行動履歴
+      else if (style.includes('ffcccc')) type = 'manual';    // 手動操作
+      if (!type) continue;
+      results.push({ type, cells, time: cells[0] });
     }
     return results;
   });
 
-  const parsedBankRows = bankRows.map(r => {
-    const parts = r.rowText.split('|').map(s => s.trim());
-    const time = parts[0];
-    const point = parseInt(parts[2], 10);
-    const amountMatch = (parts[4] || '').match(/([\d,]+)円/);
-    const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
-    const isBankTransfer = r.rowText.includes('銀行振込');
-    return { time, point, amount, isBankTransfer, raw: r.rowText };
-  }).filter(r => !Number.isNaN(r.point) && r.amount > 0);
+  // 「+1,115」「-500」などの符号付き数値文字列を整数へ変換する
+  function parseSignedInt(s) {
+    const m = String(s || '').match(/-?[\d,]+/);
+    return m ? parseInt(m[0].replace(/,/g, ''), 10) : 0;
+  }
 
-  console.log(`[UTILS] 銀行振込履歴取得: ${parsedBankRows.length}件`);
-  return { bankRows: parsedBankRows, historyPage, couponLevel };
+  // ── payment（決済）: 従来のbankRowsと同じ形（time/point/amount/isBankTransfer/raw）──
+  const paymentRows = allRows
+    .filter(r => r.type === 'payment')
+    .map(r => {
+      const c = r.cells;
+      const point = parseInt(c[2], 10);
+      const amountMatch = (c[4] || '').match(/決済金額\s*[:：]\s*([\d,]+)円/);
+      const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
+      const isBankTransfer = c[3] === '銀行振込' || (c[4] || '').includes('銀行振込');
+      return { time: c[0], point, amount, isBankTransfer, raw: c.join(' | ') };
+    })
+    .filter(r => !Number.isNaN(r.point) && r.amount > 0);
+
+  // ── action（行動履歴）: メッセージ送信等。pointはマイナス値の場合あり ──
+  const actionRows = allRows
+    .filter(r => r.type === 'action')
+    .map(r => {
+      const c = r.cells;
+      return {
+        time: c[0],
+        actionName: c[1] || '',
+        point: parseInt(c[2], 10) || 0,
+        target: c[3] || '',
+        raw: c.join(' | '),
+      };
+    });
+
+  // ── manual（手動操作）: 会員プロフィール変更・管理者によるポイント調整等 ──
+  const manualRows = allRows
+    .filter(r => r.type === 'manual')
+    .map(r => {
+      const c = r.cells;
+      return {
+        time: c[0],
+        actionName: c[1] || '',
+        pointChange: parseSignedInt(c[2]),
+        before: c[4] || '',
+        after: c[5] || '',
+        note: c[6] || '',
+        raw: c.join(' | '),
+      };
+    });
+
+  console.log(`[UTILS] ポイント増減履歴取得: 決済${paymentRows.length}件 / 行動履歴${actionRows.length}件 / 手動操作${manualRows.length}件`);
+  return { paymentRows, actionRows, manualRows, historyPage, couponLevel };
 }
 
 // ─── STEP15相当: ポイント差異チェック ─────────────────────────────
 // 期待ポイントと実際のポイントを照合し、差異があればLINEに確認通知して
-// 返信を待つ。実際の調整（adjustPoint呼び出し）は呼び出し側で行う
-async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, DRY_RUN, couponLevel = null) {
-  const totalAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
-  const totalActual = bankRows.reduce((sum, r) => sum + r.point, 0);
-  const normalPt = bankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
-  const servicePt = bankRows.reduce(
+// 返信を待つ。実際の調整（adjustPoint呼び出し）は呼び出し側で行う。
+// paymentRows: 決済行（getBankHistoryのpaymentRows。従来のbankRows）
+//   → 期待値計算・差異判定は従来どおり決済行のみで行う
+// actionRows / manualRows: 行動履歴・手動操作の増減行（getBankHistoryの戻り値）
+//   → 当日の実際のポイント純変動（netChange）を算出し、現在ポイントとの
+//     照合に使えるよう合計値を通知・戻り値に含める
+async function checkPointDiff(campaigns, paymentRows, sendLine, waitForLineReply, DRY_RUN, couponLevel = null, actionRows = [], manualRows = []) {
+  const totalAmount = paymentRows.reduce((sum, r) => sum + r.amount, 0);
+  const totalActual = paymentRows.reduce((sum, r) => sum + r.point, 0);
+  const normalPt = paymentRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
+  const servicePt = paymentRows.reduce(
     (sum, r) => sum + (r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0), 0);
   const campaignBonus = calcExpectedPoints(totalAmount, campaigns).campaignBonus;
+
+  // 決済以外の当日ポイント変動も集計する
+  // ・行動履歴（メッセージ送信等）: pointはマイナス値になりうる
+  // ・手動操作（管理者による調整等）: pointChangeは符号付き
+  const actionTotal = actionRows.reduce((sum, r) => sum + (r.point || 0), 0);
+  const manualTotal = manualRows.reduce((sum, r) => sum + (r.pointChange || 0), 0);
 
   // ポイントくじクーポン: 当日の購入合計金額が minAmount 以上なら期待値に加算する
   let couponPt = 0;
@@ -453,11 +519,13 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
 
   const grandTotal = normalPt + servicePt + campaignBonus + couponPt;
   const diff = totalActual - grandTotal;
-  console.log(`[UTILS] 入金合計=${totalAmount}円 期待値合計=${grandTotal}pt（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}+くじクーポン${couponPt}(Lv.${couponLevel}）） 実際合計=${totalActual}pt 差異=${diff}`);
+  // 当日の実際のポイント純変動（決済＋行動履歴＋手動操作）
+  const netChange = totalActual + actionTotal + manualTotal;
+  console.log(`[UTILS] 入金合計=${totalAmount}円 期待値合計=${grandTotal}pt（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}+くじクーポン${couponPt}(Lv.${couponLevel}）） 決済実績=${totalActual}pt 差異=${diff} / 行動履歴計=${actionTotal}pt 手動操作計=${manualTotal}pt 純変動=${netChange}pt`);
 
   if (diff === 0) {
     console.log('[UTILS] 一致 → 問題なし');
-    return { totalAmount, totalActual, grandTotal, couponPt, couponLevel, diff: 0, reply: null };
+    return { totalAmount, totalActual, grandTotal, couponPt, couponLevel, diff: 0, reply: null, actionTotal, manualTotal, netChange };
   }
 
   const diffLabel = diff < 0 ? '不足' : '過剰';
@@ -471,7 +539,9 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
     `キャンペーン補助：${campaignBonus}pt\n` +
     `くじクーポン：${couponPt}pt（Lv.${couponLevel != null ? couponLevel : '-'}）\n` +
     `期待ポイント合計：${grandTotal}pt\n` +
-    `実際のポイント合計：${totalActual}pt\n` +
+    `決済による付与：${totalActual}pt\n` +
+    (actionRows.length > 0 ? `行動履歴による増減：${actionTotal}pt（${actionRows.length}件）\n` : '') +
+    (manualRows.length > 0 ? `手動操作による増減：${manualTotal}pt（${manualRows.length}件）\n` : '') +
     `差異：${diffAbs}pt（${diffLabel}）\n` +
     `調整しますか？「調整する」または「スキップ」`
   );
@@ -485,7 +555,7 @@ async function checkPointDiff(campaigns, bankRows, sendLine, waitForLineReply, D
 
   if (reply !== null) console.log(`[UTILS] LINE返信: ${reply}`);
 
-  return { totalAmount, totalActual, grandTotal, couponPt, couponLevel, diff, reply };
+  return { totalAmount, totalActual, grandTotal, couponPt, couponLevel, diff, reply, actionTotal, manualTotal, netChange };
 }
 
 // ─── 入金処理（ポイント追加）─────────────────────────────────────────

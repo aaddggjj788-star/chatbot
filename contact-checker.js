@@ -233,10 +233,10 @@ async function collectMemberBasicInfo(page, uid) {
       await kyouseiPage.goto(kyouseiPage.url());
       await kyouseiPage.waitForLoadState('networkidle');
 
-      const { bankRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+      const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
       historyPage = hp;
-      const todayAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
-      console.log(`[BASIC-INFO] uid=${uid}: 当日購入 ${bankRows.length}件 合計${todayAmount}円`);
+      const todayAmount = paymentRows.reduce((sum, r) => sum + r.amount, 0);
+      console.log(`[BASIC-INFO] uid=${uid}: 当日購入 ${paymentRows.length}件 合計${todayAmount}円`);
       lines.push(`当日購入金額：${todayAmount.toLocaleString('en-US')}円`);
     } else {
       console.log(`[BASIC-INFO] uid=${uid}: 最終購入時間=${info.lastPurchase || '（なし）'} は本日ではない → 当日購入金額の取得をスキップ`);
@@ -296,22 +296,22 @@ async function collectMemberInfo(page, uid) {
 
     // 3. 当日購入履歴（getMailRows()でmg_mail_edit.phpへ遷移済みのため
     //    getBankHistory()内のwindow.history.back()で会員詳細へ戻れる）
-    const { bankRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+    const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
     historyPage = hp;
-    console.log(`[MEMBER-INFO] uid=${uid}: 当日購入履歴 ${bankRows.length}件`);
-    if (bankRows.length === 0) {
+    console.log(`[MEMBER-INFO] uid=${uid}: 当日購入履歴 ${paymentRows.length}件`);
+    if (paymentRows.length === 0) {
       lines.push('当日購入履歴：無');
       return lines;
     }
 
     // 4. 想定ポイントと実際の付与ポイントを照合（checkPointDiff と同じ計算）
-    const totalAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
-    const normalPt = bankRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
-    const servicePt = bankRows.reduce(
+    const totalAmount = paymentRows.reduce((sum, r) => sum + r.amount, 0);
+    const normalPt = paymentRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
+    const servicePt = paymentRows.reduce(
       (sum, r) => sum + (r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0), 0);
     const campaignBonus = calcExpectedPoints(totalAmount, campaigns).campaignBonus;
     const expectedPt = normalPt + servicePt + campaignBonus;
-    const actualPt = bankRows.reduce((sum, r) => sum + r.point, 0);
+    const actualPt = paymentRows.reduce((sum, r) => sum + r.point, 0);
 
     lines.push('当日購入履歴：有');
     lines.push(`当日購入総額：${totalAmount.toLocaleString('en-US')}円`);
@@ -432,17 +432,17 @@ async function notifyBankHistory(page, uid) {
     await kyouseiPage.goto(kyouseiPage.url());
     await kyouseiPage.waitForLoadState('networkidle');
 
-    const { bankRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+    const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
     historyPage = hp;
-    console.log(`[BANK-CHECK] uid=${uid}: 当日決済履歴 ${bankRows.length}件`);
-    if (bankRows.length === 0) {
+    console.log(`[BANK-CHECK] uid=${uid}: 当日決済履歴 ${paymentRows.length}件`);
+    if (paymentRows.length === 0) {
       await sendLine(NO_BANK_HISTORY_MSG);
       return;
     }
-    const total = bankRows.reduce((sum, r) => sum + r.amount, 0);
+    const total = paymentRows.reduce((sum, r) => sum + r.amount, 0);
     await sendLine([
       '【当日決済履歴】',
-      ...bankRows.map(r => `${r.time} | ${r.amount.toLocaleString('en-US')}円 | ${r.point}pt`),
+      ...paymentRows.map(r => `${r.time} | ${r.amount.toLocaleString('en-US')}円 | ${r.point}pt`),
       `合計：${total.toLocaleString('en-US')}円`,
     ].join('\n'));
   } catch (e) {
@@ -786,11 +786,11 @@ async function checkCampaignAndPoints(page, contact) {
       return result;
     }
 
-    const { bankRows, historyPage, couponLevel } = await getBankHistory(page, kyouseiPage);
-    console.log(`[CAMPAIGN] uid=${contact.uid}: 銀行振込履歴 ${bankRows.length}件`);
-    if (bankRows.length === 0) return result;
+    const { paymentRows, actionRows, manualRows, historyPage, couponLevel } = await getBankHistory(page, kyouseiPage);
+    console.log(`[CAMPAIGN] uid=${contact.uid}: 銀行振込履歴 ${paymentRows.length}件`);
+    if (paymentRows.length === 0) return result;
 
-    const totalAmount = bankRows.reduce((sum, r) => sum + r.amount, 0);
+    const totalAmount = paymentRows.reduce((sum, r) => sum + r.amount, 0);
 
     // ─── 割引率調整 ──────────────────────────────────────────
     try {
@@ -805,7 +805,7 @@ async function checkCampaignAndPoints(page, contact) {
     }
 
     // ─── ポイント調整 ────────────────────────────────────────
-    const { diff, reply } = await checkPointDiff(allCampaigns, bankRows, sendLine, waitForLineReply, DRY_RUN, couponLevel);
+    const { diff, reply } = await checkPointDiff(allCampaigns, paymentRows, sendLine, waitForLineReply, DRY_RUN, couponLevel, actionRows, manualRows);
     if (diff !== 0 && reply === '調整する') {
       if (historyPage !== kyouseiPage) {
         await historyPage.close().catch(() => {});
