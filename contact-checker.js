@@ -54,6 +54,7 @@ const {
   openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
+  formatCampaignInfo,
   runPaymentCommand,
 } = require('./utils');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
@@ -380,6 +381,8 @@ async function applyLoveLevel(page, uid, charaId, value) {
 
 // ─── 「メール確認」コマンド ───────────────────────────────────────
 // 会員詳細ページからgetMailRows()で当日配信メールを取得し、一覧をLINEへ通知する
+// 各メールの本文（td.bodyNaibu）にキャンペーンのコメントアウトがある場合は
+// campaign-rules/campaign1.jsonから内容を引いて併記する
 async function notifyTodayMails(page, uid) {
   if (!uid) {
     await sendLine('【エラー】会員IDが取得できず、メール確認を実行できませんでした');
@@ -394,10 +397,13 @@ async function notifyTodayMails(page, uid) {
       await sendLine('【当日配信メール】\n当日配信されたお知らせメールはありませんでした');
       return;
     }
-    await sendLine([
-      '【当日配信メール】',
-      ...mailRows.map((row, i) => `メール${i + 1}: ${row.title || '（タイトルなし）'}`),
-    ].join('\n'));
+    const lines = ['【当日配信メール】'];
+    for (const row of mailRows) {
+      const campaignText = formatCampaignInfo(row.campaign);
+      lines.push(row.title || '（タイトルなし）');
+      lines.push(`キャンペーン：${campaignText || 'キャンペーンなし'}`);
+    }
+    await sendLine(lines.join('\n'));
   } catch (e) {
     console.log(`[MAIL-CHECK] uid=${uid}: メール確認に失敗: ${e.message}`);
     await sendLine(`【エラー】メール確認に失敗しました: ${e.message}`);

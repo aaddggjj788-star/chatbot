@@ -8,6 +8,44 @@
  */
 
 const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+
+// ─── キャンペーンコメントアウトの参照先 ───────────────────────────────
+// お知らせメール本文に埋め込まれた <!--week/campaign/3--> 形式の
+// コメントアウトから、campaign-rules/campaign1.json の内容を引く
+const CAMPAIGN_RULES_PATH = path.join(__dirname, 'campaign-rules', 'campaign1.json');
+const CAMPAIGN_COMMENT_RE = /<!--(week|k_id|kanteisi)\/campaign\/(\d+)-->/;
+
+let _campaignRulesCache = null;
+
+function loadCampaignRules() {
+  if (_campaignRulesCache) return _campaignRulesCache;
+  try {
+    _campaignRulesCache = JSON.parse(fs.readFileSync(CAMPAIGN_RULES_PATH, 'utf8'));
+  } catch (e) {
+    console.log(`[UTILS] campaign1.jsonの読み込みに失敗: ${e.message}`);
+    _campaignRulesCache = {};
+  }
+  return _campaignRulesCache;
+}
+
+// type（week / k_id / kanteisi）と番号からcampaign1.jsonの定義を取得する
+// 該当が無い場合はnullを返す
+function getCampaignInfo(type, number) {
+  if (!type || number == null) return null;
+  const rules = loadCampaignRules();
+  const entry = rules?.[type]?.[String(number)];
+  return entry || null;
+}
+
+// キャンペーン定義を通知用の1行テキストにする（未検出・未定義はnullを返す）
+function formatCampaignInfo(campaign) {
+  if (!campaign) return null;
+  const info = getCampaignInfo(campaign.type, campaign.number);
+  if (!info) return null;
+  return [info.name, info.description].filter(Boolean).join(' / ') || null;
+}
 
 /**
  * 会員詳細ページを開く共通関数
@@ -267,7 +305,7 @@ function calcExpectedPoints(amount, campaigns) {
 // （support-checker.js の getTodayCampaignRows と同じロジック）
 // target: Page または Frame（.evaluate()を持つオブジェクト）
 async function getTodayCampaignRows(target, testMode = false) {
-  const { matched, debugRows } = await target.evaluate((testMode) => {
+  const { matched, debugRows, hiddenCount } = await target.evaluate((testMode) => {
     function parseDateCell(text) {
       let m = text.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[^\d]+(\d{1,2})[:時](\d{1,2})/);
       if (m) {
@@ -309,14 +347,39 @@ async function getTodayCampaignRows(target, testMode = false) {
     const nowMonth = now.getMonth() + 1;
     const nowDay = now.getDate();
 
+    // 「ユーザー削除済」か「非表示指定」か「緊急停止・削除」のため非表示
+    // と表示されている行は本文を取得できないため除外する
+    function isHiddenRow(cells) {
+      return cells.some(td => {
+        const text = (td.textContent || '').replace(/\s+/g, '');
+        return text.includes('のため非表示')
+          && (text.includes('ユーザー削除済') || text.includes('非表示指定') || text.includes('緊急停止・削除'));
+      });
+    }
+
+    // td.bodyNaibu のテキストを取得する。コメントアウトが実体参照として
+    // 文字列表示されている場合はtextContent、実際のコメントノードとして
+    // 存在する場合はinnerHTML側に現れるため両方を連結して返す
+    function extractBodyNaibu(tr) {
+      const els = Array.from(tr.querySelectorAll('td.bodyNaibu, .bodyNaibu'));
+      if (els.length === 0) return '';
+      return els.map(el => `${el.textContent || ''}\n${el.innerHTML || ''}`).join('\n');
+    }
+
     const debugRows = [];
     const matched = [];
+    let hiddenCount = 0;
 
     for (const tr of candidateRows) {
       const cells = Array.from(tr.querySelectorAll('td'));
       const dateCellText = cells[2] ? (cells[2].textContent || '').trim() : '';
       const parsed = parseDateCell(dateCellText);
       debugRows.push({ dateCellText, parsed });
+
+      if (isHiddenRow(cells)) {
+        hiddenCount++;
+        continue;
+      }
 
       if (!parsed) continue;
       const isToday = parsed.month === nowMonth && parsed.day === nowDay;
@@ -327,14 +390,29 @@ async function getTodayCampaignRows(target, testMode = false) {
       const body = extractBody(tr, htmlButton);
 
       const title = cells[3] ? (cells[3].textContent || '').trim() : '';
+      const bodyNaibuText = extractBodyNaibu(tr);
 
-      matched.push({ dateText: dateCellText, title, bodyHtml: body.value, bodySource: body.source });
+      matched.push({
+        dateText: dateCellText, title,
+        bodyHtml: body.value, bodySource: body.source,
+        bodyNaibuText,
+      });
     }
 
-    return { matched, debugRows };
+    return { matched, debugRows, hiddenCount };
   }, testMode);
 
-  console.log(`[UTILS] 「HTMLメールとしてみる」保有行: ${debugRows.length}件 / 本日該当: ${matched.length}件`);
+  // キャンペーンコメントアウト（<!--week/campaign/3--> 等）をNode側で解析する
+  // ※ページ内評価の戻り値にRegExp結果を含められないためここで判定する
+  for (const row of matched) {
+    const m = (row.bodyNaibuText || '').match(CAMPAIGN_COMMENT_RE);
+    row.campaign = m ? { type: m[1], number: parseInt(m[2], 10) } : null;
+    if (row.campaign) {
+      console.log(`[UTILS] キャンペーンコメントアウト検出: ${row.campaign.type}/campaign/${row.campaign.number}（"${row.title}"）`);
+    }
+  }
+
+  console.log(`[UTILS] 「HTMLメールとしてみる」保有行: ${debugRows.length}件 / 非表示除外: ${hiddenCount}件 / 本日該当: ${matched.length}件`);
   return matched;
 }
 
@@ -681,5 +759,6 @@ module.exports = {
   adjustPoint, setPointLevel, getPointLevel, getCouponLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
+  getCampaignInfo, formatCampaignInfo,
   calcPaymentPoints, processPayment, runPaymentCommand,
 };
