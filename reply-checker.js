@@ -2668,28 +2668,27 @@ async function getLatestKanteishiComment(page) {
   });
 }
 
-// ─── 対象外ユーザーへの手動返信 ─────────────────────────────────────
-// LINE/Slackコマンド「対象外返信:{uid} {返信文章}」から呼び出す。
-// 返信チェックで対象外となったユーザー（サポート左一覧には残っている）へ、
-// 指定した返信文章を確認のうえ手動で送信する。
-// 手順:
-//   ログイン → サポート画面 → 対象ユーザー一覧からuid一致行を特定 →
-//   ope_menuのformをsubmitしてope_mainに会話を表示 →
-//   最新の鑑定士コメントアウトを取得 → LINE/Slackへ確認通知 → 返信待ち →
-//   「送信」の場合のみ ope_mainフレームの textarea#mess_body に入力して
-//   #chara_mail_send で送信する
-// sendLine / waitForLineReply は呼び出し側（server.js）から渡す
-// （LINE/Slack通知・返信待ちの仕組みを共有するため）
-// ※自前でブラウザを起動・ログインするため単独実行できる
-async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY_RUN = false) {
-  console.log(`[MANUAL-REPLY] 対象外ID=${index} 返信文="${(replyText || '').slice(0, 40)}"`);
+// 最新コメントアウトから「次のコメントアウト」を計算する。
+// sinko/N または his/N の番号Nを+1する（例:「12686yu1/sinko/2」→「12686yu1/sinko/3」）。
+// 番号が見つからない場合はそのまま返す。
+function computeNextComment(comment) {
+  if (!comment) return comment;
+  const m = comment.match(/((?:sinko|his\w*)\/?)(\d+)/);
+  if (!m) return comment;
+  const next = parseInt(m[2], 10) + 1;
+  return comment.replace(/((?:sinko|his\w*)\/?)(\d+)/, `$1${next}`);
+}
 
-  // 前回の停止要求が残っていると waitForLineReply が即座に停止扱いになるため、
-  // 確認の返信待ちを行う前に停止フラグをリセットする
-  _shouldStop = false;
-
-  if (!index || !replyText) {
-    await sendLine('【エラー】対象外返信: 番号または返信文章が指定されていません');
+// ─── 対象外ユーザーの会話をope_mainに表示するまでの共通処理 ─────────────
+// 「対象外ID:{番号} ...」系コマンド（手動返信・本文照会）で共有する。
+//   対象外一覧ファイルから番号→uid/kidを解決 → ログイン → サポート画面 →
+//   対象ユーザー一覧からuid・kid一致行を特定 → ope_menuのformをsubmitして
+//   ope_mainに会話を表示 → fn({ supportPage, target, uid, kid, userName }) を呼ぶ
+// ブラウザの起動/終了はここで行い、fnの中で会話操作・通知を行う。
+// sendLine は呼び出し側（server.js）から渡す。
+async function withSkippedTargetConversation(index, sendLine, fn) {
+  if (!index) {
+    await sendLine('【エラー】対象外返信: 番号が指定されていません');
     return;
   }
 
@@ -2770,19 +2769,54 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
       console.log(`[MANUAL-REPLY] ${userName}: #bodyKakunin のタイムアウト（続行）`);
     }
 
+    await fn({ supportPage, target, uid, kid, userName });
+  } catch (err) {
+    console.error(`[MANUAL-REPLY] 対象外ID=${index}: 処理に失敗: ${err.message}`, err.stack);
+    await sendLine(`【エラー】対象外返信に失敗しました\n対象外ID：${index}\nエラー：${err.message}`);
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+// ─── 対象外ユーザーへの手動返信 ─────────────────────────────────────
+// LINE/Slackコマンド「対象外ID:{番号} {返信文章}」から呼び出す。
+// 返信チェックで対象外となったユーザーへ、指定した返信文章を確認のうえ送信する。
+//   最新の鑑定士コメントアウトを取得 → 付与するコメントアウトを決定 →
+//   LINE/Slackへ確認通知 → 返信待ち → 「送信」の場合のみ
+//   ope_mainフレームの textarea#mess_body に入力して #chara_mail_send で送信
+// useNextComment:
+//   false（デフォルト）… 最終コメントアウトと同一のものを文末に付与
+//   true                … 次のコメントアウト（番号+1）を文末に付与
+// sendLine / waitForLineReply は呼び出し側（server.js）から渡す
+async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY_RUN = false, useNextComment = false) {
+  console.log(`[MANUAL-REPLY] 対象外ID=${index} useNextComment=${useNextComment} 返信文="${(replyText || '').slice(0, 40)}"`);
+
+  // 前回の停止要求が残っていると waitForLineReply が即座に停止扱いになるため、
+  // 確認の返信待ちを行う前に停止フラグをリセットする
+  _shouldStop = false;
+
+  if (!replyText) {
+    await sendLine('【エラー】対象外返信: 返信文章が指定されていません');
+    return;
+  }
+
+  await withSkippedTargetConversation(index, sendLine, async ({ supportPage, uid, userName }) => {
     // ── 最新の鑑定士コメントアウトを取得 ───────────────────────────
     const latestComment = await getLatestKanteishiComment(supportPage);
     console.log(`[MANUAL-REPLY] uid=${uid} 最新コメントアウト: "${latestComment}"`);
 
-    // 返信文の末尾に最新コメントアウトを付与したものを、確認通知・実送信の
-    // 両方で使用する。latestComment はプレーンテキスト（例:「12686yu1/sinko/2」）の
-    // 場合があるため、コメントアウト形式（<!--...-->）に整えてから付与する
-    // （コメントアウトが無い場合は返信文のみとする）
+    // 付与するコメントアウトを決定する。
+    // ・useNextComment=false（デフォルト）: 最終コメントアウトと同一
+    // ・useNextComment=true: 次のコメントアウト（番号+1）
+    const commentToAppend = useNextComment ? computeNextComment(latestComment) : latestComment;
+
+    // 返信文の末尾にコメントアウトを付与したものを確認通知・実送信の両方で使う。
+    // プレーンテキスト（例:「12686yu1/sinko/2」）はコメントアウト形式に整える。
     let finalReplyText = replyText;
-    if (latestComment) {
-      const commentTag = latestComment.startsWith('<!--')
-        ? latestComment
-        : `<!--${latestComment}-->`;
+    if (commentToAppend) {
+      const commentTag = commentToAppend.startsWith('<!--')
+        ? commentToAppend
+        : `<!--${commentToAppend}-->`;
       finalReplyText = `${replyText}\n${commentTag}`;
     }
 
@@ -2791,6 +2825,7 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
       '【対象外返信確認】',
       `会員ID：${uid}`,
       `最終コメントアウト：${latestComment || '（なし）'}`,
+      `付与コメントアウト：${commentToAppend || '（なし）'}${useNextComment ? '（次行）' : '（同一）'}`,
       '返信内容：',
       '---',
       finalReplyText,
@@ -2832,12 +2867,44 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
     console.log(`[MANUAL-REPLY] uid=${uid} (${userName}) 送信完了`);
 
     await sendLine(`【対象外返信完了】\n会員ID：${uid}`);
-  } catch (err) {
-    console.error(`[MANUAL-REPLY] uid=${uid}: 送信に失敗: ${err.message}`, err.stack);
-    await sendLine(`【エラー】対象外返信に失敗しました\n会員ID：${uid}\nエラー：${err.message}`);
-  } finally {
-    await browser.close().catch(() => {});
-  }
+  });
+}
+
+// ─── 対象外ユーザーの本文照会（送信なし）─────────────────────────────
+// LINE/Slackコマンド「対象外ID:{番号} 本文照会」から呼び出す。
+// 対象ユーザーの最新コメントアウトとユーザーメッセージ（bodyNaibuTexts）を
+// 取得してLINE/Slackへ通知するのみで、返信送信は行わない。
+async function inquireUserBody(index, sendLine) {
+  console.log(`[MANUAL-REPLY] 本文照会 対象外ID=${index}`);
+
+  await withSkippedTargetConversation(index, sendLine, async ({ supportPage, uid }) => {
+    const latestComment = await getLatestKanteishiComment(supportPage);
+
+    const mainFrame = supportPage.frame({ name: 'ope_main' });
+    let bodyTexts = [];
+    if (mainFrame) {
+      try {
+        bodyTexts = await getBodyNaibuTexts(mainFrame);
+      } catch (e) {
+        console.log(`[本文照会] uid=${uid}: bodyNaibuTextsの取得に失敗: ${e.message}`);
+      }
+    }
+    const messageBlock = (bodyTexts && bodyTexts.length > 0)
+      ? bodyTexts.map(t => decodeHtml(t)).join('\n---\n')
+      : '（ユーザーメッセージが取得できませんでした）';
+
+    console.log(`[本文照会] uid=${uid} メッセージ${bodyTexts.length}件 最新コメント="${latestComment}"`);
+
+    await sendLine([
+      '【本文照会】',
+      `会員ID：${uid}`,
+      `最新コメントアウト：${latestComment || '（なし）'}`,
+      'ユーザーメッセージ：',
+      '---',
+      messageBlock,
+      '---',
+    ].join('\n'));
+  });
 }
 
 // ─── エントリポイント ─────────────────────────────────────────────
@@ -2885,4 +2952,4 @@ if (require.main === module) {
   checkReplies();
 }
 
-module.exports = { checkReplies, stopReplies, sendManualReply, sendLine, waitForLineReply };
+module.exports = { checkReplies, stopReplies, sendManualReply, inquireUserBody, sendLine, waitForLineReply };

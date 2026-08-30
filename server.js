@@ -26,6 +26,7 @@ try {
 let checkReplies = () => console.warn('reply-checker 未ロード');
 let stopReplies  = () => console.warn('reply-checker 未ロード');
 let sendManualReply = async () => console.warn('reply-checker 未ロード（sendManualReply）');
+let inquireUserBody = async () => console.warn('reply-checker 未ロード（inquireUserBody）');
 // sendManualReply へ渡す通知・返信待ち関数（reply-checker側の実装を共有する）
 let rcSendLine = async () => console.warn('reply-checker 未ロード（sendLine）');
 let rcWaitForLineReply = async () => { throw new Error('reply-checker 未ロード（waitForLineReply）'); };
@@ -34,6 +35,7 @@ try {
   checkReplies = rc.checkReplies;
   stopReplies  = rc.stopReplies;
   sendManualReply = rc.sendManualReply;
+  inquireUserBody = rc.inquireUserBody;
   rcSendLine = rc.sendLine;
   rcWaitForLineReply = rc.waitForLineReply;
 } catch (e) {
@@ -548,21 +550,39 @@ async function processCommand(text, reply, source = 'LINE') {
     return reply(buildSkippedUsersMessage());
   }
 
-  // ─── 「対象外ID:{番号} {返信文章}」対象外ユーザーへの手動返信 ─────────
-  // 例:「対象外ID:2 ご返信ありがとうございます。」
-  // 返信チェック完了時に通知した対象外一覧の番号を指定して、最新コメントアウトと
-  // 返信内容を確認したうえで手動送信する。番号→uid/kidの解決は
-  // reply-checker側で /tmp/rune-skipped-list.json を読んで行う。
-  // 処理には時間がかかりreplyTokenが失効するため、受付だけ即返信し、
-  // 確認通知・完了/エラーはreply-checker側のsendLineで通知する。
+  // ─── 「対象外ID:{番号} ...」対象外ユーザーへの手動返信・本文照会 ─────────
+  // 返信チェック完了時に通知した対象外一覧の番号を指定する。番号→uid/kidの
+  // 解決は reply-checker側で /tmp/rune-skipped-list.json を読んで行う。
+  //  ・「対象外ID:{番号} 本文照会」→ ユーザーメッセージを照会（送信なし）
+  //  ・「対象外ID:{番号} 次行:{文章}」→ 次のコメントアウトを付与して送信
+  //  ・「対象外ID:{番号} {文章}」    → 最終コメントアウトと同一のものを付与して送信
+  // 判定順は 本文照会 → 次行 → 通常。処理には時間がかかりreplyTokenが失効するため、
+  // 受付だけ即返信し、確認通知・完了/エラーはreply-checker側のsendLineで通知する。
   // 確認返信（「送信」「スキップ」）は返信待ち中のstate file転送で
   // sendManualReply内のwaitForLineReplyへ渡る。
-  const manualReplyMatch = text.match(/^対象外ID[:：]\s*(\d+)\s+([\s\S]+)$/);
-  if (manualReplyMatch) {
-    const index = manualReplyMatch[1];
-    const replyText = manualReplyMatch[2].trim();
+  const bunshoMatch = text.match(/^対象外ID[:：]\s*(\d+)\s+本文照会$/);
+  const nextMatch   = text.match(/^対象外ID[:：]\s*(\d+)\s+次行[:：]\s*([\s\S]+)$/);
+  const normalMatch = text.match(/^対象外ID[:：]\s*(\d+)\s+([\s\S]+)$/);
+  if (bunshoMatch) {
+    const index = bunshoMatch[1];
+    console.log(`[${source}] 本文照会: 対象外ID=${index}`);
+    inquireUserBody(index, rcSendLine)
+      .catch(err => console.error('[本文照会] 実行エラー:', err.message));
+    return reply(`【本文照会】対象外ID：${index}\n照会を開始しました`);
+  }
+  if (nextMatch) {
+    const index = nextMatch[1];
+    const replyText = nextMatch[2].trim();
+    console.log(`[${source}] 対象外返信(次行): 対象外ID=${index} text="${replyText.slice(0, 40)}"`);
+    sendManualReply(index, replyText, rcSendLine, rcWaitForLineReply, process.env.DRY_RUN === 'true', true)
+      .catch(err => console.error('[MANUAL-REPLY] 実行エラー:', err.message));
+    return reply(`【対象外返信】対象外ID：${index}\n処理を開始しました（次のコメントアウト）`);
+  }
+  if (normalMatch) {
+    const index = normalMatch[1];
+    const replyText = normalMatch[2].trim();
     console.log(`[${source}] 対象外返信: 対象外ID=${index} text="${replyText.slice(0, 40)}"`);
-    sendManualReply(index, replyText, rcSendLine, rcWaitForLineReply, process.env.DRY_RUN === 'true')
+    sendManualReply(index, replyText, rcSendLine, rcWaitForLineReply, process.env.DRY_RUN === 'true', false)
       .catch(err => console.error('[MANUAL-REPLY] 実行エラー:', err.message));
     return reply(`【対象外返信】対象外ID：${index}\n処理を開始しました`);
   }
