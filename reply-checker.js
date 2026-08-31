@@ -2841,7 +2841,17 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
     return;
   }
 
-  await withSkippedTargetConversation(index, sendLine, async ({ supportPage, uid, userName }) => {
+  await withSkippedTargetConversation(index, sendLine, async ({ supportPage, uid, kid, userName }) => {
+    // ── 「テンプレート{番号}」指定ならテンプレート本文に置換する ──────────
+    // 対象会員のkid（例: "12676yu5"）のbaseId（"12676"）に対応する
+    // reply-templates/{baseId}.json から該当IDのtextを取得して返信文章に使う。
+    // 通常の手入力文章・テンプレート未発見時はそのまま元の文章を使う。
+    let effectiveReplyText = replyText;
+    if (/^テンプレート\d+$/.test(replyText.trim())) {
+      effectiveReplyText = resolveTemplateText(kid, replyText.trim()).replace(/\\n/g, '\n');
+      console.log(`[MANUAL-REPLY] uid=${uid} kid=${kid} テンプレート指定 → "${effectiveReplyText.slice(0, 40)}"`);
+    }
+
     // ── 最新の鑑定士コメントアウトを取得 ───────────────────────────
     const latestComment = await getLatestKanteishiComment(supportPage);
     console.log(`[MANUAL-REPLY] uid=${uid} 最新コメントアウト: "${latestComment}"`);
@@ -2853,12 +2863,12 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
 
     // 返信文の末尾にコメントアウトを付与したものを確認通知・実送信の両方で使う。
     // プレーンテキスト（例:「12686yu1/sinko/2」）はコメントアウト形式に整える。
-    let finalReplyText = replyText;
+    let finalReplyText = effectiveReplyText;
     if (commentToAppend) {
       const commentTag = commentToAppend.startsWith('<!--')
         ? commentToAppend
         : `<!--${commentToAppend}-->`;
-      finalReplyText = `${replyText}\n${commentTag}`;
+      finalReplyText = `${effectiveReplyText}\n${commentTag}`;
     }
 
     // ── LINE/Slackへ確認通知して返信を待つ ─────────────────────────
