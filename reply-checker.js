@@ -2624,6 +2624,19 @@ async function processUsers(page) {
       // 「テンプレート{番号}」の場合はcharaId対応のテンプレート本文に置換する
       let replacedText = reply.replace(/^差し替え#/, '').trim();
       replacedText = resolveTemplateText(charaId, replacedText).replace(/\\n/g, '\n');
+
+      // 差し替え文章にコメントアウト（<!--...-->）が含まれていない場合は、
+      // 最新のコメントアウトを自動で文末に付与する。
+      // 通常の差し替え・テンプレート呼び出しのどちらもここを通るため両方に適用される。
+      const hasCommentTag = /<!--.*-->/.test(replacedText);
+      if (!hasCommentTag && latestComment) {
+        const commentTag = latestComment.startsWith('<!--')
+          ? latestComment
+          : `<!--${latestComment}-->`;
+        replacedText = `${replacedText}\n${commentTag}`;
+        console.log(`[SASHIKAE] コメントアウトなし → 最新コメントアウトを付与: ${commentTag}`);
+      }
+
       const replacedFullText = replacedText;
 
       const confirmMsg = [
