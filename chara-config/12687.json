@@ -34,9 +34,21 @@
                 "searchTarget": "12687mu2/his/1",
                 "useCurrentRow": true
             },
-            "his": {
+            "his0": {
                 "fileId": "12687mu2hissinko"                
-            }                                                        
+            } ,
+            "his1": {
+                "fileId": "12687mu2hissinko"                
+            }   ,       
+            "his2": {
+                "fileId": "12687mu2hissinko"                
+            }   ,       
+            "his3": {
+                "fileId": "12687mu2hissinko"                
+            }   ,       
+            "his4": {
+                "fileId": "12687mu2hissinko"                
+            }                                                                                                                 
         },
         "yu1": {
             "fileId": "12687yu1sinko",
