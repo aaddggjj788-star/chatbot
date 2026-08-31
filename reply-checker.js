@@ -2907,6 +2907,243 @@ async function inquireUserBody(index, sendLine) {
   });
 }
 
+// ─── 同一コメントアウトグループへの一括送信 ─────────────────────────
+// LINE/Slackコマンド「{コメントアウト} 検索」（例:「12686yu1/sinko/1 検索」）から呼び出す。
+// 対象ユーザー一覧の中から、最新コメントアウトが指定文字列と完全一致する会員を抽出し、
+// 指定コメントアウトの「次の行」の文章（CSV）を一括送信の確認・送信対象とする。
+//   1. 送信予定文章をCSVから取得（getReplyFromCSVByTarget / useCurrentRow=false）
+//   2. 対象ユーザーを走査し、最新コメントアウトが完全一致する会員を抽出
+//      （各会員のユーザーメッセージ bodyNaibuTexts も取得）
+//   3. LINE/Slackへ該当一覧＋送信予定文章を通知
+//   4. コマンド待ち
+//      ・「送信」            → 全員に送信
+//      ・「除外:{uid,...} 送信」→ 指定uidを除いて送信
+//      ・「スキップ」        → 何もしない
+// sendLine / waitForLineReply は呼び出し側（server.js）から渡す。
+async function batchSearchAndReply(searchComment, sendLine, waitForLineReply, DRY_RUN = false) {
+  console.log(`[BATCH-SEARCH] コメントアウト="${searchComment}"`);
+
+  // 前回の停止要求が残っていると waitForLineReply が即座に停止扱いになるため、
+  // 確認の返信待ちを行う前に停止フラグをリセットする（sendManualReplyと同じ）
+  _shouldStop = false;
+
+  if (!searchComment) {
+    await sendLine('【エラー】一括送信: コメントアウトが指定されていません');
+    return;
+  }
+
+  // コメントアウトからcharaIdを解析（例:「12684yu12/sinko/1」→「12684yu12」）
+  const parsedComment = parseCommentStr(searchComment);
+  if (!parsedComment) {
+    await sendLine(`【エラー】一括送信: コメントアウトの形式が不正です\n指定値：${searchComment}`);
+    return;
+  }
+  const charaId = parsedComment.baseId + parsedComment.typeNum;
+
+  // ── 送信予定の文章をCSVから取得（指定コメントアウトの「次の行」）──
+  // ※コメントアウト文字列ではなく、実際に送信する文章内容を取得する
+  let replyData;
+  try {
+    replyData = getReplyFromCSVByTarget(charaId, searchComment, false);
+  } catch (e) {
+    await sendLine(`【エラー】一括送信: 送信文章の取得に失敗しました\nコメントアウト：${searchComment}\n${e.message}`);
+    return;
+  }
+  if (!replyData || !replyData.replyText) {
+    await sendLine(`【エラー】一括送信: 送信文章が空です\nコメントアウト：${searchComment}`);
+    return;
+  }
+  const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
+  // 実際に送信する全文（返信文 + 次のコメントアウトを末尾に追記）
+  const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
+
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  // 指定コメントアウトを表示中の会話（ope_main）に反映するまでの共通処理。
+  // 対象会員のope_menuフォームをsubmitし、#bodyKakuninの更新を待つ。
+  async function showConversation(supportPage, stringID, label) {
+    const menuFrame = supportPage.frame({ name: 'ope_menu' });
+    const mainFrame = supportPage.frame({ name: 'ope_main' });
+    if (!menuFrame || !mainFrame) return null;
+
+    // submit前に#bodyKakuninを空にして前候補の内容の誤検知を防ぐ
+    await mainFrame.evaluate(() => {
+      const el = document.querySelector('#bodyKakunin');
+      if (el) el.innerHTML = '';
+    });
+    try {
+      await menuFrame.evaluate((sid) => {
+        const form = document.getElementById(sid);
+        if (!form) throw new Error(`id="${sid}" のformが見つかりません`);
+        form.submit();
+      }, stringID);
+    } catch (e) {
+      console.log(`[BATCH-SEARCH] ${label}: form.submit()に失敗: ${e.message}`);
+      return null;
+    }
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      await mainFrame.waitForFunction(() => {
+        const el = document.querySelector('#bodyKakunin');
+        const trCount = document.querySelectorAll('tr').length;
+        return el !== null && el.innerHTML.length > 0 && trCount >= 20;
+      }, { timeout: 15000 });
+    } catch (_) {
+      console.log(`[BATCH-SEARCH] ${label}: #bodyKakunin のタイムアウト（続行）`);
+    }
+    return mainFrame;
+  }
+
+  // getLatestKanteishiComment は複数コメントを ", " で結合して返すため、
+  // 分割して searchComment と完全一致するものが含まれるか判定する
+  function latestMatches(latestComment) {
+    const list = latestComment ? latestComment.split(',').map(s => s.trim()) : [];
+    return list.includes(searchComment);
+  }
+
+  const matched = []; // { userName, uid, kid, stringID, message }
+  try {
+    const page = await context.newPage();
+    await login(page);
+    const supportPage = await openSupportPage(page);
+
+    // ── 1. 対象ユーザーを走査し、最新コメントアウトが完全一致する会員を抽出 ──
+    const targets = await getTargetUsers(supportPage);
+    console.log(`[BATCH-SEARCH] 対象ユーザー: ${targets.length}件`);
+
+    for (const { userName, kid, uid, stringID } of targets) {
+      if (_shouldStop) { console.log('[BATCH-SEARCH] 停止要求により中断'); break; }
+
+      const mainFrame = await showConversation(supportPage, stringID, userName);
+      if (!mainFrame) continue;
+
+      const latestComment = await getLatestKanteishiComment(supportPage);
+      console.log(`[BATCH-SEARCH] ${userName}(uid=${uid}) 最新コメントアウト="${latestComment}"`);
+      if (!latestMatches(latestComment)) continue;
+
+      // ── 2. 会員のユーザーメッセージ（最新の未対応メッセージ）を取得 ──
+      let bodyTexts = [];
+      try { bodyTexts = await getBodyNaibuTexts(mainFrame); } catch (_) {}
+      const message = (bodyTexts && bodyTexts.length > 0)
+        ? decodeHtml(bodyTexts[0]).replace(/[\t\n\r]/g, ' ').replace(/\s+/g, ' ').trim()
+        : '（メッセージ取得不可）';
+
+      matched.push({ userName, uid, kid, stringID, message });
+    }
+
+    if (matched.length === 0) {
+      await sendLine(`【一括送信対象】${searchComment}\n該当グループ：0件\n最新コメントアウトが一致する会員は見つかりませんでした`);
+      return;
+    }
+
+    // ── 3. LINE/Slackへ該当一覧＋送信予定文章を通知 ──
+    const listLines = matched.flatMap((m, i) => [
+      `${i + 1}. ${m.userName}（u_id: ${m.uid}）`,
+      `   メッセージ：${m.message.slice(0, 40)}`,
+    ]);
+    await sendLine([
+      `【一括送信対象】${searchComment}`,
+      `該当グループ：${matched.length}件`,
+      '',
+      ...listLines,
+      '',
+      '送信予定の文章：',
+      '---',
+      displayReplyText,
+      replyData.nextComment,
+      '---',
+      '',
+      '「送信」：全員に送信',
+      '「除外:{uid,uid,...} 送信」：指定uidを除いて送信',
+      '「スキップ」：何もしない',
+    ].join('\n'));
+
+    // ── 4. コマンド待ち ──
+    let reply;
+    try {
+      reply = await waitForLineReply();
+    } catch (e) {
+      console.log(`[BATCH-SEARCH] 確認待ちタイムアウト → 中止: ${e.message}`);
+      await sendLine(`【一括送信】確認がタイムアウトしたため中止しました\nコメントアウト：${searchComment}`);
+      return;
+    }
+    console.log(`[BATCH-SEARCH] 確認返信: ${reply}`);
+
+    // 「除外:{uid,uid,...} 送信」→ 除外uidを抽出（カンマ・読点・空白区切り）
+    let excludeUids = [];
+    const excludeMatch = reply.match(/^除外[:：]\s*([\d,、\s]+?)\s*送信$/);
+    if (excludeMatch) {
+      excludeUids = excludeMatch[1].split(/[,、\s]+/).map(s => s.trim()).filter(Boolean);
+    } else if (reply !== '送信') {
+      // 「スキップ」やその他 → 何もしない
+      console.log(`[BATCH-SEARCH] 「送信」「除外:… 送信」以外 → スキップ`);
+      await sendLine(`【一括送信】スキップしました\nコメントアウト：${searchComment}`);
+      return;
+    }
+
+    const sendTargets = matched.filter(m => !excludeUids.includes(String(m.uid)));
+    if (sendTargets.length === 0) {
+      await sendLine(`【一括送信】除外の結果、送信対象が0件になりました\nコメントアウト：${searchComment}`);
+      return;
+    }
+
+    if (DRY_RUN) {
+      console.log(`[DRY RUN] 一括送信をスキップ 対象=${sendTargets.length}件`);
+      await sendLine(`【DRY RUN】一括送信をスキップしました\nコメントアウト：${searchComment}\n対象：${sendTargets.length}件（除外${excludeUids.length}件）`);
+      return;
+    }
+
+    // ── 5. 一括送信 ──
+    const sentResults = [];
+    for (const m of sendTargets) {
+      if (_shouldStop) { console.log('[BATCH-SEARCH] 送信中に停止要求により中断'); break; }
+      try {
+        const mainFrame = await showConversation(supportPage, m.stringID, m.userName);
+        if (!mainFrame) { sentResults.push(`${m.uid}（${m.userName}）：フレーム取得失敗`); continue; }
+
+        // 確認通知〜送信までの間に状態が変わっていないか（最新コメントアウトが
+        // まだ一致＝未返信のまま）を再確認し、変化していれば誤送信を防ぐためスキップ
+        const stillComment = await getLatestKanteishiComment(supportPage);
+        if (!latestMatches(stillComment)) {
+          console.log(`[BATCH-SEARCH] uid=${m.uid}: 最新コメントアウトが変化("${stillComment}") → スキップ`);
+          sentResults.push(`${m.uid}（${m.userName}）：状態変化のためスキップ`);
+          continue;
+        }
+
+        const sendFrame = supportPage.frame({ name: 'ope_main' });
+        if (!sendFrame) { sentResults.push(`${m.uid}（${m.userName}）：送信フレーム取得失敗`); continue; }
+        await sendFrame.fill('textarea#mess_body', textToSend);
+        await sendFrame.click('#chara_mail_send');
+        await sendFrame.waitForLoadState('networkidle').catch(() => {});
+        console.log(`[BATCH-SEARCH] uid=${m.uid}（${m.userName}）送信完了`);
+        sentResults.push(`${m.uid}（${m.userName}）：送信完了`);
+      } catch (e) {
+        console.error(`[BATCH-SEARCH] uid=${m.uid} 送信エラー: ${e.message}`);
+        sentResults.push(`${m.uid}（${m.userName}）：送信エラー ${e.message.slice(0, 40)}`);
+      }
+    }
+
+    await sendLine([
+      '【一括送信完了】',
+      `コメントアウト：${searchComment}`,
+      `送信対象：${sendTargets.length}件（除外${excludeUids.length}件）`,
+      '',
+      ...sentResults.map(r => `・${r}`),
+    ].join('\n'));
+  } catch (err) {
+    console.error(`[BATCH-SEARCH] 処理に失敗: ${err.message}`, err.stack);
+    await sendLine(`【エラー】一括送信に失敗しました\nコメントアウト：${searchComment}\nエラー：${err.message}`);
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 // ─── エントリポイント ─────────────────────────────────────────────
 
 function stopReplies() {
@@ -2952,4 +3189,4 @@ if (require.main === module) {
   checkReplies();
 }
 
-module.exports = { checkReplies, stopReplies, sendManualReply, inquireUserBody, sendLine, waitForLineReply };
+module.exports = { checkReplies, stopReplies, sendManualReply, inquireUserBody, batchSearchAndReply, sendLine, waitForLineReply };

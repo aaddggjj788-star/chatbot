@@ -27,6 +27,7 @@ let checkReplies = () => console.warn('reply-checker 未ロード');
 let stopReplies  = () => console.warn('reply-checker 未ロード');
 let sendManualReply = async () => console.warn('reply-checker 未ロード（sendManualReply）');
 let inquireUserBody = async () => console.warn('reply-checker 未ロード（inquireUserBody）');
+let batchSearchAndReply = async () => console.warn('reply-checker 未ロード（batchSearchAndReply）');
 // sendManualReply へ渡す通知・返信待ち関数（reply-checker側の実装を共有する）
 let rcSendLine = async () => console.warn('reply-checker 未ロード（sendLine）');
 let rcWaitForLineReply = async () => { throw new Error('reply-checker 未ロード（waitForLineReply）'); };
@@ -36,6 +37,7 @@ try {
   stopReplies  = rc.stopReplies;
   sendManualReply = rc.sendManualReply;
   inquireUserBody = rc.inquireUserBody;
+  batchSearchAndReply = rc.batchSearchAndReply;
   rcSendLine = rc.sendLine;
   rcWaitForLineReply = rc.waitForLineReply;
 } catch (e) {
@@ -616,6 +618,22 @@ async function processCommand(text, reply, source = 'LINE') {
     runPaymentCommand(uid, amount, lineBroadcast, process.env.DRY_RUN === 'true')
       .catch(err => console.error('[PAYMENT-CMD] 実行エラー:', err.message));
     return reply(`【入金処理】会員ID：${uid}\n入金額：${amount}円\n処理を開始しました`);
+  }
+
+  // ─── 「{コメントアウト} 検索」同一コメントアウトグループへの一括送信 ─────
+  // 例:「12686yu1/sinko/1 検索」→ 最新コメントアウトが完全一致する会員を抽出し、
+  // 次の行の文章を一括送信の確認・送信対象とする。処理には時間がかかり
+  // replyTokenが失効するため、受付だけ即返信し、確認通知・完了/エラーは
+  // reply-checker側のsendLineで通知する。確認返信（「送信」「除外:… 送信」
+  // 「スキップ」）は返信待ち中のstate file転送でwaitForLineReplyへ渡る。
+  // ※コメントアウトは必ず「/」を含むため、誤検出防止に「/」を含む語のみ対象とする
+  const searchMatch = text.match(/^(\S+\/\S+)\s+検索$/);
+  if (searchMatch) {
+    const searchComment = searchMatch[1].trim();
+    console.log(`[${source}] 一括検索送信: コメントアウト="${searchComment}"`);
+    batchSearchAndReply(searchComment, rcSendLine, rcWaitForLineReply, process.env.DRY_RUN === 'true')
+      .catch(err => console.error('[BATCH-SEARCH] 実行エラー:', err.message));
+    return reply(`【一括送信】コメントアウト：${searchComment}\n該当グループの検索を開始しました`);
   }
 
   if (text === '返信チェック開始') {
