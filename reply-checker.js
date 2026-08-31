@@ -539,6 +539,43 @@ function getReplyFromCSVBySpan(charaId, spanWord, fileId) {
   return { replyText, nextComment };
 }
 
+// ─── テンプレート差し替え・差し込み ─────────────────────────────────
+// reply-templates/{baseId}.json（baseId = charaIdの数値部分、例: 12676yu5 → 12676）
+// から指定IDのテンプレート本文を取得する。
+// 入力が「テンプレート{番号}」形式の場合のみ該当テンプレートのtextに置換し、
+// それ以外（通常の手入力文章）は入力をそのまま返す。
+// ファイル・テンプレートが見つからない場合も入力をそのまま返す。
+function resolveTemplateText(charaId, inputText) {
+  const m = String(inputText).match(/^テンプレート(\d+)$/);
+  if (!m) return inputText;
+  const templateId = parseInt(m[1], 10);
+
+  // charaId（例: "12676yu5"）の数値プレフィックス（baseId "12676"）を取り出す
+  const baseId = (String(charaId).match(/^(\d+)/) || [])[1];
+  if (!baseId) {
+    console.log(`[TEMPLATE] charaId="${charaId}" からbaseIdを抽出できませんでした`);
+    return inputText;
+  }
+
+  const templatePath = path.join(__dirname, 'reply-templates', `${baseId}.json`);
+  if (!fs.existsSync(templatePath)) {
+    console.log(`[TEMPLATE] テンプレートファイルなし: ${templatePath}`);
+    return inputText;
+  }
+  try {
+    const templates = JSON.parse(fs.readFileSync(templatePath, 'utf8')).templates || [];
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+      console.log(`[TEMPLATE] baseId=${baseId} id=${templateId}（${template.name}）を適用`);
+      return template.text;
+    }
+    console.log(`[TEMPLATE] baseId=${baseId} id=${templateId} のテンプレートが見つかりません`);
+  } catch (e) {
+    console.log(`[TEMPLATE] テンプレート読み込みエラー: ${e.message}`);
+  }
+  return inputText;
+}
+
 // ─── Playwright: ログイン ─────────────────────────────────────────
 
 async function login(page) {
@@ -2548,7 +2585,9 @@ async function processUsers(page) {
       await sendReplyText(textToSend);
     } else if (isSashikomi) {
       // 返信文の1行目と2行目の間に差し込み文を挿入した全文を生成
-      const insertText = reply.replace(/^差し込み#/, '').trim();
+      // 「テンプレート{番号}」の場合はcharaId対応のテンプレート本文に置換する
+      let insertText = reply.replace(/^差し込み#/, '').trim();
+      insertText = resolveTemplateText(charaId, insertText).replace(/\\n/g, '\n');
       const baseLines = replyData.replyText.replace(/\\n/g, '\n').trim().split('\n');
       const splicedLines = [baseLines[0], insertText, ...baseLines.slice(1)];
       const splicedText = splicedLines.join('\n') + '\n' + replyData.nextComment;
@@ -2582,7 +2621,9 @@ async function processUsers(page) {
     } else if (isSashikae) {
       // #以降のテキストを新しい返信文として丸ごと差し替える
       // 差し替え文章にはコメントアウトが含まれる前提のため、元のnextCommentは付加しない
-      const replacedText = reply.replace(/^差し替え#/, '').replace(/\\n/g, '\n').trim();
+      // 「テンプレート{番号}」の場合はcharaId対応のテンプレート本文に置換する
+      let replacedText = reply.replace(/^差し替え#/, '').trim();
+      replacedText = resolveTemplateText(charaId, replacedText).replace(/\\n/g, '\n');
       const replacedFullText = replacedText;
 
       const confirmMsg = [
