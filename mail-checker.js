@@ -32,6 +32,16 @@ const EXCLUDED_IDS = [
   '13595998', '16244500', '1494510', '20224382','21042523','20369054',
 ];
 
+// スタッフ対象ID（スタッフ用に切り出したID。既読にせず未処理のまま残し、
+// スタッフVPSが未読メールとして検出できるようにする）
+// ※EXCLUDED_IDSと同一の場合、こちらが優先されるよう除外ID判定より前で処理する
+const STAFF_TARGET_IDS = [
+  '2488023', '6092588', '12516134', '16935122', '16667313',
+  '3866720', '9966839', '3569849', '1042324', '2486932',
+  '10562903', '1045392', '16166564', '2900792', '8764227',
+  '13595998', '16244500', '1494510', '20224382', '21042523', '20369054',
+];
+
 // 通知のみID（ポイント追加はしないがLINEに通知）
 const NOTIFY_ONLY_IDS = ['19122552'];
 
@@ -211,6 +221,12 @@ async function checkMail() {
       const nameConverted = !!NAME_TO_ID[senderName.trim()];
       if (nameConverted) console.log(`  名前→ID変換: "${senderName}" → ${memberId}`);
       console.log(`  [MAIL] 会員ID: ${memberId}`);
+
+      // 優先順位0: スタッフ対象IDは既読にせず未処理のまま残す（スタッフVPSが検出する）
+      if (memberId && STAFF_TARGET_IDS.includes(memberId)) {
+        console.log(`  スキップ（スタッフ対象ID） 会員ID:${memberId} → 既読にしない`);
+        continue; // markAsSeenを呼ばない
+      }
 
       // 優先順位2: 除外IDはスキップ（通知なし）
       if (memberId && EXCLUDED_IDS.includes(memberId)) {
