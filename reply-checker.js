@@ -202,12 +202,18 @@ function parseCSV(filePath) {
 //           "12668mu1/hisu/2"    → { ..., type:"his", num:2 }（his*はhisに正規化）
 //           "12668mu2/his/3/B"   → { ..., type:"his", num:3, suffix:"B" }（数字後の/A,/B等のsuffix対応）
 // 複合形式: "12668mu2/zenhan/sinko/1" → { baseId:"12668", typeNum:"mu2", sub:"zenhan", type:"sinko", num:1, suffix:null }
+// do形式:  "12684mu1/do/1"      → { baseId:"12684", typeNum:"mu1", sub:null, type:"do", num:1, suffix:null }
+// ho形式:  "12684yu5/ho"        → { baseId:"12684", typeNum:"yu5", sub:null, type:"ho", num:null, suffix:null }（末尾数字なし）
 // ※ numは数値のみ（span範囲比較・actionKey生成のため）。/A,/B等のsuffixはsuffixフィールドに保持する。
+// ※ ho等で末尾数字が無い場合はnum:null。
 function parseCommentStr(commentStr) {
-  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/(sinko|his\w*)\/?(\d+)(?:\/?([a-zA-Z]+))?$/);
+  // sinko/his に加え、do（例:"12684mu1/do/1"）・ho（例:"12684yu5/ho"）にも対応する。
+  // ※ ho は末尾の数字が無い形式もあるため (\d+) を任意にする。
+  //   batchSearchAndReply は baseId/typeNum のみ使用するため num=null でも影響しない。
+  let m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/(sinko|his\w*|do|ho)\/?(\d+)?(?:\/?([a-zA-Z]+))?$/);
   if (m) {
     const type = m[3].startsWith('his') ? 'his' : m[3];
-    return { baseId: m[1], typeNum: m[2], sub: null, type, num: parseInt(m[4], 10), suffix: m[5] || null };
+    return { baseId: m[1], typeNum: m[2], sub: null, type, num: m[4] ? parseInt(m[4], 10) : null, suffix: m[5] || null };
   }
   m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-z]+)\/(sinko|his\w*)\/?(\d+)(?:\/?([a-zA-Z]+))?$/);
   if (m) {
