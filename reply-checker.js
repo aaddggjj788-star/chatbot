@@ -2950,6 +2950,7 @@ async function inquireUserBody(index, sendLine) {
       '【本文照会】',
       `会員ID：${uid}`,
       `最新コメントアウト：${latestComment || '（なし）'}`,
+      '',
       'ユーザーメッセージ：',
       '---',
       messageBlock,
