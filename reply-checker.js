@@ -2016,10 +2016,23 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     const receivedAt = parseMessageTime(analysis.latestUserTime || '');
     if (receivedAt) {
       const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
-      if (elapsedMin < 15) {
-        console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 15分未満のためスキップ`);
-        recordSkip(`受信から${elapsedMin.toFixed(1)}分（15分未満）のためスキップ`);
+      const bypassWaitForAutoTest =
+        autoMode &&
+        String(kid) === '12541';
+
+      if (elapsedMin < 15 && !bypassWaitForAutoTest) {
+        console.log(
+          `[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 15分未満のためスキップ`
+        );
+
+        recordSkip('15分未満のためスキップ');
         continue;
+      }
+
+      if (elapsedMin < 15 && bypassWaitForAutoTest) {
+        console.log(
+          `[AUTO-TEST] ${userName}: kid=12541 のため15分待機をバイパス`
+        );
       }
       console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 処理続行`);
     } else {
