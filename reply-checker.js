@@ -1373,6 +1373,220 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bod
   }
 }
 
+// ======================================================
+// 送り返す言葉：自動返信用のゆるい一致判定
+// ======================================================
+
+function normalizeMatchText(text) {
+  return String(text || '')
+    .normalize('NFKC')
+    .replace(/<[^>]*>/g, '')
+    .replace(/[「」『』【】［］\[\]（）()]/g, '')
+    .replace(/[、。,.!！?？・]/g, '')
+    .replace(/\s+/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+
+// ------------------------------------------------------
+// 「財運開門（ざいうんかいもん）」のような形式を分離
+// ------------------------------------------------------
+function splitWordAndReading(rawWord) {
+  const text = String(rawWord || '').trim();
+
+  const m = text.match(
+    /^(.+?)[（(]([ぁ-んァ-ヶー]+)[）)]$/
+  );
+
+  if (!m) {
+    return {
+      word: text,
+      reading: ''
+    };
+  }
+
+  return {
+    word: m[1].trim(),
+    reading: m[2].trim()
+  };
+}
+
+
+// ------------------------------------------------------
+// 短い造語向け
+//
+// 完全一致
+// ↓
+// 読み一致
+// ↓
+// 1文字程度の誤りを許容
+// ------------------------------------------------------
+function fuzzyShortWordMatch(userText, word) {
+  const user = normalizeMatchText(userText);
+  const target = normalizeMatchText(word);
+
+  if (!user || !target) {
+    return false;
+  }
+
+  // 完全部分一致
+  if (user.includes(target)) {
+    return true;
+  }
+
+  const targetChars = [...target];
+
+  // 4文字以上なら1文字欠けまで許容
+  if (targetChars.length >= 4) {
+    for (let skip = 0; skip < targetChars.length; skip++) {
+      const partial = targetChars
+        .filter((_, i) => i !== skip)
+        .join('');
+
+      if (
+        partial.length >= 3 &&
+        user.includes(partial)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+
+// ------------------------------------------------------
+// 普通の文章から比較用キーワードを作る
+//
+// 金運を優先したい
+// → 金運 / 優先
+//
+// 幸せを受け入れる
+// → 幸せ / 受け入
+// ------------------------------------------------------
+function extractPhraseKeywords(text) {
+  let s = normalizeMatchText(text);
+
+  if (!s) {
+    return [];
+  }
+
+  // よくある助詞を区切りとして扱う
+  s = s
+    .replace(/(について|として|によって|から|まで|より|ので|ため)/g, '|')
+    .replace(/[をがはにへともでの]/g, '|');
+
+  let parts = s
+    .split('|')
+    .map(v => v.trim())
+    .filter(v => v.length >= 2);
+
+  // 語尾の表記揺れを少し吸収
+  parts = parts.map(part =>
+    part
+      .replace(/したい$/, '')
+      .replace(/します$/, '')
+      .replace(/する$/, '')
+      .replace(/した$/, '')
+      .replace(/してください$/, '')
+      .replace(/下さい$/, '')
+      .replace(/ます$/, '')
+      .replace(/です$/, '')
+      .replace(/たい$/, '')
+      .trim()
+  );
+
+  return [
+    ...new Set(
+      parts.filter(v => v.length >= 2)
+    )
+  ];
+}
+
+
+// ------------------------------------------------------
+// 普通の文章向け一致判定
+// ------------------------------------------------------
+function phraseMatch(userText, targetText) {
+  const user = normalizeMatchText(userText);
+  const target = normalizeMatchText(targetText);
+
+  if (!user || !target) {
+    return false;
+  }
+
+  // まず完全な部分一致
+  if (user.includes(target)) {
+    return true;
+  }
+
+  const keywords = extractPhraseKeywords(target);
+
+  if (keywords.length === 0) {
+    return false;
+  }
+
+  // 重要語が全部入っていればOK
+  return keywords.every(keyword =>
+    user.includes(keyword)
+  );
+}
+
+
+// ------------------------------------------------------
+// 最終判定
+// ------------------------------------------------------
+function matchesReturnWord(userText, rawWord) {
+  const {
+    word,
+    reading
+  } = splitWordAndReading(rawWord);
+
+  const normalizedWord = normalizeMatchText(word);
+
+  if (!normalizedWord) {
+    return false;
+  }
+
+  // -----------------------------------------------
+  // 読み仮名付き
+  // → 基本的に造語として扱う
+  // -----------------------------------------------
+  if (reading) {
+    if (fuzzyShortWordMatch(userText, word)) {
+      return true;
+    }
+
+    if (fuzzyShortWordMatch(userText, reading)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // -----------------------------------------------
+  // 短い文字列
+  // → 造語の可能性が高い
+  // -----------------------------------------------
+  if ([...normalizedWord].length <= 6) {
+    return fuzzyShortWordMatch(
+      userText,
+      word
+    );
+  }
+
+  // -----------------------------------------------
+  // 長めなら通常文章として判定
+  // -----------------------------------------------
+  return phraseMatch(
+    userText,
+    word
+  );
+}
+
+
 // ope_mainフレームの div.bodyNaibu からユーザーメッセージ本文のみ取得する
 // 全 div.bodyNaibu から鑑定士行（90ee90 背景）に属するものを除外し、
 // さらに最新の鑑定士メッセージより上（新しい）のユーザー分のみに限定する
@@ -1734,6 +1948,73 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       while ((nengenM = nengenRe.exec(kanteishiBody)) !== null) {
         nengenWords.push(nengenM[1]);
       }
+    // ======================================================
+    // 自動巡回限定：ユーザー返信内容の安全判定
+    // ======================================================
+    if (autoMode) {
+      // 最新のユーザーメッセージ1通だけを取得
+      const latestUserText =
+        bodyNaibuTexts.length > 0
+          ? bodyNaibuTexts[0]
+          : (analysis.latestUserTexts?.[0] || '');
+
+      // 表示文字として判定するため、HTMLタグ・空白・改行を除去
+      const normalizedUserText = String(latestUserText)
+        .replace(/<[^>]*>/g, '')
+        .replace(/\s+/g, '')
+        .trim();
+
+      console.log(
+        `[AUTO-CHECK] ${userName}: 最新ユーザー本文="${normalizedUserText.slice(0, 80)}" ` +
+        `文字数=${normalizedUserText.length}`
+      );
+
+      // --------------------------------------------------
+      // 15文字以上なら自動返信対象外
+      // --------------------------------------------------
+      if (normalizedUserText.length >= 15) {
+        console.log(
+          `[AUTO-CHECK] ${userName}: ユーザー本文が15文字以上 → 対象外`
+        );
+
+        recordSkip(
+          `自動返信対象外: ユーザーメッセージが15文字以上 (${normalizedUserText.length}文字)`
+        );
+
+        continue;
+      }
+
+      // --------------------------------------------------
+      // 送り返す言葉が取得できた場合、
+      // 最新ユーザー本文との部分一致を確認
+      // --------------------------------------------------
+      if (nengenWords.length > 0) {
+        const sendWordMatched = nengenWords.some(word =>
+          matchesReturnWord(
+            normalizedUserText,
+            word
+          )
+        );
+
+        if (!sendWordMatched) {
+          console.log(
+            `[AUTO-CHECK] ${userName}: 送り返す言葉が最新ユーザー本文に不一致 ` +
+            `words=${JSON.stringify(nengenWords)}`
+          );
+
+          recordSkip(
+            `自動返信対象外: 送り返す言葉がユーザーメッセージに不一致`
+          );
+
+          continue;
+        }
+
+        console.log(
+          `[AUTO-CHECK] ${userName}: 送り返す言葉の部分一致を確認`
+        );
+      }
+    }
+
       if (nengenWords.length > 0) {
         const userTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
         const allUserText = userTexts.join('');
