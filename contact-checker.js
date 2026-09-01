@@ -285,12 +285,14 @@ async function collectMemberInfo(page, uid) {
 
     // 2. 当日配信メールからキャンペーン情報を取得（失敗時は補助0として続行）
     const campaigns = [];
+    let mailCampaigns = []; // メール本文で検出した week/campaign 等（mail-campaign-info.json照合用）
     try {
       const mailRows = await getMailRows(kyouseiPage);
       for (const row of mailRows) {
         campaigns.push(...await parseCampaignWithClaude(row.bodyHtml));
       }
-      console.log(`[MEMBER-INFO] uid=${uid}: 当日配信メール${mailRows.length}件 キャンペーン${campaigns.length}件`);
+      mailCampaigns = mailRows.map(r => r.campaign).filter(Boolean);
+      console.log(`[MEMBER-INFO] uid=${uid}: 当日配信メール${mailRows.length}件 キャンペーン${campaigns.length}件 検出コメント${mailCampaigns.length}件`);
     } catch (e) {
       console.log(`[MEMBER-INFO] uid=${uid}: キャンペーン情報の取得に失敗: ${e.message}`);
     }
@@ -310,7 +312,7 @@ async function collectMemberInfo(page, uid) {
     const normalPt = paymentRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
     const servicePt = paymentRows.reduce(
       (sum, r) => sum + (r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0), 0);
-    const campaignBonus = calcExpectedPoints(totalAmount, campaigns).campaignBonus;
+    const campaignBonus = calcExpectedPoints(totalAmount, campaigns, mailCampaigns).campaignBonus;
     const expectedPt = normalPt + servicePt + campaignBonus;
     const actualPt = paymentRows.reduce((sum, r) => sum + r.point, 0);
 

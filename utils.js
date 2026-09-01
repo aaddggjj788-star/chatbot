@@ -19,6 +19,7 @@ const CAMPAIGN_COMMENT_RE = /<!--(week|k_id|kanteisi)\/campaign\/(\d+)-->/;
 
 let _campaignRulesCache = null;
 
+// ※ checkAndApplyDiscount 用の既存 campaign1.json 読み込み処理（変更しない）
 function loadCampaignRules() {
   if (_campaignRulesCache) return _campaignRulesCache;
   try {
@@ -30,11 +31,29 @@ function loadCampaignRules() {
   return _campaignRulesCache;
 }
 
-// type（week / k_id / kanteisi）と番号からcampaign1.jsonの定義を取得する
+// ─── メール確認コマンドの説明文・期待値計算用の定義ファイル ───────────────
+// campaign-rules/mail-campaign-info.json は week/k_id/kanteisi ごとに
+// { name, description, pointMultiplier, discountRules } を持つ。
+// getCampaignInfo（説明文表示）と calcExpectedPoints（期待値の直接計算）が参照する。
+const MAIL_CAMPAIGN_INFO_PATH = path.join(__dirname, 'campaign-rules', 'mail-campaign-info.json');
+let _mailCampaignInfoCache = null;
+
+function loadMailCampaignInfo() {
+  if (_mailCampaignInfoCache) return _mailCampaignInfoCache;
+  try {
+    _mailCampaignInfoCache = JSON.parse(fs.readFileSync(MAIL_CAMPAIGN_INFO_PATH, 'utf8'));
+  } catch (e) {
+    console.log(`[UTILS] mail-campaign-info.jsonの読み込みに失敗: ${e.message}`);
+    _mailCampaignInfoCache = {};
+  }
+  return _mailCampaignInfoCache;
+}
+
+// type（week / k_id / kanteisi）と番号から mail-campaign-info.json の定義を取得する
 // 該当が無い場合はnullを返す
 function getCampaignInfo(type, number) {
   if (!type || number == null) return null;
-  const rules = loadCampaignRules();
+  const rules = loadMailCampaignInfo();
   const entry = rules?.[type]?.[String(number)];
   return entry || null;
 }
@@ -274,10 +293,46 @@ async function checkAndApplyDiscount(page, uid, campaigns, totalAmount, sendLine
 // ・rateは「通常ポイントの○.○倍」を意味するため、通常付与分
 //   （サービスポイントは含まない）に対する増加分のみを補助として計上する
 //   （既にpt単位のため÷10は不要）
-function calcExpectedPoints(amount, campaigns) {
+// mailCampaigns: getMailRows() が検出した {type, number} の配列（row.campaign）。
+//   これらが mail-campaign-info.json に定義されていれば、その pointMultiplier /
+//   discountRules から期待値を直接計算する（Claude API解析より優先）。
+//   該当ルールが無い場合は従来どおり campaigns（Claude解析結果）から計算する。
+function calcExpectedPoints(amount, campaigns, mailCampaigns = []) {
   const normalPt = Math.floor(amount / 10);
   const servicePt = Math.floor(amount * 0.005);
 
+  // ── mail-campaign-info.json 優先ルート ──────────────────────────────
+  // メール本文で検出した week/k_id/kanteisi の campaign 番号が定義されていれば
+  // JSONの内容から直接計算する。
+  for (const mc of (mailCampaigns || [])) {
+    if (!mc) continue;
+    const rule = getCampaignInfo(mc.type, mc.number);
+    if (!rule) continue; // 該当ルールなし → 次の候補（無ければ下のClaudeフォールバックへ）
+
+    // pointMultiplier: rate=1.2 は「通常ポイントの1.2倍」= 20%増。
+    // サービスポイントは含めず、通常付与分に対する増加分のみを補助として計上する。
+    let campaignBonus = 0;
+    const pm = rule.pointMultiplier;
+    if (pm && typeof pm.rate === 'number' && amount >= (pm.minAmount || 0)) {
+      campaignBonus = Math.round(normalPt * pm.rate) - normalPt;
+    }
+
+    // discountRules: 適用される割引（鑑定料金の割引）を算出する。
+    // ※割引は入金ポイント付与とは別物のためポイント総額(total)には加算せず、
+    //   参照用に discount フィールドとして返す。
+    let discount = null;
+    for (const dr of (rule.discountRules || [])) {
+      const okMin = amount >= (dr.minAmount ?? 0);
+      const okMax = dr.maxAmount == null || amount <= dr.maxAmount;
+      if (okMin && okMax) { discount = dr.discount; break; }
+    }
+
+    const total = normalPt + servicePt + campaignBonus;
+    console.log(`[UTILS] 期待値: mail-campaign-info.json適用 ${mc.type}/${mc.number} 補助=${campaignBonus}pt 割引=${discount ?? 'なし'}`);
+    return { normalPt, servicePt, campaignBonus, total, discount, source: 'mail-campaign-info', matched: `${mc.type}/${mc.number}` };
+  }
+
+  // ── フォールバック: 既存のClaude API解析(campaigns)から計算 ─────────────
   let campaignBonus = 0;
 
   const fixedApplicable = campaigns.filter(c => c.type === 'fixed' && amount >= c.amount);
@@ -298,7 +353,7 @@ function calcExpectedPoints(amount, campaigns) {
   }
 
   const total = normalPt + servicePt + campaignBonus;
-  return { normalPt, servicePt, campaignBonus, total };
+  return { normalPt, servicePt, campaignBonus, total, source: 'claude' };
 }
 
 // ─── お知らせメール一覧テーブルから本日8:00以降の行を取得 ────────────
