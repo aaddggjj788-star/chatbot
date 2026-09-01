@@ -1,0 +1,40 @@
+{
+  "1": {
+    "name": "キャンペーン1",
+    "description": "3000円以上でポイント20%増量。10000円以上3時間限定30pt割引、15000円以上3時間限定50pt割引",
+    "pointMultiplier": [
+      { "minAmount": 3000, "rate": 1.2 }
+    ],
+    "discountRules": [
+      { "minAmount": 10000, "maxAmount": 14999, "discount": 30, "durationHours": 3 },
+      { "minAmount": 15000, "discount": 50, "durationHours": 3 }
+    ]
+  },
+  "2": {
+    "name": "週替わりキャンペーン",
+    "description": "3000円以上でポイント倍率20%増加。10000円以上で割引適用",
+    "pointMultiplier": [
+      { "minAmount": 3000, "rate": 1.2 }
+    ],
+    "discountRules": [
+      { "minAmount": 10000, "maxAmount": 19999, "discount": 30 },
+      { "minAmount": 20000, "maxAmount": 29999, "discount": 50 },
+      { "minAmount": 30000, "maxAmount": 49999, "discount": 75 },
+      { "minAmount": 50000, "discount": 100 }
+    ]
+  },
+  "3": {
+    "name": "キャンペーン3",
+    "description": "3000円以上でポイント40%増量。10000円以上2時間限定30pt割引、20000円以上2時間限定50pt割引、30000円以上2時間限定75pt割引、40000円以上2時間限定100pt割引、50000円以上2時間限定120pt割引",
+    "pointMultiplier": [
+      { "minAmount": 3000, "rate": 1.4 }
+    ],
+    "discountRules": [
+      { "minAmount": 10000, "maxAmount": 19999, "discount": 30, "durationHours": 2 },
+      { "minAmount": 20000, "maxAmount": 29999, "discount": 50, "durationHours": 2 },
+      { "minAmount": 30000, "maxAmount": 39999, "discount": 75, "durationHours": 2 },
+      { "minAmount": 40000, "maxAmount": 49999, "discount": 100, "durationHours": 2 },
+      { "minAmount": 50000, "discount": 120, "durationHours": 2 }
+    ]
+  }
+}
