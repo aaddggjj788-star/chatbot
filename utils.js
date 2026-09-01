@@ -450,16 +450,19 @@ async function getMailRows(target, testMode = false) {
 // ※以前は履歴表示前に所持ポイントを+1していたが、参照のみのはずの処理で
 //   会員のポイントが増えてしまうため削除した
 // ─── 「ポイント増減履歴」ページの日付検索フォーム（前日以前へ遡るための設定）──
-// ※【要確認】実際のUIセレクタが未確認のため暫定値。判明したら .env の
-//   SEL_HISTORY_FROM_DATE / SEL_HISTORY_TO_DATE / HISTORY_DATE_FORMAT で上書きするか
-//   下記デフォルトを修正してください。
-//   from/to 入力欄が存在しない場合は前日以前への遡り検索を行わず、
-//   決済前ポイントの取得失敗として通知します（当日内で解決できる場合はそのまま動作）。
+// 始点(始点=[0])の年/月/日/時/分を指定して「表示」すると、始点〜終点(=当日)の
+// 範囲の履歴が表示される。終点[1]は当日のままにし、始点[0]の日(必要なら月)を
+// 遡らせることで過去数日分をまとめて取得する。
+// 始点の入力欄が存在しない場合は遡り検索を行わず、決済前ポイントの取得失敗として
+// 通知する（当日内で解決できる場合はそのまま動作）。
 const HISTORY_SEARCH = {
-  fromDate:   process.env.SEL_HISTORY_FROM_DATE || 'input[name="s_date"]',
-  toDate:     process.env.SEL_HISTORY_TO_DATE   || 'input[name="e_date"]',
-  showButton: process.env.SEL_HISTORY_SHOW      || 'input[name="search"][value="表示"]',
-  dateFormat: process.env.HISTORY_DATE_FORMAT   || 'YYYY-MM-DD', // 'YYYY/MM/DD' も可
+  startYear:  process.env.SEL_HISTORY_START_YEAR  || 'input[name="in_year[0]"]',
+  startMonth: process.env.SEL_HISTORY_START_MONTH || 'input[name="in_month[0]"]',
+  startDay:   process.env.SEL_HISTORY_START_DAY   || 'input[name="in_day[0]"]',
+  startHour:  process.env.SEL_HISTORY_START_HOUR  || 'input[name="in_toki[0]"]',
+  startMin:   process.env.SEL_HISTORY_START_MIN   || 'input[name="in_hun[0]"]',
+  showButton: process.env.SEL_HISTORY_SHOW        || 'input[name="search"][value="表示"]',
+  daysBack:   parseInt(process.env.HISTORY_DAYS_BACK || '5', 10), // 最大何日前まで遡るか
 };
 
 // 履歴行の増減ポイント（符号付き。cells[2]）
@@ -475,32 +478,45 @@ function historyRowAfter(r) {
   const n = parseInt(s, 10);
   return Number.isNaN(n) ? null : n;
 }
-// 履歴行の時刻(HH:MM[:SS])を秒に変換。取得できなければnull。
-function historyRowSec(r) {
-  const m = String(r.time || '').match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  return m ? (+m[1]) * 3600 + (+m[2]) * 60 + (+(m[3] || 0)) : null;
+// 当日(JST)の年月日を取得する
+function jstToday() {
+  const s = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }); // YYYY-MM-DD
+  const [y, mo, d] = s.split('-').map(Number);
+  return { y, mo, d };
 }
-// 履歴行を時系列（昇順）に整列する。全行に時刻があれば時刻順、無ければDOM順を維持。
-function orderRowsChrono(rows) {
-  const withSec = rows.map((r, i) => ({ r, sec: historyRowSec(r), i }));
-  const allHaveSec = withSec.every(x => x.sec != null);
-  withSec.sort((a, b) => allHaveSec ? (a.sec - b.sec) : (a.i - b.i));
-  return withSec.map(x => x.r);
+// 履歴行のcells[0]から日時をパースしてタイムスタンプ(ms)に変換する。
+// 日付が無い(時刻のみ)場合は defYmd(既定=当日)を用いる。複数日を跨ぐ範囲取得時に
+// 行の前後関係を正しく判定するために使用する。
+function historyRowTs(r, defYmd) {
+  const str = String(r.time || '');
+  const t = str.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  const hh = t ? +t[1] : 0, mm = t ? +t[2] : 0, ss = t ? +(t[3] || 0) : 0;
+  let y = defYmd.y, mo = defYmd.mo, d = defYmd.d;
+  const dFull = str.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (dFull) {
+    y = +dFull[1]; mo = +dFull[2]; d = +dFull[3];
+  } else {
+    const dMd = str.match(/(?:^|[^\d])(\d{1,2})[\/\-.](\d{1,2})(?=[^\d]|$)/);
+    if (dMd) { mo = +dMd[1]; d = +dMd[2]; }
+  }
+  return new Date(y, mo - 1, d, hh, mm, ss).getTime();
 }
 function fmtHistoryDate(d) {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
-  return HISTORY_SEARCH.dateFormat === 'YYYY/MM/DD' ? `${y}/${m}/${day}` : `${y}-${m}-${day}`;
+  return `${y}-${m}-${day}`;
 }
-// 日付検索フォームが利用可能か（from日付入力欄の存在で判定）
+// 日付検索フォームが利用可能か（始点の日入力欄の存在で判定）
 async function dateSearchAvailable(pg) {
-  try { return (await pg.$(HISTORY_SEARCH.fromDate)) != null; }
+  try { return (await pg.$(HISTORY_SEARCH.startDay)) != null; }
   catch { return false; }
 }
-// 指定日の履歴を日付検索で取得する（from=to=指定日で「表示」→ 再スクレイプ）
-async function loadHistoryForDate(pg, dateObj, scrapeRows) {
-  const dateStr = fmtHistoryDate(dateObj);
-  await pg.fill(HISTORY_SEARCH.fromDate, dateStr).catch(() => {});
-  await pg.fill(HISTORY_SEARCH.toDate, dateStr).catch(() => {});
+// 始点を startDate に設定して（終点=当日のまま）「表示」→ 範囲の履歴を再スクレイプする
+async function loadHistoryRange(pg, startDate, scrapeRows) {
+  await pg.fill(HISTORY_SEARCH.startYear,  String(startDate.getFullYear())).catch(() => {});
+  await pg.fill(HISTORY_SEARCH.startMonth, String(startDate.getMonth() + 1).padStart(2, '0')).catch(() => {});
+  await pg.fill(HISTORY_SEARCH.startDay,   String(startDate.getDate()).padStart(2, '0')).catch(() => {});
+  await pg.fill(HISTORY_SEARCH.startHour,  '0').catch(() => {});
+  await pg.fill(HISTORY_SEARCH.startMin,   '0').catch(() => {});
   await pg.click(HISTORY_SEARCH.showButton);
   await new Promise(r => setTimeout(r, 3000));
   return scrapeRows(pg);
@@ -509,86 +525,101 @@ async function loadHistoryForDate(pg, dateObj, scrapeRows) {
 // ─── 「追加ポイント確認」用: 決済前ポイントの解決 ─────────────────────
 // 1. 当日の最初の決済行(payment)を探す
 // 2. 決済行より前の時刻の履歴(action/manual)のうち、決済行に一番近いものの
-//    「直後の残高」を決済前ポイントとする（manualはafter値、それ以外は直近mananual
+//    「直後の残高」を決済前ポイントとする（manualはafter値、それ以外は直近manual
 //    のafterから以降の増減を積み上げて算出）
-// 3. 当日に決済前履歴が無い場合は日付検索で最大5日前まで遡る
-//    5日遡っても見つからなければ ok:false を返す
+// 3. 当日に決済前履歴が無い場合は日付検索で始点を遡らせ（最大 daysBack 日前まで）
+//    範囲取得し、決済行より前の履歴から同様に決済前ポイントを求める
+//    見つからなければ ok:false を返す
 // 戻り値: { ok:true, beforePoint, sourceDate, postRows } | { ok:false, reason } | null(決済なし)
 async function resolvePrePaymentBalance(historyPage, todayRawRows, scrapeRows) {
-  const todayOrdered = orderRowsChrono(todayRawRows);
-  const payments = todayOrdered.filter(r => r.type === 'payment');
-  if (payments.length === 0) return null;
-  const firstPayment = payments[0];
-  const fpSec = historyRowSec(firstPayment);
+  const today = jstToday();
+  const tsOf = (r) => historyRowTs(r, today);
+  const isToday = (ts) => {
+    const d = new Date(ts);
+    return d.getFullYear() === today.y && (d.getMonth() + 1) === today.mo && d.getDate() === today.d;
+  };
 
-  // targetRow の直後残高を求める。manualならafter、それ以外は ctxOrdered 内の
-  // 直近manual(after確定)を起点に、以降target時刻までの増減を積み上げる。
+  // 当日の最初の決済行を rows から取り出す
+  function firstPaymentToday(rows) {
+    return rows
+      .filter(r => r.type === 'payment' && isToday(tsOf(r)))
+      .sort((a, b) => tsOf(a) - tsOf(b))[0] || null;
+  }
+
+  // targetRow の直後残高。manualならafter、それ以外は ctx 内の直近manual(after確定)を
+  // 起点に、以降target時刻までの増減を積み上げる。
   function balanceAfter(ctxOrdered, targetRow) {
     if (targetRow.type === 'manual') {
       const a = historyRowAfter(targetRow);
       if (a != null) return a;
     }
-    const tSec = historyRowSec(targetRow);
-    let anchor = null, anchorSec = null;
+    const tTs = tsOf(targetRow);
+    let anchor = null, anchorTs = null;
     for (const r of ctxOrdered) {
-      const s = historyRowSec(r);
-      if (r.type === 'manual' && historyRowAfter(r) != null &&
-          s != null && tSec != null && s <= tSec &&
-          (anchorSec == null || s > anchorSec)) {
-        anchor = r; anchorSec = s;
+      const s = tsOf(r);
+      if (r.type === 'manual' && historyRowAfter(r) != null && s <= tTs &&
+          (anchorTs == null || s > anchorTs)) {
+        anchor = r; anchorTs = s;
       }
     }
     if (!anchor) return null; // 残高を確定できるmanualが無い
     let bal = historyRowAfter(anchor);
     for (const r of ctxOrdered) {
-      const s = historyRowSec(r);
-      if (r !== anchor && s != null && anchorSec != null && tSec != null && s > anchorSec && s <= tSec) {
-        bal += historyRowDelta(r);
-      }
+      const s = tsOf(r);
+      if (r !== anchor && s > anchorTs && s <= tTs) bal += historyRowDelta(r);
     }
     return bal;
   }
 
-  function buildResult(beforePoint, sourceDate) {
+  function buildResult(beforePoint, sourceDate, ordered, firstPayment) {
+    const fpTs = tsOf(firstPayment);
     // 決済行以降の当日行（走行残高の再構築用に delta/after を保持）
-    const postRows = todayOrdered
-      .filter(r => { const s = historyRowSec(r); return s == null || fpSec == null || s >= fpSec; })
+    const postRows = ordered
+      .filter(r => tsOf(r) >= fpTs)
       .map(r => ({ type: r.type, time: r.time, delta: historyRowDelta(r), after: historyRowAfter(r) }));
     return { ok: true, beforePoint, sourceDate, postRows };
   }
 
-  // ── 当日内に決済行より前の履歴(action/manual)があるか ──
-  const priorToday = todayOrdered.filter(r =>
-    r !== firstPayment && (r.type === 'action' || r.type === 'manual') &&
-    historyRowSec(r) != null && fpSec != null && historyRowSec(r) < fpSec);
-
-  if (priorToday.length > 0) {
-    const closest = priorToday[priorToday.length - 1]; // 決済に一番近い（最大時刻）
-    const ctx = todayOrdered.filter(r => {
-      const s = historyRowSec(r); return s != null && s <= historyRowSec(closest);
-    });
+  // rows の中から firstPayment 直前の「決済に一番近い履歴」の直後残高を決済前ポイントとする
+  function resolveFrom(rows, firstPayment) {
+    const ordered = [...rows].sort((a, b) => tsOf(a) - tsOf(b));
+    const fpTs = tsOf(firstPayment);
+    const prior = ordered.filter(r =>
+      r !== firstPayment && (r.type === 'action' || r.type === 'manual') && tsOf(r) < fpTs);
+    if (prior.length === 0) return null;
+    const closest = prior[prior.length - 1]; // 決済に一番近い（最大時刻）
+    const ctx = ordered.filter(r => tsOf(r) <= tsOf(closest));
     const before = balanceAfter(ctx, closest);
-    if (before != null) return buildResult(before, '当日');
-    // 当日にmanualアンカーが無い → 前日以降のフォールバックへ
+    if (before == null) return null;
+    const sourceDate = isToday(tsOf(closest)) ? '当日' : fmtHistoryDate(new Date(tsOf(closest)));
+    return buildResult(before, sourceDate, ordered, firstPayment);
   }
 
-  // ── 当日に解決不可 → 日付検索で最大5日前まで遡る ──
-  const canDate = await dateSearchAvailable(historyPage);
-  if (!canDate) {
+  const fpToday = firstPaymentToday(todayRawRows);
+  if (!fpToday) return null; // 当日決済なし
+
+  // 1) 当日の履歴だけで解決を試みる
+  const r1 = resolveFrom(todayRawRows, fpToday);
+  if (r1) return r1;
+
+  // 2) 解決できない → 始点を遡らせて範囲取得（終点=当日のまま）し、再度解決を試みる
+  if (!(await dateSearchAvailable(historyPage))) {
     console.log('[UTILS] 決済前ポイント: 当日内で解決できず、日付検索フォームも未対応 → 取得失敗');
     return { ok: false, reason: 'date-search-unavailable' };
   }
-  for (let back = 1; back <= 5; back++) {
-    const d = new Date();
-    d.setDate(d.getDate() - back);
-    let rows = [];
-    try { rows = await loadHistoryForDate(historyPage, d, scrapeRows); }
-    catch (e) { console.log(`[UTILS] ${back}日前の履歴取得に失敗: ${e.message}`); rows = []; }
-    if (!rows || rows.length === 0) continue;
-    const ordered = orderRowsChrono(rows);
-    const closest = ordered[ordered.length - 1];
-    const before = balanceAfter(ordered, closest);
-    if (before != null) return buildResult(before, fmtHistoryDate(d));
+  const start = new Date(today.y, today.mo - 1, today.d);
+  start.setDate(start.getDate() - HISTORY_SEARCH.daysBack);
+  let extended = [];
+  try {
+    extended = await loadHistoryRange(historyPage, start, scrapeRows);
+  } catch (e) {
+    console.log(`[UTILS] 過去履歴の範囲取得に失敗: ${e.message}`);
+  }
+  if (extended && extended.length) {
+    // 範囲取得後の集合から当日の最初の決済行を取り直す（無ければ当日分を流用）
+    const fpExt = firstPaymentToday(extended) || fpToday;
+    const r2 = resolveFrom(extended, fpExt);
+    if (r2) return r2;
   }
   return { ok: false, reason: 'no-history-5days' };
 }
