@@ -3,6 +3,12 @@ const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const fs = require('fs');
 const crypto = require('crypto');
+const path = require('path');
+
+const REPLY_AUTO_CONFIG_FILE = path.join(
+  __dirname,
+  'reply-auto-config.json'
+);
 
 // reply-checker.js との連携用（LINEから「送信」「スキップ」を受け取りポーリング通知）
 const REPLY_STATE_FILE = '/tmp/rune-reply-state.json';
@@ -46,6 +52,75 @@ try {
 
 // 「返信チェック開始」の多重起動防止
 let isReplyCheckerRunning = false;
+// ======================================================
+// 自動返信巡回 設定管理
+// ======================================================
+
+function loadReplyAutoConfig() {
+  const defaultConfig = {
+    enabled: false,
+    intervalMinutes: 20,
+    targetKids: [],
+    maxSendPerRun: 50,
+    retry: {
+      login: 2,
+      pageLoad: 2,
+      iframe: 2,
+      send: 2
+    }
+  };
+
+  try {
+    if (!fs.existsSync(REPLY_AUTO_CONFIG_FILE)) {
+      return defaultConfig;
+    }
+
+    const raw = fs.readFileSync(
+      REPLY_AUTO_CONFIG_FILE,
+      'utf8'
+    );
+
+    const saved = JSON.parse(raw);
+
+    return {
+      ...defaultConfig,
+      ...saved,
+      retry: {
+        ...defaultConfig.retry,
+        ...(saved.retry || {})
+      }
+    };
+
+  } catch (err) {
+    console.error(
+      '[AUTO-REPLY] 設定ファイル読込エラー:',
+      err.message
+    );
+
+    return defaultConfig;
+  }
+}
+
+function saveReplyAutoConfig(config) {
+  fs.writeFileSync(
+    REPLY_AUTO_CONFIG_FILE,
+    JSON.stringify(config, null, 2),
+    'utf8'
+  );
+}
+
+function updateReplyAutoConfig(changes) {
+  const current = loadReplyAutoConfig();
+
+  const updated = {
+    ...current,
+    ...changes
+  };
+
+  saveReplyAutoConfig(updated);
+
+  return updated;
+}
 
 // support-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let checkSupport = () => console.warn('support-checker 未ロード');
