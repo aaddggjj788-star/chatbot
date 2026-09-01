@@ -195,8 +195,9 @@ function main() {
       '判定',
       'ファイル名',
       'CSV行',
+      '対象コメントアウト',
+      '除外JSON用',
       '本文列',
-      'コメントアウト',
       '危険理由',
       '文頭3有効行',
       '文末3有効行'
@@ -291,8 +292,9 @@ function main() {
             'IGNORE',
             fileName,
             csvLine,
-            candidate.column,
             ignoredComment,
+            ignoredComment ? `"${ignoredComment}",` : '',
+            candidate.column,
             result.reasons.join(' / '),
             result.headLines.join(' / '),
             result.tailLines.join(' / ')
@@ -331,12 +333,18 @@ function main() {
           `  文末: ${result.tailLines.join(' / ')}`
         );
 
+        const targetComment =
+          candidate.comments.length > 0
+            ? candidate.comments[0]
+            : '';
+
         reportRows.push([
           'NG',
           fileName,
           csvLine,
+          targetComment,
+          targetComment ? `"${targetComment}",` : '',
           candidate.column,
-          candidate.comments.join(' / '),
           result.reasons.join(' / '),
           result.headLines.join(' / '),
           result.tailLines.join(' / ')
