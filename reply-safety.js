@@ -7,19 +7,13 @@ function checkReplySafety(text) {
     .map(line => line.trim())
     .filter(line => line.length > 0);
 
+  // 通常チェック用
   const headLines = lines.slice(0, 3);
   const tailLines = lines.slice(-3);
 
-  const checkTargets = [
-    ...headLines.map((line, i) => ({
-      position: `文頭${i + 1}行目`,
-      line
-    })),
-    ...tailLines.map((line, i) => ({
-      position: `文末${tailLines.length - i}行目`,
-      line
-    }))
-  ];
+  // imgチェック用
+  const imgHeadLines = lines.slice(0, 2);
+  const imgTailLines = lines.slice(-2);
 
   const reasons = [];
 
@@ -31,26 +25,55 @@ function checkReplySafety(text) {
     { name: 'レス無', regex: /レス無/ },
     { name: 'マッチ', regex: /マッチ/ },
     { name: '有料○日', regex: /有料[0-9０-９]+日/ },
-    { name: 'ユーザー', regex: /ユーザー/ },
-    { name: '<img', regex: /<img\b/i }
+    { name: 'ユーザー', regex: /ユーザー/ }
   ];
 
   const separatorPattern =
     /^[━─―ー\-_=＝■□◆◇★☆●○▲△▼▽＊*#＃]+$/;
 
-  for (const target of checkTargets) {
-    const { position, line } = target;
-
+  // 通常危険ワード：文頭3行
+  headLines.forEach((line, i) => {
     if (separatorPattern.test(line)) {
-      reasons.push(`${position}：区切り線を検出`);
+      reasons.push(`文頭${i + 1}行目：区切り線を検出`);
     }
 
     for (const rule of wordRules) {
       if (rule.regex.test(line)) {
-        reasons.push(`${position}：「${rule.name}」を検出`);
+        reasons.push(`文頭${i + 1}行目：「${rule.name}」を検出`);
       }
     }
-  }
+  });
+
+  // 通常危険ワード：文末3行
+  tailLines.forEach((line, i) => {
+    const position = tailLines.length - i;
+
+    if (separatorPattern.test(line)) {
+      reasons.push(`文末${position}行目：区切り線を検出`);
+    }
+
+    for (const rule of wordRules) {
+      if (rule.regex.test(line)) {
+        reasons.push(`文末${position}行目：「${rule.name}」を検出`);
+      }
+    }
+  });
+
+  // imgだけ：文頭2行
+  imgHeadLines.forEach((line, i) => {
+    if (/<img\b/i.test(line)) {
+      reasons.push(`文頭${i + 1}行目：「<img」を検出`);
+    }
+  });
+
+  // imgだけ：文末2行
+  imgTailLines.forEach((line, i) => {
+    const position = imgTailLines.length - i;
+
+    if (/<img\b/i.test(line)) {
+      reasons.push(`文末${position}行目：「<img」を検出`);
+    }
+  });
 
   return {
     safe: reasons.length === 0,
