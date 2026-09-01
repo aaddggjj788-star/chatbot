@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "intervalMinutes": 20,
+  "targetKids": [],
+  "maxSendPerRun": 50,
+  "retry": {
+    "login": 2,
+    "pageLoad": 2,
+    "iframe": 2,
+    "send": 2
+  }
+}
