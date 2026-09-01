@@ -542,8 +542,8 @@ async function login(page) {
     await page.waitForLoadState('networkidle');
   }
 
-  await page.fill('[name="id"]',   process.env.SYSTEM_LOGIN_ID);
-  await page.fill('[name="pass"]', process.env.SYSTEM_LOGIN_PASS);
+  await page.fill('[name="id"]',    process.env.CHECK_LOGIN_ID);
+  await page.fill('[name="pass"]',  process.env.CHECK_LOGIN_PASS);
   await page.click('[name="login"]');
   await page.waitForLoadState('networkidle');
   console.log('[LOGIN] 完了:', await page.title());
