@@ -1719,7 +1719,7 @@ return phraseMatch(
   userText,
   word
 );
-
+}
 
 // ope_mainフレームの div.bodyNaibu からユーザーメッセージ本文のみ取得する
 // 全 div.bodyNaibu から鑑定士行（90ee90 背景）に属するものを除外し、
