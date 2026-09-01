@@ -465,18 +465,25 @@ const HISTORY_SEARCH = {
   daysBack:   parseInt(process.env.HISTORY_DAYS_BACK || '5', 10), // 最大何日前まで遡るか
 };
 
-// 履歴行の増減ポイント（符号付き。cells[2]）
-function historyRowDelta(r) {
-  const m = String(r.cells[2] || '').match(/-?[\d,]+/);
-  return m ? parseInt(m[0].replace(/,/g, ''), 10) : 0;
-}
-// 履歴行の「変更後ポイント（残高）」。manual行のみ確定値を持つ（cells[5]）。他はnull。
-function historyRowAfter(r) {
-  if (r.type !== 'manual') return null;
-  const s = String(r.cells[5] || '').replace(/[^\d-]/g, '');
-  if (s === '' || s === '-') return null;
-  const n = parseInt(s, 10);
-  return Number.isNaN(n) ? null : n;
+// 履歴行が表示している「会員ポイント残高（その行の時点での残高）」を取り出す。
+// ※重要: cells[2] は「増減ポイント（変動量）」であり残高ではない。
+//   メッセージ開封等では cells[2] が 0 になるため、cells[2] を残高として参照すると
+//   誤った決済前ポイントになる（本バグの原因）。よって cells[2] は残高に使わない。
+//   時刻(c0)・種別(c1)・変動量(c2)の列を除いた右側のセルから、符号なし整数
+//   （例: "1,756" / "5056"）を右詰めで探し、最初に見つかった値を残高とする。
+//   決済金額（"…円"）・符号付きの変動量・時刻表記は残高から除外する。無ければ null。
+function historyRowBalance(r) {
+  const cells = r.cells || [];
+  for (let i = cells.length - 1; i >= 3; i--) { // c0=時刻 c1=種別 c2=変動量 は除外
+    const raw = String(cells[i] || '').trim();
+    if (!raw) continue;
+    if (raw.includes('円')) continue;                  // 決済金額など
+    if (/[:：]/.test(raw)) continue;                    // 時刻/コロン混じりは除外
+    if (/^[+\-]/.test(raw)) continue;                   // 符号付き=変動量
+    if (!/^\d{1,3}(?:,\d{3})+$|^\d+$/.test(raw)) continue; // 符号なし整数（カンマ区切り可）のみ
+    return parseInt(raw.replace(/,/g, ''), 10);
+  }
+  return null;
 }
 // 当日(JST)の年月日を取得する
 function jstToday() {
@@ -546,53 +553,39 @@ async function resolvePrePaymentBalance(historyPage, todayRawRows, scrapeRows) {
       .sort((a, b) => tsOf(a) - tsOf(b))[0] || null;
   }
 
-  // targetRow の直後残高。manualならafter、それ以外は ctx 内の直近manual(after確定)を
-  // 起点に、以降target時刻までの増減を積み上げる。
-  function balanceAfter(ctxOrdered, targetRow) {
-    if (targetRow.type === 'manual') {
-      const a = historyRowAfter(targetRow);
-      if (a != null) return a;
+  // firstPayment 直前（時刻が最も近い過去）で「残高が表示されている行」を探し、
+  // その行の会員ポイント残高を決済前ポイントとする。
+  // ※ 変動量(cells[2])の積み上げは行わず、表示されている残高を直接読む。
+  //   orderedAsc は時系列昇順（降順表示ページも正規化済み）である前提。
+  function findBeforePoint(orderedAsc, fpTs) {
+    for (let i = orderedAsc.length - 1; i >= 0; i--) {
+      const r = orderedAsc[i];
+      if (tsOf(r) >= fpTs) continue;       // 決済以降は対象外
+      if (r.type === 'payment') continue;  // 決済行自体は残高列を持たない
+      const bal = historyRowBalance(r);
+      if (bal != null) return { before: bal, row: r };
     }
-    const tTs = tsOf(targetRow);
-    let anchor = null, anchorTs = null;
-    for (const r of ctxOrdered) {
-      const s = tsOf(r);
-      if (r.type === 'manual' && historyRowAfter(r) != null && s <= tTs &&
-          (anchorTs == null || s > anchorTs)) {
-        anchor = r; anchorTs = s;
-      }
-    }
-    if (!anchor) return null; // 残高を確定できるmanualが無い
-    let bal = historyRowAfter(anchor);
-    for (const r of ctxOrdered) {
-      const s = tsOf(r);
-      if (r !== anchor && s > anchorTs && s <= tTs) bal += historyRowDelta(r);
-    }
-    return bal;
+    return null;
   }
 
   function buildResult(beforePoint, sourceDate, ordered, firstPayment) {
     const fpTs = tsOf(firstPayment);
-    // 決済行以降の当日行（走行残高の再構築用に delta/after を保持）
+    // 決済行以降の当日行（決済後の最大残高を算出するため残高値を保持）
     const postRows = ordered
       .filter(r => tsOf(r) >= fpTs)
-      .map(r => ({ type: r.type, time: r.time, delta: historyRowDelta(r), after: historyRowAfter(r) }));
+      .map(r => ({ type: r.type, time: r.time, balance: historyRowBalance(r) }));
     return { ok: true, beforePoint, sourceDate, postRows };
   }
 
-  // rows の中から firstPayment 直前の「決済に一番近い履歴」の直後残高を決済前ポイントとする
+  // rows を時系列昇順に整列し、firstPayment 直前の残高表示行から決済前ポイントを求める
   function resolveFrom(rows, firstPayment) {
-    const ordered = [...rows].sort((a, b) => tsOf(a) - tsOf(b));
+    const ordered = [...rows].sort((a, b) => tsOf(a) - tsOf(b)); // 降順ページもここで昇順に正規化
     const fpTs = tsOf(firstPayment);
-    const prior = ordered.filter(r =>
-      r !== firstPayment && (r.type === 'action' || r.type === 'manual') && tsOf(r) < fpTs);
-    if (prior.length === 0) return null;
-    const closest = prior[prior.length - 1]; // 決済に一番近い（最大時刻）
-    const ctx = ordered.filter(r => tsOf(r) <= tsOf(closest));
-    const before = balanceAfter(ctx, closest);
-    if (before == null) return null;
-    const sourceDate = isToday(tsOf(closest)) ? '当日' : fmtHistoryDate(new Date(tsOf(closest)));
-    return buildResult(before, sourceDate, ordered, firstPayment);
+    const hit = findBeforePoint(ordered, fpTs);
+    if (!hit) return null;
+    const sourceDate = isToday(tsOf(hit.row)) ? '当日' : fmtHistoryDate(new Date(tsOf(hit.row)));
+    console.log(`[UTILS] 決済前ポイント: 参照行 time="${hit.row.time}" type=${hit.row.type} 残高=${hit.before} cells="${(hit.row.cells || []).join(' | ')}"`);
+    return buildResult(hit.before, sourceDate, ordered, firstPayment);
   }
 
   const fpToday = firstPaymentToday(todayRawRows);
@@ -817,14 +810,11 @@ async function checkPointDiff(campaigns, paymentRows, sendLine, waitForLineReply
   // 決済前ポイントが解決できた → 決済後の最大ポイントとの差で「実際に増えたポイント」を算出
   if (prePayment && prePayment.ok) {
     const beforePoint = prePayment.beforePoint;
-    // 決済前ポイントを起点に、決済行以降の当日行を時系列で適用して走行残高を再構築する。
-    // manual行はafter(残高確定値)にスナップ、それ以外は増減(delta)を加算する。
-    let bal = beforePoint;
+    // 決済後の最大ポイント = 決済行以降の当日行に表示されている残高の最大値。
+    // ※ 変動量の積み上げではなく、各行が表示している残高(balance)をそのまま使う。
     let maxPoint = beforePoint;
     for (const r of prePayment.postRows || []) {
-      if (r.after != null) bal = r.after;
-      else bal += (r.delta || 0);
-      if (bal > maxPoint) maxPoint = bal;
+      if (r.balance != null && r.balance > maxPoint) maxPoint = r.balance;
     }
     const actualIncrease = maxPoint - beforePoint;
     const addDiff = actualIncrease - grandTotal; // 実際に増えたポイント − 期待ポイント
