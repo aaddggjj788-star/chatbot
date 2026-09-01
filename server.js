@@ -52,6 +52,8 @@ try {
 
 // 「返信チェック開始」の多重起動防止
 let isReplyCheckerRunning = false;
+// 自動返信巡回タイマー
+let replyAutoTimer = null;
 // ======================================================
 // 自動返信巡回 設定管理
 // ======================================================
@@ -120,6 +122,106 @@ function updateReplyAutoConfig(changes) {
   saveReplyAutoConfig(updated);
 
   return updated;
+}
+
+// ======================================================
+// 自動返信巡回 停止
+// ======================================================
+function stopReplyAutoScheduler() {
+  if (replyAutoTimer) {
+    clearTimeout(replyAutoTimer);
+    replyAutoTimer = null;
+  }
+}
+
+
+// ======================================================
+// 自動返信 次回巡回予約
+// ======================================================
+function scheduleNextReplyAutoRun() {
+  stopReplyAutoScheduler();
+
+  const config = loadReplyAutoConfig();
+
+  if (!config.enabled) {
+    return;
+  }
+
+  const intervalMs =
+    Math.max(1, Number(config.intervalMinutes) || 20)
+    * 60
+    * 1000;
+
+  replyAutoTimer = setTimeout(async () => {
+    replyAutoTimer = null;
+
+    // 実際の自動巡回処理は次の工程でここに入れる
+  console.log('[AUTO-REPLY] 自動巡回時刻になりました');
+
+  const latestConfig = loadReplyAutoConfig();
+
+  // 停止されていたら何もしない
+  if (!latestConfig.enabled) {
+    console.log('[AUTO-REPLY] 設定OFFのため巡回を中止します');
+    return;
+  }
+
+  // 手動または前回のreply-checkerがまだ動作中
+  if (isReplyCheckerRunning) {
+    console.log(
+      '[AUTO-REPLY] reply-checkerが既に動作中のため今回の巡回をスキップします'
+    );
+
+    scheduleNextReplyAutoRun();
+    return;
+  }
+
+  isReplyCheckerRunning = true;
+
+  try {
+    console.log('[AUTO-REPLY] reply-checkerを起動します');
+
+  await checkReplies({
+    autoMode: true,
+    targetKids: latestConfig.targetKids,
+    maxSendPerRun: latestConfig.maxSendPerRun,
+    retry: latestConfig.retry
+  });
+
+  } catch (err) {
+    console.error(
+      '[AUTO-REPLY] reply-checker実行エラー:',
+      err.message
+    );
+
+    if (err.message === 'AUTO_REPLY_SEND_LIMIT') {
+      console.error(
+        '[AUTO-REPLY] 最大送信件数到達のため自動巡回を停止します'
+      );
+
+      stopReplyAutoScheduler();
+
+      updateReplyAutoConfig({
+        enabled: false
+      });
+    }
+
+  } finally {
+    isReplyCheckerRunning = false;
+
+    // 実行中に「停止」が押されていなければ次回を予約
+    const afterConfig = loadReplyAutoConfig();
+
+    if (afterConfig.enabled) {
+      scheduleNextReplyAutoRun();
+    }
+  }
+
+  }, intervalMs);
+
+  console.log(
+    `[AUTO-REPLY] 次回巡回を${config.intervalMinutes}分後に予約しました`
+  );
 }
 
 // support-checker は依存パッケージが別環境にある場合があるため安全に読み込む
@@ -584,11 +686,29 @@ async function processCommand(text, reply, source = 'LINE') {
 
   // 停止コマンドは返信待ち中でも即座に効くよう、state file転送より先に判定する
   if (text === '停止') {
+
     stopReplies();
     stopContacts();
     stopSupport();
-    return reply('全チェック処理を停止しました');
+
+    stopReplyAutoScheduler();
+
+    updateReplyAutoConfig({
+      enabled: false
+    });
+
+    return reply(
+      [
+        '【全チェック処理を停止しました】',
+        '',
+        '返信チェック：停止',
+        'コンタクトチェック：停止',
+        'サポートチェック：停止',
+        '自動返信巡回：停止'
+      ].join('\n')
+    );
   }
+
   if (text === '返信チェック停止') {
     stopReplies();
     return reply('返信チェックを停止しました');
@@ -709,6 +829,77 @@ async function processCommand(text, reply, source = 'LINE') {
     batchSearchAndReply(searchComment, rcSendLine, rcWaitForLineReply, process.env.DRY_RUN === 'true')
       .catch(err => console.error('[BATCH-SEARCH] 実行エラー:', err.message));
     return reply(`【一括送信】コメントアウト：${searchComment}\n該当グループの検索を開始しました`);
+  }
+
+    // ======================================================
+  // 自動返信開始
+  // ======================================================
+  if (text.startsWith('自動返信開始')) {
+    const match = text.match(/kid\s*[:：]\s*(.+)$/i);
+
+    let targetKids = [];
+
+    if (match) {
+      targetKids = match[1]
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean);
+    }
+
+    const updated = updateReplyAutoConfig({
+      enabled: true,
+      targetKids
+    });
+
+    scheduleNextReplyAutoRun();
+
+    const targetText =
+      updated.targetKids.length > 0
+        ? updated.targetKids.join(', ')
+        : '全鑑定士';
+
+    await reply(
+      [
+        '【自動返信設定を更新しました】',
+        '',
+        `対象kid：${targetText}`,
+        `巡回間隔：${updated.intervalMinutes}分`,
+        `最大送信件数：${updated.maxSendPerRun}件`
+      ].join('\n')
+    );
+
+    return;
+  }
+
+    // ======================================================
+  // 自動返信状況
+  // ======================================================
+  if (text === '自動返信状況') {
+    const config = loadReplyAutoConfig();
+
+    const targetText =
+      config.targetKids.length > 0
+        ? config.targetKids.join(', ')
+        : '全鑑定士';
+
+    await reply(
+      [
+        '【自動返信状況】',
+        '',
+        `稼働設定：${config.enabled ? 'ON' : 'OFF'}`,
+        `対象kid：${targetText}`,
+        `巡回間隔：${config.intervalMinutes}分`,
+        `最大送信件数：${config.maxSendPerRun}件`,
+        '',
+        'リトライ上限',
+        `ログイン：${config.retry.login}回`,
+        `ページ読込：${config.retry.pageLoad}回`,
+        `iframe：${config.retry.iframe}回`,
+        `送信：${config.retry.send}回`
+      ].join('\n')
+    );
+
+    return;
   }
 
   if (text === '返信チェック開始') {
@@ -932,3 +1123,17 @@ const server = app.listen(PORT, () => {
 server.on('error', (err) => {
   console.error('[SERVER] listenエラー:', err.message);
 });
+// ======================================================
+// 起動時に自動返信設定を復元
+// ======================================================
+const startupAutoConfig = loadReplyAutoConfig();
+
+if (startupAutoConfig.enabled) {
+  console.log(
+    `[AUTO-REPLY] 自動返信設定ONを検出。${startupAutoConfig.intervalMinutes}分後の巡回を予約します`
+  );
+
+  scheduleNextReplyAutoRun();
+} else {
+  console.log('[AUTO-REPLY] 自動返信設定はOFFです');
+}

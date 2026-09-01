@@ -29,6 +29,43 @@ const fs = require('fs');
 const path = require('path');
 const { parse: parseCSVSync } = require('csv-parse/sync');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
+const { checkReplySafety } = require('./reply-safety');
+
+const REPLY_SAFETY_IGNORE_FILE = path.join(
+  __dirname,
+  'reply-safety-ignore.json'
+);
+
+
+function loadReplySafetyIgnoreComments() {
+  try {
+    if (!fs.existsSync(REPLY_SAFETY_IGNORE_FILE)) {
+      return new Set();
+    }
+
+    const config = JSON.parse(
+      fs.readFileSync(REPLY_SAFETY_IGNORE_FILE, 'utf8')
+    );
+
+    const list = Array.isArray(config.ignoreComments)
+      ? config.ignoreComments
+      : [];
+
+    return new Set(
+      list
+        .map(v => String(v).trim())
+        .filter(Boolean)
+    );
+
+  } catch (err) {
+    console.error(
+      '[REPLY-SAFETY] 除外設定読込エラー:',
+      err.message
+    );
+
+    return new Set();
+  }
+}
 
 const LOGIN_URL   = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const BASE_URL    = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
@@ -601,6 +638,37 @@ async function login(page) {
   await page.click('[name="login"]');
   await page.waitForLoadState('networkidle');
   console.log('[LOGIN] 完了:', await page.title());
+}
+
+async function loginWithRetry(page, retryCount = 2) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    try {
+      console.log(`[LOGIN] 試行 ${attempt}/${retryCount}`);
+
+      await login(page);
+
+      console.log(`[LOGIN] 試行 ${attempt}/${retryCount} 成功`);
+      return;
+
+    } catch (err) {
+      lastError = err;
+
+      console.error(
+        `[LOGIN] 試行 ${attempt}/${retryCount} 失敗: ${err.message}`
+      );
+
+      if (attempt < retryCount) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+  }
+
+  const error = new Error('AUTO_REPLY_LOGIN_FAILED');
+  error.cause = lastError;
+
+  throw error;
 }
 
 // ─── Playwright: サポート左側一覧を開く ──────────────────────────
@@ -1426,16 +1494,43 @@ async function searchSinkoFromRirekiHistory(page, charaId) {
 
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
-async function processUsers(page) {
+async function processUsers(
+  page,
+  targetKids = [],
+  autoMode = false,
+  maxSendPerRun = 50
+) {
   // 今回の実行分だけを記録するため、開始時にリセットする
   skippedUsers = [];
+  let autoSendCount = 0;
   // 対象外一覧ファイルも新しい返信チェック開始時に上書きリセットする
   resetSkippedList();
 
   // page = mg_ope.php（親フレームページ）
   // ope_menuフレームから対象ユーザーを取得
-  const targets = await getTargetUsers(page);
-  console.log(`[LIST] 対象ユーザー: ${targets.length}件`);
+let targets = await getTargetUsers(page);
+
+console.log(`[LIST] 抽出ユーザー: ${targets.length}件`);
+
+// ======================================================
+// kid指定フィルター
+// targetKidsが空なら全kid対象
+// ======================================================
+if (Array.isArray(targetKids) && targetKids.length > 0) {
+  const targetKidSet = new Set(
+    targetKids.map(v => String(v).trim())
+  );
+
+  targets = targets.filter(user =>
+    targetKidSet.has(String(user.kid))
+  );
+
+  console.log(
+    `[LIST] kidフィルター適用: ${[...targetKidSet].join(', ')}`
+  );
+}
+
+console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
 
   if (targets.length === 0) {
     await sendLine('未返信の対象ユーザーはいませんでした');
@@ -2463,6 +2558,44 @@ async function processUsers(page) {
       continue;
     }
 
+    // ======================================================
+    // 危険文章チェック
+    // ======================================================
+    const safetyResult = checkReplySafety(replyData.replyText);
+
+    if (!safetyResult.safe) {
+      const ignoreComments = loadReplySafetyIgnoreComments();
+
+      const currentComments = [
+        ...(Array.isArray(allComments) ? allComments : []),
+        replyData.nextComment || ''
+      ]
+        .map(v => String(v || '').replace(/^<!--|-->$/g, '').trim())
+        .filter(Boolean);
+
+      const ignoredComment = currentComments.find(comment =>
+        ignoreComments.has(comment)
+      );
+
+      if (ignoredComment) {
+        console.log(
+          `[REPLY-SAFETY] ${userName}: 危険候補だが除外登録済み → 続行 (${ignoredComment})`
+        );
+      } else {
+        const reasonText = safetyResult.reasons.join(' / ');
+
+        console.log(
+          `[REPLY-SAFETY] ${userName}: 危険文章を検出 → 対象外 (${reasonText})`
+        );
+
+        recordSkip(
+          `危険文章: ${reasonText}`
+        );
+
+        continue;
+      }
+    }
+
     // ─── LINEに確認メッセージを送信 ─────────────────────────────
     // \n（リテラル）が残っている場合に備えて実際の改行に変換してから表示
     const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
@@ -2546,21 +2679,11 @@ async function processUsers(page) {
           '「差し込み#{文章}」：2行目の後に挿入して確認',
           '「差し替え#{文章}」：返信文を差し替えて確認',
         ].join('\n');
-    await sendLine(lineMsg);
+        if (!autoMode) {
+          await sendLine(lineMsg);
+        }
 
-    // ─── LINE返信を待つ（5分タイムアウト → スキップ）────────────
-    let reply;
-    try {
-      reply = await waitForLineReply();
-    } catch (e) {
-      console.log(`[TIMEOUT] ${userName}: 5分タイムアウト → スキップ`);
-      recordSkip('LINE確認の5分タイムアウト');
-      continue;
-    }
-
-    console.log(`[LINE] 返信: ${reply}`);
-
-    // ope_mainフレーム内のフォームに記入して送信する共通処理
+        // ope_mainフレーム内のフォームに記入して送信する共通処理
     async function sendReplyText(textToSend) {
       console.log(`[SEND-TEXT] 送信内容: "${textToSend.slice(0, 80)}..."`);
       if (DRY_RUN) {
@@ -2579,6 +2702,62 @@ async function processUsers(page) {
       console.log(`[SEND] ${userName} 送信完了`);
       await sendLine(`【送信完了】${uid}へ${kid}からの返信を送信しました`);
     }
+
+    // ======================================================
+    // 自動返信モード
+    // ======================================================
+    if (autoMode) {
+      if (autoSendCount >= maxSendPerRun) {
+        const message = [
+          '【自動返信を安全停止しました】',
+          '',
+          `最大送信件数：${maxSendPerRun}件`,
+          `今回送信済み：${autoSendCount}件`,
+          '',
+          '送信件数が設定上限に到達したため、',
+          '今回の自動巡回を停止しました。'
+        ].join('\n');
+
+        console.error(
+          `[AUTO-REPLY] 最大送信件数 ${maxSendPerRun}件に到達`
+        );
+
+        await sendLine(message);
+
+        throw new Error('AUTO_REPLY_SEND_LIMIT');
+      }
+
+      const textToSend =
+        replyData.replyText
+          .replace(/\\n/g, '\n')
+          .trim()
+        + '\n'
+        + (replyData.nextComment || '');
+
+      console.log(
+        `[AUTO-REPLY] ${userName} (u_id=${uid}, k_id=${kid}) を自動送信します`
+      );
+
+      await sendReplyText(textToSend);
+
+      autoSendCount++;
+
+      continue;
+    }
+
+
+    // ─── LINE返信を待つ（5分タイムアウト → スキップ）────────────
+    let reply;
+    try {
+      reply = await waitForLineReply();
+    } catch (e) {
+      console.log(`[TIMEOUT] ${userName}: 5分タイムアウト → スキップ`);
+      recordSkip('LINE確認の5分タイムアウト');
+      continue;
+    }
+
+    console.log(`[LINE] 返信: ${reply}`);
+
 
     // 「差し込み#{文章}」「差し替え#{文章}」形式の返信を検出
     const isSashikomi = reply.startsWith('差し込み#');
@@ -3222,7 +3401,23 @@ function stopReplies() {
   console.log('=== reply-checker 停止要求 ===');
 }
 
-async function checkReplies() {
+async function checkReplies(options = {}) {
+    const {
+    autoMode = false,
+    targetKids = []
+  } = options;
+
+  const normalizedTargetKids = Array.isArray(targetKids)
+    ? targetKids.map(v => String(v).trim()).filter(Boolean)
+    : [];
+
+  console.log(
+    `[REPLY] mode=${autoMode ? 'AUTO' : 'MANUAL'} targetKids=${
+      normalizedTargetKids.length
+        ? normalizedTargetKids.join(',')
+        : 'ALL'
+    }`
+  );
   _shouldStop = false;
   console.log('=== reply-checker 起動 ===');
 
@@ -3239,9 +3434,19 @@ async function checkReplies() {
 
   try {
     const page = await context.newPage();
-    await login(page);
+    await loginWithRetry(
+      page,
+      autoMode
+        ? (options.retry?.login ?? 2)
+        : 1
+    );
     const supportPage = await openSupportPage(page);
-    await processUsers(supportPage);
+    await processUsers(
+      supportPage,
+      normalizedTargetKids,
+      autoMode,
+      options.maxSendPerRun ?? 50
+    );
     // 対象外一覧を番号付きでファイルに保存（対象外ID返信コマンド用）してから
     // 対象外となったユーザーと理由をまとめてLINEへ通知する
     saveSkippedList();
