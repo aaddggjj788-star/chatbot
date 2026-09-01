@@ -181,12 +181,26 @@ function scheduleNextReplyAutoRun() {
   try {
     console.log('[AUTO-REPLY] reply-checkerを起動します');
 
-  await checkReplies({
-    autoMode: true,
-    targetKids: latestConfig.targetKids,
-    maxSendPerRun: latestConfig.maxSendPerRun,
-    retry: latestConfig.retry
-  });
+    const targetText =
+      Array.isArray(latestConfig.targetKids) &&
+      latestConfig.targetKids.length > 0
+        ? latestConfig.targetKids.join(', ')
+        : '全鑑定士';
+
+    await rc.sendLine(
+      [
+        '【自動返信チェックを開始します】',
+        '',
+        `対象kid：${targetText}`
+      ].join('\n')
+    );
+
+    await checkReplies({
+      autoMode: true,
+      targetKids: latestConfig.targetKids,
+      maxSendPerRun: latestConfig.maxSendPerRun,
+      retry: latestConfig.retry
+    });
 
   } catch (err) {
     console.error(
@@ -205,6 +219,48 @@ function scheduleNextReplyAutoRun() {
         enabled: false
       });
     }
+
+    if (err.message === 'AUTO_REPLY_LOGIN_FAILED') {
+      console.error(
+        '[AUTO-REPLY] ログイン再試行上限のため自動巡回を停止します'
+      );
+
+      stopReplyAutoScheduler();
+
+      updateReplyAutoConfig({
+        enabled: false
+      });
+
+      await rc.sendLine(
+        [
+          '【自動返信を停止しました】',
+          '',
+          'ログインに複数回失敗しました。',
+          '自動返信巡回を停止しました。'
+        ].join('\n')
+      );
+    }    
+
+    if (err.message === 'AUTO_REPLY_PAGE_LOAD_FAILED') {
+      console.error(
+        '[AUTO-REPLY] サポートページ読込再試行上限のため自動巡回を停止します'
+      );
+
+      stopReplyAutoScheduler();
+
+      updateReplyAutoConfig({
+        enabled: false
+      });
+
+      await rc.sendLine(
+        [
+          '【自動返信を停止しました】',
+          '',
+          'サポートページの読み込み、または初期フレーム取得に複数回失敗しました。',
+          '自動返信巡回を停止しました。'
+        ].join('\n')
+      );
+    }    
 
   } finally {
     isReplyCheckerRunning = false;

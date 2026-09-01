@@ -684,6 +684,52 @@ async function openSupportPage(page) {
   return page;
 }
 
+
+async function openSupportPageWithRetry(page, retryCount = 2) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    try {
+      console.log(
+        `[PAGE] サポートページ試行 ${attempt}/${retryCount}`
+      );
+
+      const supportPage = await openSupportPage(page);
+
+      // 初期フレームが本当に取れるか確認
+      const menuFrame = page.frame({ name: 'ope_menu' });
+
+      if (!menuFrame) {
+        throw new Error('ope_menuフレーム取得失敗');
+      }
+
+      console.log(
+        `[PAGE] サポートページ試行 ${attempt}/${retryCount} 成功`
+      );
+
+      return supportPage;
+
+    } catch (err) {
+      lastError = err;
+
+      console.error(
+        `[PAGE] サポートページ試行 ${attempt}/${retryCount} 失敗: ${err.message}`
+      );
+
+      if (attempt < retryCount) {
+        await new Promise(resolve =>
+          setTimeout(resolve, 3000)
+        );
+      }
+    }
+  }
+
+  const error = new Error('AUTO_REPLY_PAGE_LOAD_FAILED');
+  error.cause = lastError;
+
+  throw error;
+}
+
 // ─── 対象ユーザー絞り込み（JS評価）─────────────────────────────────
 //
 // 左パネルのテーブル行を走査し、以下の両条件を満たす行のユーザー情報を返す:
@@ -1503,6 +1549,8 @@ async function processUsers(
   // 今回の実行分だけを記録するため、開始時にリセットする
   skippedUsers = [];
   let autoSendCount = 0;
+  let dangerCount = 0;
+  let errorCount = 0;
   // 対象外一覧ファイルも新しい返信チェック開始時に上書きリセットする
   resetSkippedList();
 
@@ -2587,7 +2635,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         console.log(
           `[REPLY-SAFETY] ${userName}: 危険文章を検出 → 対象外 (${reasonText})`
         );
-
+        dangerCount++;
         recordSkip(
           `危険文章: ${reasonText}`
         );
@@ -2855,6 +2903,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       recordSkip('LINEでスキップを選択');
     }
     } catch (e) {
+      errorCount++;
       console.error(`[ERROR] ${userName}: 処理中にエラーが発生しました: ${e.message}`, e.stack);
       skippedUsers.push({
         userName,
@@ -2865,6 +2914,12 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       continue;
     }
   }
+  return {
+    sentCount: autoSendCount,
+    skippedCount: skippedUsers.length,
+    dangerCount,
+    errorCount
+  };
 }
 
 // ─── ope_mainフレームから最新の鑑定士コメントアウトを取得する ──────────
@@ -3440,21 +3495,53 @@ async function checkReplies(options = {}) {
         ? (options.retry?.login ?? 2)
         : 1
     );
-    const supportPage = await openSupportPage(page);
-    await processUsers(
+    const supportPage = await openSupportPageWithRetry(
+      page,
+      autoMode
+        ? (options.retry?.pageLoad ?? 2)
+        : 1
+    );
+    const result = await processUsers(
       supportPage,
       normalizedTargetKids,
       autoMode,
       options.maxSendPerRun ?? 50
     );
-    // 対象外一覧を番号付きでファイルに保存（対象外ID返信コマンド用）してから
-    // 対象外となったユーザーと理由をまとめてLINEへ通知する
+
+    // 対象外一覧を番号付きでファイルに保存
     saveSkippedList();
+
+    // 自動巡回時は集計通知を先に出す
+    if (autoMode) {
+      await sendLine(
+        [
+          '【自動返信チェック完了】',
+          '',
+          `送信件数：${result?.sentCount ?? 0}件`,
+          `対象外件数：${result?.skippedCount ?? 0}件`,
+          `危険文章：${result?.dangerCount ?? 0}件`,
+          `エラー：${result?.errorCount ?? 0}件`
+        ].join('\n')
+      );
+    }
+
+    // 従来の対象外ID一覧
     await sendLine(buildSkippedMessage());
+
     console.log('=== reply-checker 完了 ===');
   } catch (err) {
     console.error('[FATAL]', err.message, err.stack);
-    await sendLine(`【システムエラー】reply-checker: ${err.message}`);
+
+    // 自動巡回時はserver.js側で安全停止処理を行うため、
+    // エラーを上位へ返す
+    if (autoMode) {
+      throw err;
+    }
+
+    // 手動返信チェックは従来どおりここで通知
+    await sendLine(
+      `【システムエラー】reply-checker: ${err.message}`
+    );
   } finally {
     clearState();
     await browser.close();
