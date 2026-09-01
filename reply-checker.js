@@ -1506,6 +1506,72 @@ function extractPhraseKeywords(text) {
 }
 
 
+
+
+
+function containsNegativeExpression(text) {
+  const s = normalizeMatchText(text);
+
+  if (!s) {
+    return false;
+  }
+
+  // --------------------------------------------------
+  // 「ない」を含んでいても肯定になる表現は除外
+  // --------------------------------------------------
+  const normalizedExceptions =
+    NEGATIVE_EXCEPTION_PHRASES.map(normalizeMatchText);
+
+  const textForNegativeCheck =
+    normalizedExceptions.reduce(
+      (current, phrase) =>
+        current.replaceAll(phrase, ''),
+      s
+    );
+
+  const negativePatterns = [
+    /ません/,
+    /ない/,
+    /しない/,
+    /やらない/,
+    /進まない/,
+    /やめる/,
+    /辞める/,
+    /断る/,
+    /拒否/,
+    /無理/,
+    /嫌/,
+    /できない/,
+    /出来ない/,
+    /望まない/,
+    /希望しない/,
+    /必要ない/,
+    /必要ありません/
+  ];
+
+  return negativePatterns.some(re =>
+    re.test(textForNegativeCheck)
+  );
+}
+
+
+const NEGATIVE_EXCEPTION_PHRASES = [
+  '迷いはない',
+  '問題ない',
+  '問題ありません',
+  '構わない',
+  '構いません',
+  '不安はない',
+  '不安ありません',
+  '異論はない',
+  '異論ありません',
+  '抵抗はない',
+  '抵抗ありません',
+  '躊躇はない',
+  '躊躇ありません'
+];
+
+
 // ------------------------------------------------------
 // 普通の文章向け一致判定
 // ------------------------------------------------------
@@ -1517,7 +1583,19 @@ function phraseMatch(userText, targetText) {
     return false;
   }
 
-  // まず完全な部分一致
+  // --------------------------------------------------
+  // 否定表現を最優先で判定
+  //
+  // 例:
+  // 「次へ進む」
+  // →「次へ進みません」
+  // は文字列が似ていてもNG
+  // --------------------------------------------------
+  if (containsNegativeExpression(userText)) {
+    return false;
+  }
+
+  // 完全部分一致
   if (user.includes(target)) {
     return true;
   }
