@@ -368,13 +368,16 @@ function resolveAction(charaCfg, commentStr) {
   };
 }
 
+// commentStr を chara-config のphase設定に従って解決し、結果を標準出力に表示する。
+// ※ 致命的エラー時は process.exit ではなく Error を throw する
+//   （check-csv-batch.js から複数回呼び出しても1件の失敗で全体が止まらないようにするため）。
+//   CLI として単体実行する場合は main() 側で catch して終了コードを制御する。
 function runJsonMode(charaId, commentStr) {
   let configPath, charaCfg;
   try {
     ({ configPath, config: charaCfg } = loadCharaConfig(charaId));
   } catch (e) {
-    console.error(`chara-config読み込み失敗: chara-config/${charaId}.json (${e.message})`);
-    process.exit(1);
+    throw new Error(`chara-config読み込み失敗: chara-config/${charaId}.json (${e.message})`);
   }
   console.log(`chara-config: ${configPath}`);
   console.log(`対象コメント: "${commentStr}"`);
@@ -382,8 +385,7 @@ function runJsonMode(charaId, commentStr) {
   const resolved = resolveAction(charaCfg, commentStr);
 
   if (resolved.error) {
-    console.error(resolved.error);
-    process.exit(1);
+    throw new Error(resolved.error);
   }
 
   console.log(`コメント種別: ${resolved.kind}`);
@@ -401,16 +403,9 @@ function runJsonMode(charaId, commentStr) {
     // 現在のsinko/hisコメント自身を検索し、その次の行（次のsinko/hisへ
     // 遷移する内容）を表示する（例: sinko/2 → 次行=sinko/3への内容）
     console.log('→ 該当するJSON設定(action)なし → sinko+1の通常ルールにフォールバック');
-    let found;
-    try {
-      found = findByTarget(resolved.resolvedCharaId, commentStr, false, resolved.fileId);
-    } catch (e) {
-      console.error(e.message);
-      process.exit(1);
-    }
+    const found = findByTarget(resolved.resolvedCharaId, commentStr, false, resolved.fileId);
     if (!found) {
-      console.error('対象行の次行が取得できませんでした（末尾到達等）');
-      process.exit(1);
+      throw new Error('対象行の次行が取得できませんでした（末尾到達等）');
     }
     printResult(found.csvPath, found.rowIdx, found.row);
     return;
@@ -432,16 +427,9 @@ function runJsonMode(charaId, commentStr) {
   console.log(`検索対象(searchTarget): "${target}"`);
   console.log(`useCurrentRow: ${useCurrentRow} → ${useCurrentRow ? '同行' : '次行'}を表示`);
 
-  let found;
-  try {
-    found = findByTarget(resolved.resolvedCharaId, target, useCurrentRow, actionCfg.fileId ?? resolved.fileId ?? null);
-  } catch (e) {
-    console.error(e.message);
-    process.exit(1);
-  }
+  const found = findByTarget(resolved.resolvedCharaId, target, useCurrentRow, actionCfg.fileId ?? resolved.fileId ?? null);
   if (!found) {
-    console.error('対象行が取得できませんでした（末尾到達等）');
-    process.exit(1);
+    throw new Error('対象行が取得できませんでした（末尾到達等）');
   }
   printResult(found.csvPath, found.rowIdx, found.row);
 }
@@ -461,7 +449,12 @@ function main() {
       console.error('例:     node check-csv.js --chara 12680 --comment "12680mu2/ho/1"');
       process.exit(1);
     }
-    runJsonMode(charaId, commentStr);
+    try {
+      runJsonMode(charaId, commentStr);
+    } catch (e) {
+      console.error(e.message);
+      process.exit(1);
+    }
     return;
   }
 
@@ -481,4 +474,20 @@ function main() {
   }
 }
 
-main();
+// CLIとして直接実行された場合のみ main() を走らせる。
+// check-csv-batch.js などから require された場合は実行しない。
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  runJsonMode,
+  searchByTarget,
+  searchHoSequential,
+  resolveAction,
+  parseCommentStr,
+  parseSubActionComment,
+  loadCharaConfig,
+  findByTarget,
+  printResult,
+};
