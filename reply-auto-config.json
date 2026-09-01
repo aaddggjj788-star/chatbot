@@ -1,8 +1,8 @@
 {
   "enabled": false,
-  "intervalMinutes": 1,
+  "intervalMinutes": 20,
   "targetKids": [],
-  "maxSendPerRun": 3,
+  "maxSendPerRun": 50,
   "retry": {
     "login": 2,
     "pageLoad": 2
