@@ -35,8 +35,10 @@
                 "useCurrentRow": true
             },
             "his0": {
-                "fileId": "12687mu2hissinko"                
-            } ,
+                "fileId": "12687mu2hissinko",                
+                "searchTarget": "12687mu2/his/1",
+                "useCurrentRow": true
+                } ,
             "his1": {
                 "fileId": "12687mu2hissinko"                
             }   ,       
