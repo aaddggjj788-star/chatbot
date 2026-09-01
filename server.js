@@ -524,6 +524,11 @@ async function sendSlack(text) {
 // 通知が完全に消えてしまうため）。各チェッカーの isSlackOnly() と同じ判定。
 const SLACK_ONLY = process.env.SLACK_ONLY === 'true' && Boolean(process.env.SLACK_WEBHOOK_URL);
 
+// Slack受信の詳細デバッグログ（リクエスト受信・署名検証・イベント受信等）は
+// .env に DEBUG_SLACK=true を設定した場合のみ出力する。
+// ※接続成功/失敗などの重要ログは DEBUG_SLACK に関係なく常に出力する。
+const DEBUG_SLACK = process.env.DEBUG_SLACK === 'true';
+
 async function lineReply(replyToken, text) {
   // Slackにも通知する（SLACK_WEBHOOK_URL設定時のみ動作）
   await sendSlack(text);
@@ -1047,8 +1052,10 @@ async function handleSlackMessageEvent(event) {
   // ・event.subtype あり → メッセージ編集/参加通知など通常発言以外なので無視
   // ※人間からの通常発言には bot_id も subtype も付かないため除外されない
   if (event.type !== 'message' || event.bot_id || event.subtype) {
-    console.log('[SLACK] 対象外のイベントのため無視:',
-      { type: event.type, bot_id: event.bot_id, subtype: event.subtype });
+    if (DEBUG_SLACK) {
+      console.log('[SLACK] 対象外のイベントのため無視:',
+        { type: event.type, bot_id: event.bot_id, subtype: event.subtype });
+    }
     return;
   }
 
@@ -1120,7 +1127,9 @@ function startSlackSocketMode() {
     }
 
     const event = body?.event;
-    console.log(`[SLACK] Socket Mode 受信: event.type=${event?.type} channel=${event?.channel}`);
+    if (DEBUG_SLACK) {
+      console.log(`[SLACK] Socket Mode 受信: event.type=${event?.type} channel=${event?.channel}`);
+    }
 
     // message.channels 以外（app_home_opened など）はackのみで終了する
     if (event?.type !== 'message') return;
@@ -1136,7 +1145,9 @@ function startSlackSocketMode() {
 // ─── Slack Event API エンドポイント（Request URL方式・互換用）───────
 // Socket Mode有効時はSlackから呼ばれないが、既存機能への影響を避けるため残す
 app.post('/slack/events', async (req, res) => {
-  console.log('[SLACK] リクエスト受信:', req.headers['user-agent'], req.body);
+  if (DEBUG_SLACK) {
+    console.log('[SLACK] リクエスト受信:', req.headers['user-agent'], req.body);
+  }
 
   // URL検証チャレンジ（Slack App登録時のエンドポイント確認）
   if (req.body && req.body.type === 'url_verification') {
@@ -1144,9 +1155,9 @@ app.post('/slack/events', async (req, res) => {
   }
 
   // 署名検証
-  console.log('[SLACK] 署名検証開始');
+  if (DEBUG_SLACK) console.log('[SLACK] 署名検証開始');
   const result = verifySlackSignature(req);
-  console.log('[SLACK] 署名検証結果:', result);
+  if (DEBUG_SLACK) console.log('[SLACK] 署名検証結果:', result);
   if (!result) {
     console.warn('[SLACK] 署名検証に失敗しました');
     return res.sendStatus(401);
