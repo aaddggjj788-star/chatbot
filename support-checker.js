@@ -1339,11 +1339,11 @@ async function checkSupport() {
       console.log('[DEBUG] allCampaigns:', JSON.stringify(allCampaigns));
 
       console.log('[STEP10-14] ブラウザバック→ポイント増減履歴から当日の増減履歴（決済/行動/手動）を取得');
-      const { paymentRows, actionRows, manualRows, historyPage, couponLevel } = await getBankHistory(page, mainFrame);
+      const { paymentRows, actionRows, manualRows, historyPage, couponLevel, prePayment } = await getBankHistory(page, mainFrame, { resolvePrePayment: true });
       console.log(`[STEP14] 抽出成功: 決済${paymentRows.length}件 / 行動履歴${actionRows.length}件 / 手動操作${manualRows.length}件`);
 
-      console.log('[STEP15] ポイント計算と照合（当日の入金合計で判定）');
-      const { totalAmount, diff, reply } = await checkPointDiff(allCampaigns, paymentRows, sendLine, waitForLineReply, DRY_RUN, couponLevel, actionRows, manualRows);
+      console.log('[STEP15] ポイント計算と照合（決済前ポイント基準の「追加ポイント確認」）');
+      const { totalAmount, diff, reply } = await checkPointDiff(allCampaigns, paymentRows, sendLine, waitForLineReply, DRY_RUN, couponLevel, actionRows, manualRows, prePayment);
 
       if (diff !== 0) {
         if (reply === '調整する' && !DRY_RUN) {

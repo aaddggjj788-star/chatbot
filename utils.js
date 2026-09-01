@@ -449,7 +449,152 @@ async function getMailRows(target, testMode = false) {
 //   オブジェクトになるため呼び出し側でclose/戻る操作を行い分ける必要がある）
 // ※以前は履歴表示前に所持ポイントを+1していたが、参照のみのはずの処理で
 //   会員のポイントが増えてしまうため削除した
-async function getBankHistory(topPage, target) {
+// ─── 「ポイント増減履歴」ページの日付検索フォーム（前日以前へ遡るための設定）──
+// ※【要確認】実際のUIセレクタが未確認のため暫定値。判明したら .env の
+//   SEL_HISTORY_FROM_DATE / SEL_HISTORY_TO_DATE / HISTORY_DATE_FORMAT で上書きするか
+//   下記デフォルトを修正してください。
+//   from/to 入力欄が存在しない場合は前日以前への遡り検索を行わず、
+//   決済前ポイントの取得失敗として通知します（当日内で解決できる場合はそのまま動作）。
+const HISTORY_SEARCH = {
+  fromDate:   process.env.SEL_HISTORY_FROM_DATE || 'input[name="s_date"]',
+  toDate:     process.env.SEL_HISTORY_TO_DATE   || 'input[name="e_date"]',
+  showButton: process.env.SEL_HISTORY_SHOW      || 'input[name="search"][value="表示"]',
+  dateFormat: process.env.HISTORY_DATE_FORMAT   || 'YYYY-MM-DD', // 'YYYY/MM/DD' も可
+};
+
+// 履歴行の増減ポイント（符号付き。cells[2]）
+function historyRowDelta(r) {
+  const m = String(r.cells[2] || '').match(/-?[\d,]+/);
+  return m ? parseInt(m[0].replace(/,/g, ''), 10) : 0;
+}
+// 履歴行の「変更後ポイント（残高）」。manual行のみ確定値を持つ（cells[5]）。他はnull。
+function historyRowAfter(r) {
+  if (r.type !== 'manual') return null;
+  const s = String(r.cells[5] || '').replace(/[^\d-]/g, '');
+  if (s === '' || s === '-') return null;
+  const n = parseInt(s, 10);
+  return Number.isNaN(n) ? null : n;
+}
+// 履歴行の時刻(HH:MM[:SS])を秒に変換。取得できなければnull。
+function historyRowSec(r) {
+  const m = String(r.time || '').match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return m ? (+m[1]) * 3600 + (+m[2]) * 60 + (+(m[3] || 0)) : null;
+}
+// 履歴行を時系列（昇順）に整列する。全行に時刻があれば時刻順、無ければDOM順を維持。
+function orderRowsChrono(rows) {
+  const withSec = rows.map((r, i) => ({ r, sec: historyRowSec(r), i }));
+  const allHaveSec = withSec.every(x => x.sec != null);
+  withSec.sort((a, b) => allHaveSec ? (a.sec - b.sec) : (a.i - b.i));
+  return withSec.map(x => x.r);
+}
+function fmtHistoryDate(d) {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return HISTORY_SEARCH.dateFormat === 'YYYY/MM/DD' ? `${y}/${m}/${day}` : `${y}-${m}-${day}`;
+}
+// 日付検索フォームが利用可能か（from日付入力欄の存在で判定）
+async function dateSearchAvailable(pg) {
+  try { return (await pg.$(HISTORY_SEARCH.fromDate)) != null; }
+  catch { return false; }
+}
+// 指定日の履歴を日付検索で取得する（from=to=指定日で「表示」→ 再スクレイプ）
+async function loadHistoryForDate(pg, dateObj, scrapeRows) {
+  const dateStr = fmtHistoryDate(dateObj);
+  await pg.fill(HISTORY_SEARCH.fromDate, dateStr).catch(() => {});
+  await pg.fill(HISTORY_SEARCH.toDate, dateStr).catch(() => {});
+  await pg.click(HISTORY_SEARCH.showButton);
+  await new Promise(r => setTimeout(r, 3000));
+  return scrapeRows(pg);
+}
+
+// ─── 「追加ポイント確認」用: 決済前ポイントの解決 ─────────────────────
+// 1. 当日の最初の決済行(payment)を探す
+// 2. 決済行より前の時刻の履歴(action/manual)のうち、決済行に一番近いものの
+//    「直後の残高」を決済前ポイントとする（manualはafter値、それ以外は直近mananual
+//    のafterから以降の増減を積み上げて算出）
+// 3. 当日に決済前履歴が無い場合は日付検索で最大5日前まで遡る
+//    5日遡っても見つからなければ ok:false を返す
+// 戻り値: { ok:true, beforePoint, sourceDate, postRows } | { ok:false, reason } | null(決済なし)
+async function resolvePrePaymentBalance(historyPage, todayRawRows, scrapeRows) {
+  const todayOrdered = orderRowsChrono(todayRawRows);
+  const payments = todayOrdered.filter(r => r.type === 'payment');
+  if (payments.length === 0) return null;
+  const firstPayment = payments[0];
+  const fpSec = historyRowSec(firstPayment);
+
+  // targetRow の直後残高を求める。manualならafter、それ以外は ctxOrdered 内の
+  // 直近manual(after確定)を起点に、以降target時刻までの増減を積み上げる。
+  function balanceAfter(ctxOrdered, targetRow) {
+    if (targetRow.type === 'manual') {
+      const a = historyRowAfter(targetRow);
+      if (a != null) return a;
+    }
+    const tSec = historyRowSec(targetRow);
+    let anchor = null, anchorSec = null;
+    for (const r of ctxOrdered) {
+      const s = historyRowSec(r);
+      if (r.type === 'manual' && historyRowAfter(r) != null &&
+          s != null && tSec != null && s <= tSec &&
+          (anchorSec == null || s > anchorSec)) {
+        anchor = r; anchorSec = s;
+      }
+    }
+    if (!anchor) return null; // 残高を確定できるmanualが無い
+    let bal = historyRowAfter(anchor);
+    for (const r of ctxOrdered) {
+      const s = historyRowSec(r);
+      if (r !== anchor && s != null && anchorSec != null && tSec != null && s > anchorSec && s <= tSec) {
+        bal += historyRowDelta(r);
+      }
+    }
+    return bal;
+  }
+
+  function buildResult(beforePoint, sourceDate) {
+    // 決済行以降の当日行（走行残高の再構築用に delta/after を保持）
+    const postRows = todayOrdered
+      .filter(r => { const s = historyRowSec(r); return s == null || fpSec == null || s >= fpSec; })
+      .map(r => ({ type: r.type, time: r.time, delta: historyRowDelta(r), after: historyRowAfter(r) }));
+    return { ok: true, beforePoint, sourceDate, postRows };
+  }
+
+  // ── 当日内に決済行より前の履歴(action/manual)があるか ──
+  const priorToday = todayOrdered.filter(r =>
+    r !== firstPayment && (r.type === 'action' || r.type === 'manual') &&
+    historyRowSec(r) != null && fpSec != null && historyRowSec(r) < fpSec);
+
+  if (priorToday.length > 0) {
+    const closest = priorToday[priorToday.length - 1]; // 決済に一番近い（最大時刻）
+    const ctx = todayOrdered.filter(r => {
+      const s = historyRowSec(r); return s != null && s <= historyRowSec(closest);
+    });
+    const before = balanceAfter(ctx, closest);
+    if (before != null) return buildResult(before, '当日');
+    // 当日にmanualアンカーが無い → 前日以降のフォールバックへ
+  }
+
+  // ── 当日に解決不可 → 日付検索で最大5日前まで遡る ──
+  const canDate = await dateSearchAvailable(historyPage);
+  if (!canDate) {
+    console.log('[UTILS] 決済前ポイント: 当日内で解決できず、日付検索フォームも未対応 → 取得失敗');
+    return { ok: false, reason: 'date-search-unavailable' };
+  }
+  for (let back = 1; back <= 5; back++) {
+    const d = new Date();
+    d.setDate(d.getDate() - back);
+    let rows = [];
+    try { rows = await loadHistoryForDate(historyPage, d, scrapeRows); }
+    catch (e) { console.log(`[UTILS] ${back}日前の履歴取得に失敗: ${e.message}`); rows = []; }
+    if (!rows || rows.length === 0) continue;
+    const ordered = orderRowsChrono(rows);
+    const closest = ordered[ordered.length - 1];
+    const before = balanceAfter(ordered, closest);
+    if (before != null) return buildResult(before, fmtHistoryDate(d));
+  }
+  return { ok: false, reason: 'no-history-5days' };
+}
+
+async function getBankHistory(topPage, target, options = {}) {
+  const { resolvePrePayment = false } = options;
   console.log(`[UTILS] kyouseiPage URL: ${target.url()}`);
 
   console.log('[UTILS] ブラウザバックで会員詳細ページに戻る');
@@ -482,36 +627,41 @@ async function getBankHistory(topPage, target) {
     historyPage = target;
   }
 
+  // 背景色ごとに行種別(payment/action/manual)を判定して全行を取得する共通処理。
+  // 背景色はtr/tdのstyle属性・bgcolor属性いずれに付与されていても拾えるよう、
+  // 行内の全セル分のスタイル文字列を結合して判定する。
+  // 日付検索で表示範囲を変えた後の再取得にも使えるよう関数化する。
+  async function scrapeRows(pg) {
+    return pg.evaluate(() => {
+      function rowStyleText(tr) {
+        let s = (tr.getAttribute('style') || '') + ' ' + (tr.getAttribute('bgcolor') || '');
+        for (const td of tr.querySelectorAll('td')) {
+          s += ' ' + (td.getAttribute('style') || '') + ' ' + (td.getAttribute('bgcolor') || '');
+        }
+        return s.toLowerCase();
+      }
+      const rows = Array.from(document.querySelectorAll('tr'));
+      const results = [];
+      for (const tr of rows) {
+        const cells = Array.from(tr.querySelectorAll('td')).map(td => (td.textContent || '').trim());
+        if (cells.length === 0) continue;
+        const style = rowStyleText(tr);
+        let type = null;
+        if (style.includes('ccffcc')) type = 'payment';       // 決済
+        else if (style.includes('ccccff')) type = 'action';    // 行動履歴
+        else if (style.includes('ffcccc')) type = 'manual';    // 手動操作
+        if (!type) continue;
+        results.push({ type, cells, time: cells[0] });
+      }
+      return results;
+    });
+  }
+
   console.log('[UTILS] 「表示」ボタンをクリック');
   await historyPage.click('input[name="search"][value="表示"]');
   await new Promise(r => setTimeout(r, 3000));
 
-  // 背景色ごとに全行を取得する（決済金額を含む行のみ、という従来の絞り込みは廃止）。
-  // 背景色はtr/tdのstyle属性・bgcolor属性いずれに付与されていても拾えるよう、
-  // 行内の全セル分のスタイル文字列を結合して判定する。
-  const allRows = await historyPage.evaluate(() => {
-    function rowStyleText(tr) {
-      let s = (tr.getAttribute('style') || '') + ' ' + (tr.getAttribute('bgcolor') || '');
-      for (const td of tr.querySelectorAll('td')) {
-        s += ' ' + (td.getAttribute('style') || '') + ' ' + (td.getAttribute('bgcolor') || '');
-      }
-      return s.toLowerCase();
-    }
-    const rows = Array.from(document.querySelectorAll('tr'));
-    const results = [];
-    for (const tr of rows) {
-      const cells = Array.from(tr.querySelectorAll('td')).map(td => (td.textContent || '').trim());
-      if (cells.length === 0) continue;
-      const style = rowStyleText(tr);
-      let type = null;
-      if (style.includes('ccffcc')) type = 'payment';       // 決済
-      else if (style.includes('ccccff')) type = 'action';    // 行動履歴
-      else if (style.includes('ffcccc')) type = 'manual';    // 手動操作
-      if (!type) continue;
-      results.push({ type, cells, time: cells[0] });
-    }
-    return results;
-  });
+  const allRows = await scrapeRows(historyPage);
 
   // 「+1,115」「-500」などの符号付き数値文字列を整数へ変換する
   function parseSignedInt(s) {
@@ -563,7 +713,21 @@ async function getBankHistory(topPage, target) {
     });
 
   console.log(`[UTILS] ポイント増減履歴取得: 決済${paymentRows.length}件 / 行動履歴${actionRows.length}件 / 手動操作${manualRows.length}件`);
-  return { paymentRows, actionRows, manualRows, historyPage, couponLevel };
+
+  // 「追加ポイント確認」用の決済前ポイント解決（resolvePrePayment=true かつ決済ありのとき）。
+  // ※日付検索で前日以降へ遷移する可能性があるため、当日表示を前提とする他フローに
+  //   影響しないよう既定では実行しない（呼び出し側が明示的にtrueを渡す）。
+  let prePayment = null;
+  if (resolvePrePayment && paymentRows.length > 0) {
+    try {
+      prePayment = await resolvePrePaymentBalance(historyPage, allRows, scrapeRows);
+    } catch (e) {
+      console.log('[UTILS] 決済前ポイント解決に失敗:', e.message);
+      prePayment = { ok: false, reason: `error: ${e.message}` };
+    }
+  }
+
+  return { paymentRows, actionRows, manualRows, historyPage, couponLevel, prePayment };
 }
 
 // ─── STEP15相当: ポイント差異チェック ─────────────────────────────
@@ -574,7 +738,12 @@ async function getBankHistory(topPage, target) {
 // actionRows / manualRows: 行動履歴・手動操作の増減行（getBankHistoryの戻り値）
 //   → 当日の実際のポイント純変動（netChange）を算出し、現在ポイントとの
 //     照合に使えるよう合計値を通知・戻り値に含める
-async function checkPointDiff(campaigns, paymentRows, sendLine, waitForLineReply, DRY_RUN, couponLevel = null, actionRows = [], manualRows = []) {
+// prePayment: getBankHistory({resolvePrePayment:true})の戻り値（決済前ポイント解決結果）
+//   → { ok:true, beforePoint, sourceDate, postRows } の場合は「追加ポイント確認」方式
+//     （決済前ポイントと決済後最大ポイントの差＝実際に増えたポイント）で通知する。
+//   → { ok:false } の場合は取得失敗として通知して中断する。
+//   → null の場合は従来どおり決済行ベースの差異判定を行う。
+async function checkPointDiff(campaigns, paymentRows, sendLine, waitForLineReply, DRY_RUN, couponLevel = null, actionRows = [], manualRows = [], prePayment = null) {
   const totalAmount = paymentRows.reduce((sum, r) => sum + r.amount, 0);
   const totalActual = paymentRows.reduce((sum, r) => sum + r.point, 0);
   const normalPt = paymentRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
@@ -600,6 +769,58 @@ async function checkPointDiff(campaigns, paymentRows, sendLine, waitForLineReply
   // 当日の実際のポイント純変動（決済＋行動履歴＋手動操作）
   const netChange = totalActual + actionTotal + manualTotal;
   console.log(`[UTILS] 入金合計=${totalAmount}円 期待値合計=${grandTotal}pt（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}+くじクーポン${couponPt}(Lv.${couponLevel}）） 決済実績=${totalActual}pt 差異=${diff} / 行動履歴計=${actionTotal}pt 手動操作計=${manualTotal}pt 純変動=${netChange}pt`);
+
+  // ─── 「追加ポイント確認」方式（prePaymentが渡された場合）────────────────
+  // 決済前ポイントの取得に失敗 → エラー通知して中断
+  if (prePayment && prePayment.ok === false) {
+    console.log(`[UTILS] 決済前ポイント取得失敗（reason=${prePayment.reason}） → 追加ポイント確認を中断`);
+    await sendLine(
+      `【エラー】決済前ポイントの取得に失敗しました\n` +
+      `5日以内に履歴が見つかりませんでした\n` +
+      `手動で確認をお願いします`
+    );
+    // 自動調整が走らないよう diff:0・reply:null を返す
+    return { totalAmount, totalActual, grandTotal, couponPt, couponLevel, diff: 0, reply: null, actionTotal, manualTotal, netChange, prePaymentError: prePayment.reason };
+  }
+
+  // 決済前ポイントが解決できた → 決済後の最大ポイントとの差で「実際に増えたポイント」を算出
+  if (prePayment && prePayment.ok) {
+    const beforePoint = prePayment.beforePoint;
+    // 決済前ポイントを起点に、決済行以降の当日行を時系列で適用して走行残高を再構築する。
+    // manual行はafter(残高確定値)にスナップ、それ以外は増減(delta)を加算する。
+    let bal = beforePoint;
+    let maxPoint = beforePoint;
+    for (const r of prePayment.postRows || []) {
+      if (r.after != null) bal = r.after;
+      else bal += (r.delta || 0);
+      if (bal > maxPoint) maxPoint = bal;
+    }
+    const actualIncrease = maxPoint - beforePoint;
+    const addDiff = actualIncrease - grandTotal; // 実際に増えたポイント − 期待ポイント
+    console.log(`[UTILS] 追加ポイント確認: 決済前=${beforePoint}pt(${prePayment.sourceDate}) 決済後最大=${maxPoint}pt 実増=${actualIncrease}pt 期待=${grandTotal}pt 差異=${addDiff}pt`);
+
+    await sendLine(
+      `【ポイント確認（追加）】\n` +
+      `決済前ポイント：${beforePoint}pt（${prePayment.sourceDate}時点）\n` +
+      `決済後の最大ポイント：${maxPoint}pt\n` +
+      `実際に増えたポイント：${actualIncrease}pt\n` +
+      `入金合計：${totalAmount.toLocaleString('en-US')}円\n` +
+      `期待ポイント：${grandTotal}pt\n` +
+      `差異：${addDiff}pt\n` +
+      `調整しますか？「調整する」または「スキップ」`
+    );
+
+    let reply = null;
+    try {
+      reply = await waitForLineReply();
+    } catch (e) {
+      console.log('[UTILS] LINE返信待ちタイムアウト → スキップ扱い:', e.message);
+    }
+    if (reply !== null) console.log(`[UTILS] LINE返信: ${reply}`);
+
+    // diff は addDiff（実増−期待）を返す。呼び出し側(STEP17)は diff<0→加算 / diff>0→減算。
+    return { totalAmount, totalActual, grandTotal, couponPt, couponLevel, diff: addDiff, reply, actionTotal, manualTotal, netChange, beforePoint, maxPoint, actualIncrease, prePaymentDate: prePayment.sourceDate };
+  }
 
   if (diff === 0) {
     console.log('[UTILS] 一致 → 問題なし');
