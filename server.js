@@ -4,7 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk').default;
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
-
+const rc = require('./reply-checker');
 const REPLY_AUTO_CONFIG_FILE = path.join(
   __dirname,
   'reply-auto-config.json'
@@ -38,7 +38,6 @@ let batchSearchAndReply = async () => console.warn('reply-checker 未ロード�
 let rcSendLine = async () => console.warn('reply-checker 未ロード（sendLine）');
 let rcWaitForLineReply = async () => { throw new Error('reply-checker 未ロード（waitForLineReply）'); };
 try {
-  const rc = require('./reply-checker');
   checkReplies = rc.checkReplies;
   stopReplies  = rc.stopReplies;
   sendManualReply = rc.sendManualReply;
@@ -950,8 +949,6 @@ async function processCommand(text, reply, source = 'LINE') {
         'リトライ上限',
         `ログイン：${config.retry.login}回`,
         `ページ読込：${config.retry.pageLoad}回`,
-        `iframe：${config.retry.iframe}回`,
-        `送信：${config.retry.send}回`
       ].join('\n')
     );
 
