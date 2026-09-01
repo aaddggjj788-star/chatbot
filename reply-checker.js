@@ -1430,26 +1430,58 @@ function fuzzyShortWordMatch(userText, word) {
     return false;
   }
 
-  // 完全部分一致
+  const userChars = [...user];
+  const targetChars = [...target];
+
+  // --------------------------------------------------
+  // ユーザー本文が送り返す言葉より短ければNG
+  //
+  // 例:
+  // 雨情心継ぎ → 5文字
+  // 雨継ぎ     → 3文字
+  // → NG
+  // --------------------------------------------------
+  if (userChars.length < targetChars.length) {
+    return false;
+  }
+
+  // 完全部分一致なら即OK
   if (user.includes(target)) {
     return true;
   }
 
-  const targetChars = [...target];
+  // --------------------------------------------------
+  // targetと同じ文字数の範囲をユーザー本文から切り出し、
+  // 1文字までの違いを許容する
+  // --------------------------------------------------
+  const targetLength = targetChars.length;
 
-  // 4文字以上なら1文字欠けまで許容
-  if (targetChars.length >= 4) {
-    for (let skip = 0; skip < targetChars.length; skip++) {
-      const partial = targetChars
-        .filter((_, i) => i !== skip)
-        .join('');
+  for (
+    let start = 0;
+    start <= userChars.length - targetLength;
+    start++
+  ) {
+    const window = userChars.slice(
+      start,
+      start + targetLength
+    );
 
-      if (
-        partial.length >= 3 &&
-        user.includes(partial)
-      ) {
-        return true;
+    let mismatchCount = 0;
+
+    for (let i = 0; i < targetLength; i++) {
+      if (window[i] !== targetChars[i]) {
+        mismatchCount++;
       }
+
+      // 2文字以上違った時点で不一致
+      if (mismatchCount > 1) {
+        break;
+      }
+    }
+
+    // 1文字違いまでならOK
+    if (mismatchCount <= 1) {
+      return true;
     }
   }
 
