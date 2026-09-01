@@ -5,7 +5,88 @@ const { checkReplySafety } = require('./reply-safety');
 
 const REPLY_CSV_DIR = path.join(__dirname, 'reply-csv');
 const REPORT_PATH = path.join(__dirname, 'reply-safety-report.csv');
+const IGNORE_PATH = path.join(__dirname, 'reply-safety-ignore.json');
 
+// ======================================================
+// 除外コメント読み込み
+// ======================================================
+function loadIgnoreComments() {
+  if (!fs.existsSync(IGNORE_PATH)) {
+    console.log('[INFO] reply-safety-ignore.json がありません。除外なしで実行します。');
+    return new Set();
+  }
+
+  try {
+    const config = JSON.parse(
+      fs.readFileSync(IGNORE_PATH, 'utf8')
+    );
+
+    const list = Array.isArray(config.ignoreComments)
+      ? config.ignoreComments
+      : [];
+
+    return new Set(
+      list
+        .map(v => String(v).trim())
+        .filter(Boolean)
+    );
+
+  } catch (err) {
+    console.error(
+      `[ERROR] reply-safety-ignore.json の読み込みに失敗しました: ${err.message}`
+    );
+
+    process.exit(1);
+  }
+}
+
+// ======================================================
+// HTMLコメントアウト取得
+//
+// <!--12679yu3/sinko/79-->
+// ↓
+// 12679yu3/sinko/79
+// ======================================================
+function extractComments(text) {
+  const comments = [];
+  const source = String(text || '');
+
+  const regex = /<!--\s*([\s\S]*?)\s*-->/g;
+
+  let match;
+
+  while ((match = regex.exec(source)) !== null) {
+    const comment = String(match[1] || '').trim();
+
+    if (comment) {
+      comments.push(comment);
+    }
+  }
+
+  return comments;
+}
+
+// ======================================================
+// HTMLコメントを本文から除外
+// ======================================================
+function removeHtmlComments(text) {
+  return String(text || '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trim();
+}
+
+// ======================================================
+// 返信候補取得
+//
+// 対応形式:
+//
+// 形式1
+// A列 = コメント
+// B列 = 返信本文
+//
+// 形式2
+// A列 = 返信本文 + コメント
+// ======================================================
 function extractReplyCandidates(record) {
   const candidates = [];
 
@@ -13,36 +94,48 @@ function extractReplyCandidates(record) {
     return candidates;
   }
 
+  const colA = String(record[0] || '');
+  const colB = String(record[1] || '');
+
   // --------------------------------------------------
-  // 形式1
+  // B列に本文が存在する場合
   // A列 = コメント
-  // B列 = 返信本文
+  // B列 = 本文
+  // として扱う
   // --------------------------------------------------
-  if (record.length >= 2 && String(record[1] || '').trim()) {
-    candidates.push({
-      column: 'B列',
-      text: String(record[1] || '')
-    });
+  if (colB.trim()) {
+    const comments = [
+      ...extractComments(colA),
+      ...extractComments(colB)
+    ];
+
+    const replyText = removeHtmlComments(colB);
+
+    if (replyText) {
+      candidates.push({
+        column: 'B列',
+        text: replyText,
+        comments
+      });
+    }
+
+    return candidates;
   }
 
   // --------------------------------------------------
-  // 形式2
-  // A列 = 返信本文 + HTMLコメント
-  //
-  // HTMLコメント自体は画面に表示されないため、
-  // 安全チェック対象から除外する
+  // B列が空の場合
+  // A列 = 本文 + コメント
+  // として扱う
   // --------------------------------------------------
-  const colA = String(record[0] || '').trim();
+  if (colA.trim()) {
+    const comments = extractComments(colA);
+    const replyText = removeHtmlComments(colA);
 
-  if (colA) {
-    const withoutComments = colA
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .trim();
-
-    if (withoutComments) {
+    if (replyText) {
       candidates.push({
         column: 'A列',
-        text: withoutComments
+        text: replyText,
+        comments
       });
     }
   }
@@ -50,16 +143,32 @@ function extractReplyCandidates(record) {
   return candidates;
 }
 
+// ======================================================
+// 除外登録確認
+// ======================================================
+function findIgnoredComment(comments, ignoreComments) {
+  for (const comment of comments) {
+    if (ignoreComments.has(comment)) {
+      return comment;
+    }
+  }
+
+  return null;
+}
+
+// ======================================================
+// CSV出力用
+// ======================================================
 function csvEscape(value) {
   const text = String(value ?? '');
 
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+// ======================================================
+// メイン
+// ======================================================
 function main() {
-  // --------------------------------------------------
-  // reply-csv確認
-  // --------------------------------------------------
   if (!fs.existsSync(REPLY_CSV_DIR)) {
     console.error(
       `reply-csv フォルダが見つかりません: ${REPLY_CSV_DIR}`
@@ -68,9 +177,8 @@ function main() {
     process.exit(1);
   }
 
-  // --------------------------------------------------
-  // CSV一覧取得
-  // --------------------------------------------------
+  const ignoreComments = loadIgnoreComments();
+
   const files = fs
     .readdirSync(REPLY_CSV_DIR)
     .filter(name => name.toLowerCase().endsWith('.csv'))
@@ -79,16 +187,16 @@ function main() {
   let totalRows = 0;
   let totalCandidates = 0;
   let totalDanger = 0;
+  let totalIgnore = 0;
   let totalReadErrors = 0;
 
-  // --------------------------------------------------
-  // 出力レポート
-  // --------------------------------------------------
   const reportRows = [
     [
+      '判定',
       'ファイル名',
       'CSV行',
       '本文列',
+      'コメントアウト',
       '危険理由',
       '文頭3有効行',
       '文末3有効行'
@@ -99,10 +207,11 @@ function main() {
   console.log('========================================');
   console.log('返信CSV安全チェック');
   console.log('========================================');
+  console.log(`安全チェック除外登録: ${ignoreComments.size}件`);
 
-  // --------------------------------------------------
-  // 全CSV走査
-  // --------------------------------------------------
+  // ====================================================
+  // CSVファイル走査
+  // ====================================================
   for (const fileName of files) {
     const filePath = path.join(REPLY_CSV_DIR, fileName);
 
@@ -111,8 +220,6 @@ function main() {
     try {
       const raw = fs.readFileSync(filePath, 'utf8');
 
-      // reply-checker側に合わせて
-      // csv-parseを使用
       records = parse(raw, {
         bom: true,
         skip_empty_lines: false,
@@ -131,9 +238,9 @@ function main() {
       continue;
     }
 
-    // --------------------------------------------------
-    // CSV各行
-    // --------------------------------------------------
+    // ==================================================
+    // CSV行走査
+    // ==================================================
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
 
@@ -144,27 +251,78 @@ function main() {
       for (const candidate of candidates) {
         totalCandidates++;
 
-        // reply-safety.jsの共通判定を使用
         const result = checkReplySafety(candidate.text);
 
+        // 安全なら何もしない
         if (result.safe) {
           continue;
         }
 
-        totalDanger++;
-
         const csvLine = i + 1;
+
+        // ------------------------------------------------
+        // 除外コメント確認
+        // ------------------------------------------------
+        const ignoredComment = findIgnoredComment(
+          candidate.comments,
+          ignoreComments
+        );
+
+        // =================================================
+        // IGNORE
+        // =================================================
+        if (ignoredComment) {
+          totalIgnore++;
+
+          console.log('');
+          console.log(
+            `[IGNORE] ${fileName}  CSV行:${csvLine}  ${candidate.column}`
+          );
+
+          console.log(
+            `  コメント: ${ignoredComment}`
+          );
+
+          for (const reason of result.reasons) {
+            console.log(`  ・${reason}`);
+          }
+
+          reportRows.push([
+            'IGNORE',
+            fileName,
+            csvLine,
+            candidate.column,
+            ignoredComment,
+            result.reasons.join(' / '),
+            result.headLines.join(' / '),
+            result.tailLines.join(' / ')
+          ]);
+
+          continue;
+        }
+
+        // =================================================
+        // NG
+        // =================================================
+        totalDanger++;
 
         console.log('');
         console.log(
           `[NG] ${fileName}  CSV行:${csvLine}  ${candidate.column}`
         );
 
+        if (candidate.comments.length) {
+          console.log(
+            `  コメント: ${candidate.comments.join(' / ')}`
+          );
+        } else {
+          console.log('  コメント: なし');
+        }
+
         for (const reason of result.reasons) {
           console.log(`  ・${reason}`);
         }
 
-        console.log('');
         console.log(
           `  文頭: ${result.headLines.join(' / ')}`
         );
@@ -174,9 +332,11 @@ function main() {
         );
 
         reportRows.push([
+          'NG',
           fileName,
           csvLine,
           candidate.column,
+          candidate.comments.join(' / '),
           result.reasons.join(' / '),
           result.headLines.join(' / '),
           result.tailLines.join(' / ')
@@ -185,9 +345,9 @@ function main() {
     }
   }
 
-  // --------------------------------------------------
-  // CSVレポート出力
-  // --------------------------------------------------
+  // ====================================================
+  // レポート保存
+  // ====================================================
   const reportText =
     '\uFEFF' +
     reportRows
@@ -200,9 +360,6 @@ function main() {
     'utf8'
   );
 
-  // --------------------------------------------------
-  // 集計
-  // --------------------------------------------------
   console.log('');
   console.log('========================================');
   console.log('チェック完了');
@@ -211,7 +368,8 @@ function main() {
   console.log(`CSVファイル数 : ${files.length}`);
   console.log(`CSV総行数     : ${totalRows}`);
   console.log(`返信候補数    : ${totalCandidates}`);
-  console.log(`危険文章      : ${totalDanger}`);
+  console.log(`危険文章 NG   : ${totalDanger}`);
+  console.log(`除外 IGNORE   : ${totalIgnore}`);
   console.log(`CSV読込エラー : ${totalReadErrors}`);
 
   console.log('');
