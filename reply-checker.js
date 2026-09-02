@@ -2192,6 +2192,10 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       );
 
       console.log(
+        `[AUTO-QUESTION] ${userName}: 質問型コメント=${isQuestionComment}`
+      );      
+
+      console.log(
         `[AUTO-CHECK] ${userName}: 最新ユーザー本文="${normalizedUserText.slice(0, 80)}" ` +
         `文字数=${normalizedUserText.length}`
       );
