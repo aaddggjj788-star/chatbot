@@ -30,12 +30,14 @@ const path = require('path');
 const { parse: parseCSVSync } = require('csv-parse/sync');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
 const { checkReplySafety } = require('./reply-safety');
-
+const OpenAI = require('openai');
 const REPLY_SAFETY_IGNORE_FILE = path.join(
   __dirname,
   'reply-safety-ignore.json'
 );
-
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 function loadReplySafetyIgnoreComments() {
   try {
@@ -83,6 +85,11 @@ const POLL_INTERVAL_MS = 2000;
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 let _shouldStop = false;
+
+const REPLY_AUTO_QUESTION_COMMENTS_FILE = path.join(
+  __dirname,
+  'reply-auto-question-comments.json'
+);
 
 // 今回の返信チェックで対象外となったユーザー
 // [{ userName, uid, kid, reason }]
@@ -1413,6 +1420,40 @@ function splitWordAndReading(rawWord) {
 }
 
 
+function loadReplyAutoQuestionComments() {
+  try {
+    if (!fs.existsSync(REPLY_AUTO_QUESTION_COMMENTS_FILE)) {
+      return new Set();
+    }
+
+    const config = JSON.parse(
+      fs.readFileSync(
+        REPLY_AUTO_QUESTION_COMMENTS_FILE,
+        'utf8'
+      )
+    );
+
+    const list = Array.isArray(config.questionComments)
+      ? config.questionComments
+      : [];
+
+    return new Set(
+      list
+        .map(v => String(v).trim())
+        .filter(Boolean)
+    );
+
+  } catch (err) {
+    console.error(
+      '[AUTO-QUESTION] 質問型コメント設定読込エラー:',
+      err.message
+    );
+
+    return new Set();
+  }
+}
+
+
 // ------------------------------------------------------
 // 短い造語向け
 //
@@ -2143,6 +2184,13 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         .replace(/\s+/g, '')
         .trim();
 
+
+      const questionComments = loadReplyAutoQuestionComments();
+
+      const isQuestionComment = allComments.some(comment =>
+        questionComments.has(String(comment).trim())
+      );
+
       console.log(
         `[AUTO-CHECK] ${userName}: 最新ユーザー本文="${normalizedUserText.slice(0, 80)}" ` +
         `文字数=${normalizedUserText.length}`
@@ -2151,13 +2199,18 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       // --------------------------------------------------
       // 15文字以上なら自動返信対象外
       // --------------------------------------------------
-      if (normalizedUserText.length >= 15) {
+      if (
+        normalizedUserText.length >= 20 &&
+        !isQuestionComment
+      ) {
         console.log(
-          `[AUTO-CHECK] ${userName}: ユーザー本文が15文字以上 → 対象外`
+          `[AUTO-CHECK] ${userName}: ユーザー本文が20文字以上 → 対象外`
         );
-
+        console.log(
+          `[AUTO-QUESTION] ${userName}: 質問型コメント一致 → 20文字制限を解除`
+        );
         recordSkip(
-          `自動返信対象外: ユーザーメッセージが15文字以上 (${normalizedUserText.length}文字)`
+          `自動返信対象外: ユーザーメッセージが20文字以上 (${normalizedUserText.length}文字)`
         );
 
         continue;
@@ -2193,6 +2246,55 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
       }
     }
+
+// ======================================================
+// 質問型コメント：OpenAIで回答内容を確認
+// ======================================================
+    if (isQuestionComment) {
+      const kanteishiQuestionText = String(
+        analysis.kanteishiBodyText || ''
+      )
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+
+      const userTexts =
+        bodyNaibuTexts.length > 0
+          ? bodyNaibuTexts
+          : (analysis.latestUserTexts || []);
+
+      const combinedUserText = userTexts
+        .map(
+          (text, index) =>
+            `【ユーザーメッセージ${index + 1}】\n${text}`
+        )
+        .join('\n\n');
+
+      const aiCheck = await checkQuestionAnswerWithAI(
+        kanteishiQuestionText,
+        combinedUserText
+      );
+
+      console.log(
+        `[AUTO-QUESTION] ${userName}: ` +
+        `answered=${aiCheck.answered} ` +
+        `relevant=${aiCheck.relevant} ` +
+        `reason="${aiCheck.reason}"`
+      );
+
+      if (!aiCheck.answered || !aiCheck.relevant) {
+        recordSkip(
+          `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
+        );
+
+        continue;
+      }
+
+      console.log(
+        `[AUTO-QUESTION] ${userName}: 質問への回答を確認 → 自動返信続行`
+      );
+    }
+
 
       if (nengenWords.length > 0) {
         const userTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
@@ -3382,6 +3484,72 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
   };
 }
 
+
+async function checkQuestionAnswerWithAI(kanteishiText, userText) {
+  try {
+    const prompt = `
+次の2つの文章を比較してください。
+
+【鑑定士メッセージ】
+${kanteishiText}
+
+【ユーザーメッセージ】
+${userText}
+
+判定条件：
+- 鑑定士が質問している内容に対して、ユーザーが実質的に回答しているか
+- 単なる「よろしくお願いします」「はい」など、質問への具体的回答になっていない場合は false
+- 表現や語尾が完全一致している必要はない
+- 質問への回答内容が含まれていれば true
+
+JSONのみ返してください。
+
+{
+  "answered": true または false,
+  "reason": "短い理由"
+}
+`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-5-mini',
+      messages: [
+        {
+          role: 'system',
+          content: '質問と回答の対応関係だけを判定してください。'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      response_format: {
+        type: 'json_object'
+      }
+    });
+
+    const content =
+      response.choices?.[0]?.message?.content || '';
+
+    const result = JSON.parse(content);
+
+    return {
+      answered: result.answered === true,
+      reason: String(result.reason || '')
+    };
+
+  } catch (err) {
+    console.error(
+      '[AUTO-QUESTION] OpenAI判定エラー:',
+      err.message
+    );
+
+    return {
+      answered: false,
+      reason: `AI判定エラー: ${err.message}`
+    };
+  }
+}
+
 // ─── ope_mainフレームから最新の鑑定士コメントアウトを取得する ──────────
 // analyzeMessages と同じDOM走査（緑背景 #90EE90 が鑑定士メッセージ）で、
 // DOM最上位＝最新の鑑定士メッセージの本文からコメントアウト（<!--...-->）を
@@ -3529,6 +3697,90 @@ async function withSkippedTargetConversation(index, sendLine, fn) {
     await sendLine(`【エラー】対象外返信に失敗しました\n対象外ID：${index}\nエラー：${err.message}`);
   } finally {
     await browser.close().catch(() => {});
+  }
+}
+
+
+
+async function checkQuestionAnswerWithAI(kanteishiText, userText) {
+  try {
+    const response = await openai.responses.create({
+      model: 'gpt-5-mini',
+
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text:
+                '鑑定士の質問に対して、ユーザーが実質的に回答しているかだけを判定してください。' +
+                '単なる挨拶、相槌、質問と無関係な返答は answered=false としてください。' +
+                '表現が完全一致する必要はありません。'
+            }
+          ]
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text:
+                `【鑑定士メッセージ】\n${kanteishiText}\n\n` +
+                `【ユーザーメッセージ】\n${userText}`
+            }
+          ]
+        }
+      ],
+
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'question_answer_check',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              answered: {
+                type: 'boolean'
+              },
+              relevant: {
+                type: 'boolean'
+              },
+              reason: {
+                type: 'string'
+              }
+            },
+            required: [
+              'answered',
+              'relevant',
+              'reason'
+            ],
+            additionalProperties: false
+          }
+        }
+      }
+    });
+
+    const result = JSON.parse(response.output_text);
+
+    return {
+      answered: result.answered === true,
+      relevant: result.relevant === true,
+      reason: String(result.reason || '')
+    };
+
+  } catch (err) {
+    console.error(
+      '[AUTO-QUESTION] OpenAI判定エラー:',
+      err.message
+    );
+
+    return {
+      answered: false,
+      relevant: false,
+      reason: `AI判定エラー: ${err.message}`
+    };
   }
 }
 
