@@ -1382,7 +1382,7 @@ function normalizeMatchText(text) {
     .normalize('NFKC')
     .replace(/<[^>]*>/g, '')
     .replace(/[「」『』【】［］\[\]（）()]/g, '')
-    .replace(/[、。,.!！?？・]/g, '')
+    .replace(/[、。,.!！?？・･*＊_＿]/g, '')
     .replace(/\s+/g, '')
     .trim()
     .toLowerCase();
@@ -1396,7 +1396,7 @@ function splitWordAndReading(rawWord) {
   const text = String(rawWord || '').trim();
 
   const m = text.match(
-    /^(.+?)[（(]([ぁ-んァ-ヶー]+)[）)]$/
+    /^(.+?)[（(]([ぁ-んァ-ヶー・･\s]+)[）)]$/
   );
 
   if (!m) {
