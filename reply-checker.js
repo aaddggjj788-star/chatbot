@@ -2249,56 +2249,56 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           `[AUTO-CHECK] ${userName}: 送り返す言葉の部分一致を確認`
         );
       }
-    }
 
-// ======================================================
-// 質問型コメント：OpenAIで回答内容を確認
-// ======================================================
-    if (isQuestionComment) {
-      const kanteishiQuestionText = String(
-        analysis.kanteishiBodyText || ''
-      )
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .trim();
 
-      const userTexts =
-        bodyNaibuTexts.length > 0
-          ? bodyNaibuTexts
-          : (analysis.latestUserTexts || []);
-
-      const combinedUserText = userTexts
-        .map(
-          (text, index) =>
-            `【ユーザーメッセージ${index + 1}】\n${text}`
+  // ======================================================
+  // 質問型コメント：OpenAIで回答内容を確認
+  // ======================================================
+      if (isQuestionComment) {
+        const kanteishiQuestionText = String(
+          analysis.kanteishiBodyText || ''
         )
-        .join('\n\n');
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .trim();
 
-      const aiCheck = await checkQuestionAnswerWithAI(
-        kanteishiQuestionText,
-        combinedUserText
-      );
+        const userTexts =
+          bodyNaibuTexts.length > 0
+            ? bodyNaibuTexts
+            : (analysis.latestUserTexts || []);
 
-      console.log(
-        `[AUTO-QUESTION] ${userName}: ` +
-        `answered=${aiCheck.answered} ` +
-        `relevant=${aiCheck.relevant} ` +
-        `reason="${aiCheck.reason}"`
-      );
+        const combinedUserText = userTexts
+          .map(
+            (text, index) =>
+              `【ユーザーメッセージ${index + 1}】\n${text}`
+          )
+          .join('\n\n');
 
-      if (!aiCheck.answered || !aiCheck.relevant) {
-        recordSkip(
-          `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
+        const aiCheck = await checkQuestionAnswerWithAI(
+          kanteishiQuestionText,
+          combinedUserText
         );
 
-        continue;
+        console.log(
+          `[AUTO-QUESTION] ${userName}: ` +
+          `answered=${aiCheck.answered} ` +
+          `relevant=${aiCheck.relevant} ` +
+          `reason="${aiCheck.reason}"`
+        );
+
+        if (!aiCheck.answered || !aiCheck.relevant) {
+          recordSkip(
+            `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
+          );
+
+          continue;
+        }
+
+        console.log(
+          `[AUTO-QUESTION] ${userName}: 質問への回答を確認 → 自動返信続行`
+        );
       }
-
-      console.log(
-        `[AUTO-QUESTION] ${userName}: 質問への回答を確認 → 自動返信続行`
-      );
     }
-
 
       if (nengenWords.length > 0) {
         const userTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
