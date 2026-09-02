@@ -2286,9 +2286,14 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           `reason="${aiCheck.reason}"`
         );
 
-        if (!aiCheck.answered || !aiCheck.relevant) {
+        if (
+          !aiCheck.answered ||
+          !aiCheck.required_details_provided ||
+          !aiCheck.instruction_followed ||
+          !aiCheck.relevant
+        ) {
           recordSkip(
-            `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
+            `自動返信対象外: 質問回答条件を満たしていない (${aiCheck.reason})`
           );
 
           continue;
@@ -3501,16 +3506,23 @@ ${kanteishiText}
 ${userText}
 
 判定条件：
-- 鑑定士が質問している内容に対して、ユーザーが実質的に回答しているか
-- 単なる「よろしくお願いします」「はい」など、質問への具体的回答になっていない場合は false
-- 表現や語尾が完全一致している必要はない
-- 質問への回答内容が含まれていれば true
+- 鑑定士メッセージに含まれる質問・回答要求・記述要求をすべて確認する
+- ユーザーの複数メッセージを合わせて、それらの要求に実質的に回答しているか判定する
+- 質問の一部にだけ答えている場合は false
+- 理由、年齢、希望内容、選択肢など具体的な回答を求めている場合、その具体的内容が含まれていなければ false
+- 鑑定士が指定した言葉を送るよう要求している場合、その言葉が含まれていなければ false
+- 「はい」「いいえ」「よろしくお願いします」「次へ進みます」「次へ進みません」など、質問への具体的回答になっていない返答は false
+- 表現や語尾が完全一致する必要はない
+- 鑑定士が求めた回答内容と指示を十分に満たしている場合のみ true
 
 JSONのみ返してください。
 
 {
-  "answered": true または false,
-  "reason": "短い理由"
+  "answered": false,
+  "required_details_provided": false,
+  "instruction_followed": false,
+  "relevant": false,
+  "reason": "質問への具体的回答、理由、指定された言葉が含まれていない"
 }
 `;
 
