@@ -333,6 +333,111 @@ function applyReplaceHeader(replyText, replaceHeader) {
   return rest ? `${replaceHeader}\n${rest}` : replaceHeader;
 }
 
+// ─── 返信確認コマンド（送信/スキップ/差し込み[N]#/差し替え#/差し替え前文#）の共通処理 ──
+// processUsers の返信確認フローと、対象外ID次行照会（inquireNextLine）の
+// 両方から利用する。差し込み位置指定・差し替え前文の解釈をここに集約する。
+
+// baseReplyText の指定行の直前に insertText を挿入した本文を生成する。
+// lineNum=2（デフォルト）で「2行目に挿入」（＝1行目の直後）、
+// lineNum=3 で3行目、lineNum=4 で4行目…に挿入する。
+// ※返信文の改行はCSV由来のリテラル "\n" のため、実改行へ正規化してから分割する。
+function buildSplicedReply(baseReplyText, insertText, lineNum = 2) {
+  const baseLines = baseReplyText.replace(/\\n/g, '\n').trim().split('\n');
+  const n = Number.isFinite(lineNum) ? lineNum : 2;
+  const pos = Math.max(1, n - 1); // 挿入位置（先頭行の直後 = 1）
+  const splicedLines = [...baseLines.slice(0, pos), insertText, ...baseLines.slice(pos)];
+  return splicedLines.join('\n');
+}
+
+// 返信確認コマンド文字列を解釈する。
+// ・「送信」                    → { kind: 'send' }
+// ・「差し替え前文#{文章}」      → { kind: 'sashikaeZenbun', text }
+// ・「差し替え#{文章}」          → { kind: 'sashikae', text }
+// ・「差し込み{N}#{文章}」       → { kind: 'sashikomi', lineNum: N, text }
+// ・「差し込み#{文章}」          → { kind: 'sashikomi', lineNum: 2, text }
+// ・その他                      → { kind: 'skip' }
+// ※「差し替え前文#」は「差し替え#」より先に、「差し込み{N}#」は「差し込み#」より
+//   先に判定する（前方一致の取りこぼしを防ぐため）。
+function parseConfirmCommand(reply) {
+  const r = (reply || '').trim();
+  if (r === '送信') return { kind: 'send' };
+  let m;
+  if ((m = r.match(/^差し替え前文#([\s\S]+)$/))) return { kind: 'sashikaeZenbun', text: m[1] };
+  if ((m = r.match(/^差し替え#([\s\S]+)$/)))     return { kind: 'sashikae', text: m[1] };
+  if ((m = r.match(/^差し込み(\d+)#([\s\S]+)$/))) return { kind: 'sashikomi', lineNum: parseInt(m[1], 10), text: m[2] };
+  if ((m = r.match(/^差し込み#([\s\S]+)$/)))      return { kind: 'sashikomi', lineNum: 2, text: m[1] };
+  return { kind: 'skip' };
+}
+
+// 差し込み・差し替え系で生成した本文を提示し、「送信」なら送信テキストを返す二次確認。
+// 「送信」以外・タイムアウトはスキップ扱いにする。
+// 戻り値: { send: true, text } | { send: false, reason }
+async function confirmSecondarySend({ label, text, sendLine, waitForLineReply }) {
+  await sendLine([
+    `【${label}】`,
+    '---',
+    text,
+    '---',
+    'この内容で送信しますか？',
+    '「送信」または「スキップ」',
+  ].join('\n'));
+  let r;
+  try {
+    r = await waitForLineReply();
+  } catch (e) {
+    return { send: false, reason: `${label}の5分タイムアウト` };
+  }
+  if ((r || '').trim() === '送信') return { send: true, text };
+  return { send: false, reason: `${label}でスキップを選択` };
+}
+
+// 返信確認コマンドを解決し、最終的に送信するテキストを決定する共通処理。
+// 差し込み・差し替え系は confirmSecondarySend で生成結果を再確認してから返す。
+// 戻り値: { send: true, text } | { send: false, reason }
+async function resolveConfirmCommand({
+  reply, replyText, nextComment, latestComment, charaId, sendLine, waitForLineReply,
+}) {
+  const cmd = parseConfirmCommand(reply);
+  const tail = nextComment || '';
+
+  // 送信：返信文 + 次のコメントアウトを末尾に追記
+  if (cmd.kind === 'send') {
+    return { send: true, text: replyText.replace(/\\n/g, '\n').trim() + '\n' + tail };
+  }
+
+  // 差し込み#（2行目）/ 差し込み{N}#（N行目）
+  // 「テンプレート{番号}」指定はcharaId対応のテンプレート本文に置換する
+  if (cmd.kind === 'sashikomi') {
+    const insertText = resolveTemplateText(charaId, cmd.text.trim()).replace(/\\n/g, '\n');
+    const splicedText = buildSplicedReply(replyText, insertText, cmd.lineNum) + '\n' + tail;
+    const label = cmd.lineNum === 2 ? '差し込み確認' : `差し込み確認（${cmd.lineNum}行目）`;
+    return await confirmSecondarySend({ label, text: splicedText, sendLine, waitForLineReply });
+  }
+
+  // 差し替え#（返信文を丸ごと差し替え）
+  // 差し替え文章にコメントアウトが含まれない場合は最新コメントアウトを付与する
+  if (cmd.kind === 'sashikae') {
+    let replacedText = resolveTemplateText(charaId, cmd.text.trim()).replace(/\\n/g, '\n');
+    const hasCommentTag = /<!--.*-->/.test(replacedText);
+    if (!hasCommentTag && latestComment) {
+      const commentTag = latestComment.startsWith('<!--') ? latestComment : `<!--${latestComment}-->`;
+      replacedText = `${replacedText}\n${commentTag}`;
+    }
+    return await confirmSecondarySend({ label: '差し替え確認', text: replacedText, sendLine, waitForLineReply });
+  }
+
+  // 差し替え前文#（文頭のみ差し替え。imgタグがあればそれより上、なければ文頭3行を差し替え）
+  // 既存の replaceHeader ロジック（applyReplaceHeader）を再利用する
+  if (cmd.kind === 'sashikaeZenbun') {
+    const zenbun = resolveTemplateText(charaId, cmd.text.trim()).replace(/\\n/g, '\n');
+    const replacedBody = applyReplaceHeader(replyText, zenbun).replace(/\\n/g, '\n');
+    const replacedText = replacedBody + '\n' + tail;
+    return await confirmSecondarySend({ label: '差し替え前文確認', text: replacedText, sendLine, waitForLineReply });
+  }
+
+  return { send: false, reason: 'LINEでスキップを選択' };
+}
+
 // コメント情報からJSONのphase設定を解決する
 // 優先順: typeNum+sub ("mu2zenhan") → typeNum+type ("mu2his") → typeNum ("mu1")
 function resolvePhaseCfg(parsed, config) {
@@ -3409,100 +3514,23 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     console.log(`[LINE] 返信: ${reply}`);
 
 
-    // 「差し込み#{文章}」「差し替え#{文章}」形式の返信を検出
-    const isSashikomi = reply.startsWith('差し込み#');
-    const isSashikae  = reply.startsWith('差し替え#');
-
-    // ─── 送信 / スキップ / 差し込み / 差し替え ────────────────────
-    if (reply === '送信') {
-      // 返信文 + 次のコメントアウトを末尾に追記（先頭・末尾の余分な改行を除去）
-      const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
-      await sendReplyText(textToSend);
-    } else if (isSashikomi) {
-      // 返信文の1行目と2行目の間に差し込み文を挿入した全文を生成
-      // 「テンプレート{番号}」の場合はcharaId対応のテンプレート本文に置換する
-      let insertText = reply.replace(/^差し込み#/, '').trim();
-      insertText = resolveTemplateText(charaId, insertText).replace(/\\n/g, '\n');
-      const baseLines = replyData.replyText.replace(/\\n/g, '\n').trim().split('\n');
-      const splicedLines = [baseLines[0], insertText, ...baseLines.slice(1)];
-      const splicedText = splicedLines.join('\n') + '\n' + replyData.nextComment;
-
-      const confirmMsg = [
-        '【差し込み確認】',
-        '---',
-        splicedText,
-        '---',
-        'この内容で送信しますか？',
-        '「送信」または「スキップ」',
-      ].join('\n');
-      await sendLine(confirmMsg);
-
-      let sashikomiReply;
-      try {
-        sashikomiReply = await waitForLineReply();
-      } catch (e) {
-        console.log(`[TIMEOUT] ${userName}: 差し込み確認 5分タイムアウト → スキップ`);
-        recordSkip('差し込み確認の5分タイムアウト');
-        continue;
-      }
-      console.log(`[LINE] 差し込み確認返信: ${sashikomiReply}`);
-
-      if (sashikomiReply === '送信') {
-        await sendReplyText(splicedText);
-      } else {
-        console.log(`[SKIP] ${userName} 差し込みをスキップ`);
-        recordSkip('差し込み確認でスキップを選択');
-      }
-    } else if (isSashikae) {
-      // #以降のテキストを新しい返信文として丸ごと差し替える
-      // 差し替え文章にはコメントアウトが含まれる前提のため、元のnextCommentは付加しない
-      // 「テンプレート{番号}」の場合はcharaId対応のテンプレート本文に置換する
-      let replacedText = reply.replace(/^差し替え#/, '').trim();
-      replacedText = resolveTemplateText(charaId, replacedText).replace(/\\n/g, '\n');
-
-      // 差し替え文章にコメントアウト（<!--...-->）が含まれていない場合は、
-      // 最新のコメントアウトを自動で文末に付与する。
-      // 通常の差し替え・テンプレート呼び出しのどちらもここを通るため両方に適用される。
-      const hasCommentTag = /<!--.*-->/.test(replacedText);
-      if (!hasCommentTag && latestComment) {
-        const commentTag = latestComment.startsWith('<!--')
-          ? latestComment
-          : `<!--${latestComment}-->`;
-        replacedText = `${replacedText}\n${commentTag}`;
-        console.log(`[SASHIKAE] コメントアウトなし → 最新コメントアウトを付与: ${commentTag}`);
-      }
-
-      const replacedFullText = replacedText;
-
-      const confirmMsg = [
-        '【差し替え確認】',
-        '---',
-        replacedText,
-        '---',
-        'この内容で送信しますか？',
-        '「送信」または「スキップ」',
-      ].join('\n');
-      await sendLine(confirmMsg);
-
-      let sashikaeReply;
-      try {
-        sashikaeReply = await waitForLineReply();
-      } catch (e) {
-        console.log(`[TIMEOUT] ${userName}: 差し替え確認 5分タイムアウト → スキップ`);
-        recordSkip('差し替え確認の5分タイムアウト');
-        continue;
-      }
-      console.log(`[LINE] 差し替え確認返信: ${sashikaeReply}`);
-
-      if (sashikaeReply === '送信') {
-        await sendReplyText(replacedFullText);
-      } else {
-        console.log(`[SKIP] ${userName} 差し替えをスキップ`);
-        recordSkip('差し替え確認でスキップを選択');
-      }
+    // ─── 送信 / スキップ / 差し込み[N] / 差し替え / 差し替え前文 ────────
+    // コマンド解釈・差し込み位置指定・差し替え前文・差し込み/差し替え系の
+    // 二次確認は resolveConfirmCommand に集約し、対象外ID次行照会と共通化している。
+    const decision = await resolveConfirmCommand({
+      reply,
+      replyText: replyData.replyText,
+      nextComment: replyData.nextComment,
+      latestComment,
+      charaId,
+      sendLine,
+      waitForLineReply,
+    });
+    if (decision.send) {
+      await sendReplyText(decision.text);
     } else {
-      console.log(`[SKIP] ${userName} スキップ`);
-      recordSkip('LINEでスキップを選択');
+      console.log(`[SKIP] ${userName} ${decision.reason}`);
+      recordSkip(decision.reason);
     }
     } catch (e) {
       errorCount++;
@@ -3910,6 +3938,113 @@ async function inquireUserBody(index, sendLine) {
   });
 }
 
+// ─── 対象外ユーザーの次行照会（コメントアウトの次行文章を確認して送信）──────
+// LINE/Slackコマンド「対象外ID:{番号} 次行照会」から呼び出す。
+// 対象ユーザーの最新コメントアウトからCSVの「次の行」の文章を取得して提示し、
+// 送信確認フロー（送信/スキップ/差し込み[N]#/差し替え#/差し替え前文#）を行う。
+// sendLine / waitForLineReply は呼び出し側（server.js）から渡す。
+async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = false) {
+  console.log(`[MANUAL-REPLY] 次行照会 対象外ID=${index}`);
+
+  // 前回の停止要求が残っていると waitForLineReply が即座に停止扱いになるため、
+  // 確認の返信待ちを行う前に停止フラグをリセットする（sendManualReplyと同じ）
+  _shouldStop = false;
+
+  await withSkippedTargetConversation(index, sendLine, async ({ supportPage, uid, userName }) => {
+    // ── 最新の鑑定士コメントアウトを取得 ──
+    const latestComment = await getLatestKanteishiComment(supportPage);
+    if (!latestComment) {
+      await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウトが取得できませんでした`);
+      return;
+    }
+    // 複数コメントが ", " で結合されている場合は最後（最も進んだ）のものを対象にする
+    const targetComment =
+      latestComment.split(',').map(s => s.trim()).filter(Boolean).pop() || latestComment.trim();
+
+    // ── コメントアウトからcharaIdを解析してCSVの次行文章を取得 ──
+    const parsed = parseCommentStr(targetComment);
+    if (!parsed) {
+      await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\nコメントアウトの形式を解析できませんでした`);
+      return;
+    }
+    const charaId = parsed.baseId + parsed.typeNum;
+
+    let replyData;
+    try {
+      replyData = getReplyFromCSVByTarget(charaId, targetComment, false);
+    } catch (e) {
+      await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\n次行文章の取得に失敗しました\n${e.message}`);
+      return;
+    }
+    if (!replyData || !replyData.replyText) {
+      await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\n次行文章が空でした（末尾到達等）`);
+      return;
+    }
+
+    const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
+    console.log(`[次行照会] uid=${uid} 対象コメント="${targetComment}" 次行="${displayReplyText.slice(0, 40)}"`);
+
+    // ── 次に送信予定の文章を提示してコマンド待ち ──
+    await sendLine([
+      '【次行照会】',
+      `会員ID：${uid}`,
+      `最新コメントアウト：${latestComment}`,
+      '次に送信予定の文章：',
+      '---',
+      displayReplyText,
+      replyData.nextComment,
+      '---',
+      '「送信」「スキップ」「差し込み#文章」「差し込み3#文章」「差し込み4#文章」',
+      '「差し替え#文章」「差し替え前文#文章」',
+    ].join('\n'));
+
+    let reply;
+    try {
+      reply = await waitForLineReply();
+    } catch (e) {
+      console.log(`[次行照会] uid=${uid}: 確認待ちタイムアウト → 中止: ${e.message}`);
+      await sendLine(`【次行照会】会員ID：${uid}\n確認がタイムアウトしたため中止しました`);
+      return;
+    }
+    console.log(`[次行照会] uid=${uid} 確認返信: ${reply}`);
+
+    // ── 送信確認フロー（processUsersと共通の resolveConfirmCommand）──
+    const decision = await resolveConfirmCommand({
+      reply,
+      replyText: replyData.replyText,
+      nextComment: replyData.nextComment,
+      latestComment: targetComment,
+      charaId,
+      sendLine,
+      waitForLineReply,
+    });
+
+    if (!decision.send) {
+      console.log(`[次行照会] uid=${uid}: ${decision.reason}`);
+      await sendLine(`【次行照会】会員ID：${uid}\n${decision.reason}`);
+      return;
+    }
+
+    if (DRY_RUN) {
+      console.log(`[DRY RUN] uid=${uid}: 次行照会の送信をスキップ`);
+      await sendLine(`【DRY RUN】次行照会の送信をスキップしました\n会員ID：${uid}`);
+      return;
+    }
+
+    // ── 送信 → ope_mainフレームのフォームに入力して送信 ──
+    const sendFrame = supportPage.frame({ name: 'ope_main' });
+    if (!sendFrame) {
+      await sendLine(`【エラー】次行照会\n会員ID：${uid} の送信フレーム取得に失敗しました`);
+      return;
+    }
+    await sendFrame.fill('textarea#mess_body', decision.text);
+    await sendFrame.click('#chara_mail_send');
+    await sendFrame.waitForLoadState('networkidle').catch(() => {});
+    console.log(`[次行照会] uid=${uid} (${userName}) 送信完了`);
+    await sendLine(`【次行照会 送信完了】\n会員ID：${uid}`);
+  });
+}
+
 // ─── 同一コメントアウトグループへの一括送信 ─────────────────────────
 // LINE/Slackコマンド「{コメントアウト} 検索」（例:「12686yu1/sinko/1 検索」）から呼び出す。
 // 対象ユーザー一覧の中から、最新コメントアウトが指定文字列と完全一致する会員を抽出し、
@@ -4250,4 +4385,4 @@ if (require.main === module) {
   checkReplies();
 }
 
-module.exports = { checkReplies, stopReplies, sendManualReply, inquireUserBody, batchSearchAndReply, sendLine, waitForLineReply };
+module.exports = { checkReplies, stopReplies, sendManualReply, inquireUserBody, inquireNextLine, batchSearchAndReply, sendLine, waitForLineReply };
