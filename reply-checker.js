@@ -2262,25 +2262,30 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       // 最新ユーザー本文との部分一致を確認
       // --------------------------------------------------
       if (nengenWords.length > 0) {
-        const sendWordMatched = nengenWords.some(word =>
-          matchesReturnWord(
+        const unmatchedWords = nengenWords.filter(word =>
+          !matchesReturnWord(
             normalizedCombinedUserText,
             word
           )
         );
 
-        if (!sendWordMatched) {
+        if (unmatchedWords.length > 0) {
           console.log(
-            `[AUTO-CHECK] ${userName}: 送り返す言葉が最新ユーザー本文に不一致 ` +
-            `words=${JSON.stringify(nengenWords)}`
+            `[AUTO-CHECK] ${userName}: 送り返す言葉不一致 ` +
+            `unmatched=${JSON.stringify(unmatchedWords)}`
           );
 
           recordSkip(
-            `自動返信対象外: 送り返す言葉がユーザーメッセージに不一致`
+            `自動返信対象外: 送り返す言葉が一部不一致 (${unmatchedWords.join(', ')})`
           );
 
           continue;
         }
+
+        console.log(
+          `[AUTO-CHECK] ${userName}: 送り返す言葉を全て確認`
+        );
+      }
 
         console.log(
           `[AUTO-CHECK] ${userName}: 送り返す言葉の部分一致を確認`
