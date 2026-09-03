@@ -1255,6 +1255,64 @@ function parseMessageTime(timeStr) {
 
 // ─── specialProcess ヘルパー ──────────────────────────────────────
 
+
+function isLikelyNicknameFinal(candidate) {
+  const s = String(candidate || '').trim();
+
+  if (!s) return false;
+
+  // 長すぎるものは除外
+  if ([...s].length < 2 || [...s].length > 8) {
+    return false;
+  }
+
+  // 名前として使う文字だけ許可
+  if (!/^[一-龥々ぁ-んァ-ヶーa-zA-Z0-9]+$/.test(s)) {
+    return false;
+  }
+
+  // 一般語・文章語を最終除外
+  const NG_WORDS = [
+    '心配',
+    '不安',
+    '幸せ',
+    '元気',
+    '大丈夫',
+    '無理',
+    '嫌い',
+    '好き',
+    '普通',
+    '本気',
+    '重要',
+    '必要',
+    '人生',
+    '仕事',
+    '恋愛',
+    'お金',
+    '健康',
+    '将来',
+    '家族',
+    '友達',
+    '気持ち',
+    '自分',
+    '相手',
+    '問題',
+    '状況',
+    '理由',
+    '希望',
+    '未来',
+    '鑑定',
+    '返信'
+  ];
+
+  if (NG_WORDS.some(word => s.includes(word))) {
+    return false;
+  }
+
+  return true;
+}
+
+
 // テキスト全体からニックネームを抽出する（名前の位置は不定のため全体検索）
 // 戻り値: { nickname: string|null, needsConfirmation: false }
 //
@@ -1281,7 +1339,13 @@ function extractNickname(userTexts) {
   function resolveNickname(candidate) {
     candidate = (candidate || '').trim();
     if (!candidate) return null;
-
+    if (
+      NICKNAME_EXCLUDE_WORDS.some(word =>
+        candidate.includes(word)
+      )
+    ) {
+      return null;
+    }
     // ひらがなのみ → そのまま使用（例: たろう→たろう）
     if (/^[ぁ-んー]+$/.test(candidate)) return candidate;
     // カタカナのみ → そのまま使用（例: タロウ→タロウ）
@@ -1315,7 +1379,9 @@ function extractNickname(userTexts) {
       if (hasFemale) return givenName;
       return givenName; // 不明時も名前部分（後半）を採用
     }
-
+    if (!isLikelyNicknameFinal(candidate)) {
+      return null;
+    }
     return candidate; // スペースなし単独名/ニックネーム → そのまま
   }
 
@@ -1327,6 +1393,35 @@ function extractNickname(userTexts) {
     if (!NAME_LINE_RE.test(line)) return false;
     return !EXCLUDE_WORDS.some(w => line.includes(w));
   }
+
+  const NICKNAME_EXCLUDE_WORDS = [
+    '心配',
+    '不安',
+    '幸せ',
+    '元気',
+    '大丈夫',
+    '無理',
+    '嫌い',
+    '好き',
+    '普通',
+    '本気',
+    '重要',
+    '必要',
+    '人生',
+    '仕事',
+    '恋愛',
+    'お金',
+    '健康',
+    '将来',
+    '家族',
+    '友達',
+    '気持ち',
+    '自分',
+    '相手',
+    '問題',
+    '状況',
+    '理由'
+  ];  
 
   const rawLines = text.split('\n').map(l => l.trim());
 
@@ -1348,25 +1443,82 @@ function extractNickname(userTexts) {
   if (chanM) return { nickname: chanM[1].trim(), needsConfirmation: false };
 
   // 【優先度2】パターン3: 「名前は○○」（明示パターン）
-  const nameWaM = text.match(/名前は([一-龥々ぁ-んァ-ヶー]{2,6})/);
+  const nameWaM = text.match(
+    /(?:^|\n)(?:私の)?名前は([一-龥々ぁ-んァ-ヶー]{2,8})(?:です|と申します|といいます|と言います)?[。！!\s]*(?:\n|$)/
+  );
+
+  if (nameWaM) {
+    const candidate = nameWaM[1].trim();
+
+    if (isNameLine(candidate)) {
+      const nick = resolveNickname(candidate);
+
+      if (nick) {
+        return {
+          nickname: nick,
+          needsConfirmation: false
+        };
+      }
+    }
+  }
+
   if (nameWaM) {
     const nick = resolveNickname(nameWaM[1]);
     if (nick) return { nickname: nick, needsConfirmation: false };
   }
 
   // 【優先度2】パターン2: 「私は○○」（自己紹介パターン）
-  const watashiM = text.match(/私は([一-龥々ぁ-んァ-ヶー]{2,6})/);
+  const watashiM = text.match(
+    /(?:^|\n)私は([一-龥々ぁ-んァ-ヶー]{2,8})(?:です|と申します|といいます|と言います)[。！!\s]*(?:\n|$)/
+  );
+
   if (watashiM) {
-    const nick = resolveNickname(watashiM[1]);
-    if (nick) return { nickname: nick, needsConfirmation: false };
+    const candidate = watashiM[1].trim();
+
+    if (isNameLine(candidate)) {
+      const nick = resolveNickname(candidate);
+
+      if (nick) {
+        return {
+          nickname: nick,
+          needsConfirmation: false
+        };
+      }
+    }
   }
 
   // 【優先度2】パターン1: 「○○と言います/と申します/です」（名乗りパターン）
-  const selfM = text.match(/([一-龥々ぁ-んァ-ヶー]{2,6})(?:と言います|と申します|といいます|です)/);
+  const selfM = text.match(
+    /([一-龥々ぁ-んァ-ヶー]{2,6})(?:と言います|と申します|といいます)/
+  );
   if (selfM) {
     const nick = resolveNickname(selfM[1]);
     if (nick) return { nickname: nick, needsConfirmation: false };
   }
+
+ // 「○○です」は行全体が名前だけの場合に限定して許可
+  for (const line of rawLines) {
+    const simpleNameM = line.match(
+      /^([一-龥々ぁ-んァ-ヶー]{2,8})です[。！!]*$/
+    );
+
+    if (!simpleNameM) continue;
+
+    const candidate = simpleNameM[1];
+
+    if (!isNameLine(candidate)) {
+      continue;
+    }
+
+    const nick = resolveNickname(candidate);
+
+    if (nick) {
+      return {
+        nickname: nick,
+        needsConfirmation: false
+      };
+    }
+  } 
 
   // 【優先度3】パターン5: 日付/血液型行と隣接する名前候補行
   const isDateLine    = s => /\d{1,4}[\/\-]\d{1,2}[\/\-]?\d{1,2}/.test(s);
