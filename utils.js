@@ -986,8 +986,15 @@ async function processPayment(memberId, amount, points) {
     }
 
     // ── ログインフォームを入力・送信 ──
-    await page.fill(process.env.SEL_LOGIN_ID    || '[name="login_id"]', process.env.SYSTEM_LOGIN_ID);
-    await page.fill(process.env.SEL_LOGIN_PASS  || '[name="password"]', process.env.SYSTEM_LOGIN_PASS);
+    await page.fill(
+      process.env.SEL_LOGIN_ID || '[name="login_id"]',
+      process.env.CHECK_LOGIN_ID
+    );
+    
+    await page.fill(
+      process.env.SEL_LOGIN_PASS || '[name="password"]',
+      process.env.CHECK_LOGIN_PASS
+    );
     await page.click(process.env.SEL_LOGIN_SUBMIT || '[type="submit"]');
     await page.waitForLoadState('networkidle');
 
