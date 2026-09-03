@@ -1335,6 +1335,32 @@ function extractNickname(userTexts) {
   const MALE_KANJI   = '郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明';
   const FEMALE_KANJI = '子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵';
 
+  const explicitPatterns = [
+    // ここではユウでお願いします
+    /ここでは([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})でお願いします/,
+
+    // ハナでお願いします
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})でお願いします/,
+
+    // ネットではRINを使っています
+    /ネットでは([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})を使っています/,
+
+    // みーちゃんって呼ばれてます
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})って呼ばれて(?:います|ます)/,
+
+    // 雪って呼ばれることが多い
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})って呼ばれることが多い/,
+
+    // 普段はユキと呼ばれています
+    /普段は([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})と呼ばれて(?:います|ます)/,
+
+    // 名前は花子です。今は～
+    /(?:私の)?名前は([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})(?:です)?(?:[。、！!\s]|$)/,
+
+    // miyoと申します
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})(?:と申します|といいます|と言います)/
+  ];  
+
   // 候補文字列をニックネームに解決（フルネームを苗字/名前に分割して男女判定）
   function resolveNickname(candidate) {
     candidate = (candidate || '').trim();
@@ -1387,7 +1413,7 @@ function extractNickname(userTexts) {
 
   // 名前行かどうかを判定する
   // 条件: 漢字(々含む)/ひらがな/カタカナのみ2-6文字 かつ 除外ワードを含まない
-  const NAME_LINE_RE = /^[一-龥々ぁ-んァ-ヶー]{2,6}$/;
+  const NAME_LINE_RE = /^[一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{2,6}$/;
   const EXCLUDE_WORDS = ['ない', 'なかった', 'かった', 'あった', '思う', 'です', 'ます'];
   function isNameLine(line) {
     if (!NAME_LINE_RE.test(line)) return false;
@@ -1425,6 +1451,71 @@ function extractNickname(userTexts) {
 
   const rawLines = text.split('\n').map(l => l.trim());
 
+  // ======================================================
+  // 明示的な呼び名・ニックネーム指定を最優先で抽出
+  // ======================================================
+
+  const explicitNicknamePatterns = [
+    // ここではユウでお願いします
+    /ここでは([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})でお願いします/,
+
+    // ハナでお願いします
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})でお願いします/,
+
+    // ネットではRINを使っています
+    /ネットでは([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})を使っています/,
+
+    // 普段は雪って呼ばれることが多いです
+    /普段は([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})って呼ばれることが多い/,
+
+    // 雪って呼ばれることが多いです
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})って呼ばれることが多い/,
+
+    // みんなにはみーちゃんって呼ばれてます
+    /みんなには([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})って呼ばれて/,
+
+    // ○○と呼ばれています
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})と呼ばれて(?:います|ます)/,
+
+    // 名前は花子です。今は〜
+    /(?:私の)?名前は([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})(?:です)?(?=[。、！!\s]|$)/,
+
+    // miyoと申します / 花子といいます
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})(?:と申します|といいます|と言います)/
+  ];
+
+  for (const pattern of explicitNicknamePatterns) {
+    const match = text.match(pattern);
+
+    if (!match) {
+      continue;
+    }
+
+    let candidate = String(match[1] || '').trim();
+
+    // 最終表示が "%useradana%さん" なので、
+    // 「もっさん」など末尾の「さん」は保存時に除去
+    if (candidate.endsWith('さん')) {
+      candidate = candidate.slice(0, -2);
+    }
+
+    const nick = resolveNickname(candidate);
+
+    if (
+      nick &&
+      isLikelyNicknameFinal(nick)
+    ) {
+      console.log(
+        `[NICKNAME] 明示パターン一致: "${match[0]}" → "${nick}"`
+      );
+
+      return {
+        nickname: nick,
+        needsConfirmation: false
+      };
+    }
+  }  
+
   // 【最優先】1行目（空行スキップ）が名前パターンなら即採用
   const firstLine = rawLines.find(l => l.length > 0) || '';
   if (isNameLine(firstLine)) {
@@ -1444,7 +1535,7 @@ function extractNickname(userTexts) {
 
   // 【優先度2】パターン3: 「名前は○○」（明示パターン）
   const nameWaM = text.match(
-    /(?:^|\n)(?:私の)?名前は([一-龥々ぁ-んァ-ヶー]{2,8})(?:です|と申します|といいます|と言います)?[。！!\s]*(?:\n|$)/
+    /(?:^|\n)(?:私の)?名前は([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{2,8})(?:です|と申します|といいます|と言います)?[。！!\s]*(?:\n|$)/
   );
 
   if (nameWaM) {
@@ -1469,7 +1560,7 @@ function extractNickname(userTexts) {
 
   // 【優先度2】パターン2: 「私は○○」（自己紹介パターン）
   const watashiM = text.match(
-    /(?:^|\n)私は([一-龥々ぁ-んァ-ヶー]{2,8})(?:です|と申します|といいます|と言います)[。！!\s]*(?:\n|$)/
+    /(?:^|\n)私は([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{2,8})(?:です|と申します|といいます|と言います)[。！!\s]*(?:\n|$)/
   );
 
   if (watashiM) {
@@ -1489,7 +1580,7 @@ function extractNickname(userTexts) {
 
   // 【優先度2】パターン1: 「○○と言います/と申します/です」（名乗りパターン）
   const selfM = text.match(
-    /([一-龥々ぁ-んァ-ヶー]{2,6})(?:と言います|と申します|といいます)/
+    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{2,6})(?:と言います|と申します|といいます)/
   );
   if (selfM) {
     const nick = resolveNickname(selfM[1]);
@@ -1499,7 +1590,7 @@ function extractNickname(userTexts) {
  // 「○○です」は行全体が名前だけの場合に限定して許可
   for (const line of rawLines) {
     const simpleNameM = line.match(
-      /^([一-龥々ぁ-んァ-ヶー]{2,8})です[。！!]*$/
+      /^([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{2,8})です[。！!]*$/
     );
 
     if (!simpleNameM) continue;
