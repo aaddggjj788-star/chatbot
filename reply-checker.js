@@ -2178,6 +2178,19 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           ? bodyNaibuTexts[0]
           : (analysis.latestUserTexts?.[0] || '');
 
+      const userTextsForAuto =
+        bodyNaibuTexts.length > 0
+          ? bodyNaibuTexts
+          : (analysis.latestUserTexts || []);
+
+      const combinedUserText = userTextsForAuto
+        .map(text => String(text || '').trim())
+        .filter(Boolean)
+        .join('\n\n');
+
+      const normalizedCombinedUserText =
+        normalizeMatchText(combinedUserText);          
+
       // 表示文字として判定するため、HTMLタグ・空白・改行を除去
       const normalizedUserText = String(latestUserText)
         .replace(/<[^>]*>/g, '')
@@ -2204,20 +2217,27 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       // 15文字以上なら自動返信対象外
       // --------------------------------------------------
       if (
-        normalizedUserText.length >= 20 &&
+        normalizedCombinedUserText.length >= 20 &&
         !isQuestionComment
       ) {
         console.log(
-          `[AUTO-CHECK] ${userName}: ユーザー本文が20文字以上 → 対象外`
+          `[AUTO-CHECK] ${userName}: ユーザーメッセージ群が20文字以上 → 対象外`
         );
-        console.log(
-          `[AUTO-QUESTION] ${userName}: 質問型コメント一致 → 20文字制限を解除`
-        );
+
         recordSkip(
-          `自動返信対象外: ユーザーメッセージが20文字以上 (${normalizedUserText.length}文字)`
+          `自動返信対象外: ユーザーメッセージ群が20文字以上 (${normalizedCombinedUserText.length}文字)`
         );
 
         continue;
+      }
+
+      if (
+        normalizedCombinedUserText.length >= 20 &&
+        isQuestionComment
+      ) {
+        console.log(
+          `[AUTO-QUESTION] ${userName}: 質問型コメント一致 → 20文字制限を解除`
+        );
       }
 
       // --------------------------------------------------
@@ -2227,7 +2247,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       if (nengenWords.length > 0) {
         const sendWordMatched = nengenWords.some(word =>
           matchesReturnWord(
-            normalizedUserText,
+            normalizedCombinedUserText,
             word
           )
         );
@@ -2262,18 +2282,6 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           .replace(/<[^>]+>/g, '')
           .trim();
 
-        const userTexts =
-          bodyNaibuTexts.length > 0
-            ? bodyNaibuTexts
-            : (analysis.latestUserTexts || []);
-
-        const combinedUserText = userTexts
-          .map(
-            (text, index) =>
-              `【ユーザーメッセージ${index + 1}】\n${text}`
-          )
-          .join('\n\n');
-
         const aiCheck = await checkQuestionAnswerWithAI(
           kanteishiQuestionText,
           combinedUserText
@@ -2283,27 +2291,33 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           `[AUTO-QUESTION] ${userName}: ` +
           `answered=${aiCheck.answered} ` +
           `relevant=${aiCheck.relevant} ` +
+          `safety=${aiCheck.safety} ` +
           `reason="${aiCheck.reason}"`
         );
 
+        if (!aiCheck.answered || !aiCheck.relevant) {
+          recordSkip(
+            `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
+          );
+
+          continue;
+        }
+
         if (
-          !aiCheck.answered ||
-          !aiCheck.required_details_provided ||
-          !aiCheck.instruction_followed ||
-          !aiCheck.relevant
+          aiCheck.safety === 'ambiguous' ||
+          aiCheck.safety === 'urgent'
         ) {
           recordSkip(
-            `自動返信対象外: 質問回答条件を満たしていない (${aiCheck.reason})`
+            `自動返信対象外: 要確認 safety=${aiCheck.safety} (${aiCheck.reason})`
           );
 
           continue;
         }
 
         console.log(
-          `[AUTO-QUESTION] ${userName}: 質問への回答を確認 → 自動返信続行`
+          `[AUTO-QUESTION] ${userName}: 質問回答OK → 自動返信続行`
         );
       }
-    }
 
       if (nengenWords.length > 0) {
         const userTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
@@ -3763,6 +3777,14 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
               relevant: {
                 type: 'boolean'
               },
+              safety: {
+                type: 'string',
+                enum: [
+                  'normal',
+                  'ambiguous',
+                  'urgent'
+                ]
+              },
               reason: {
                 type: 'string'
               }
@@ -3770,6 +3792,7 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
             required: [
               'answered',
               'relevant',
+              'safety',
               'reason'
             ],
             additionalProperties: false
@@ -3783,6 +3806,7 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
     return {
       answered: result.answered === true,
       relevant: result.relevant === true,
+      safety: result.safety || 'ambiguous',
       reason: String(result.reason || '')
     };
 
@@ -3795,6 +3819,7 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
     return {
       answered: false,
       relevant: false,
+      safety: 'ambiguous',
       reason: `AI判定エラー: ${err.message}`
     };
   }
