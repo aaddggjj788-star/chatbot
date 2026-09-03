@@ -14,6 +14,14 @@
  *     例: node check-csv-batch.js --chara 12687 --file comments.txt
  *     ※ comments.txt は1行1コメント。空行と # から始まる行（コメント）は無視する。
  *
+ *   node check-csv-batch.js --chara {charaId} --range "{comment}/{start}-{end}"
+ *     例: node check-csv-batch.js --chara 12686 --range "12686yu7mu/sinko/1-12"
+ *     ※ 末尾の {start}-{end}（例: 1-12）を展開し、start〜end の番号を
+ *        1件ずつ自動生成してチェックする（上記例は
+ *        12686yu7mu/sinko/1 〜 12686yu7mu/sinko/12 の12件）。
+ *     ※ カンマ区切りで複数レンジも指定可能
+ *        （例: "12686yu7mu/sinko/1-12,12686yu7mu/his/1-3"）。
+ *
  * ※ charaId は chara-config/{charaId}.json を参照するためのIDを指定する
  *   （check-csv.js の --chara と同じ。例: 12687）。
  */
@@ -31,14 +39,43 @@ function getFlagValue(args, flag) {
   return args[idx + 1] ?? null;
 }
 
-// カンマ区切り文字列 or テキストファイルからコメント一覧を組み立てる
-function collectComments({ commentsArg, fileArg }) {
+// レンジ指定文字列（例: "12686yu7mu/sinko/1-12"）を展開して
+// 個別コメント（例: 12686yu7mu/sinko/1 〜 /12）の配列にする。
+// 末尾の "{start}-{end}" を数値レンジとみなし、その手前を接頭辞として
+// start〜end の番号を1つずつ結合する。
+function expandRange(rangeStr) {
+  const m = rangeStr.match(/^(.*?)(\d+)-(\d+)$/);
+  if (!m) {
+    throw new Error(`レンジ形式が不正です（末尾を "{start}-{end}" にしてください）: "${rangeStr}"`);
+  }
+  const [, prefix, startStr, endStr] = m;
+  const start = parseInt(startStr, 10);
+  const end   = parseInt(endStr, 10);
+  if (start > end) {
+    throw new Error(`レンジの開始が終了より大きいです（${start} > ${end}）: "${rangeStr}"`);
+  }
+  const out = [];
+  for (let i = start; i <= end; i++) {
+    out.push(`${prefix}${i}`);
+  }
+  return out;
+}
+
+// カンマ区切り文字列 or テキストファイル or レンジ指定からコメント一覧を組み立てる
+function collectComments({ commentsArg, fileArg, rangeArg }) {
   const comments = [];
 
   if (commentsArg) {
     for (const c of commentsArg.split(',')) {
       const t = c.trim();
       if (t) comments.push(t);
+    }
+  }
+
+  if (rangeArg) {
+    for (const r of rangeArg.split(',')) {
+      const t = r.trim();
+      if (t) comments.push(...expandRange(t));
     }
   }
 
@@ -63,9 +100,11 @@ function usageAndExit() {
   console.error('使い方:');
   console.error('  node check-csv-batch.js --chara {charaId} --comments "{comment1,comment2,...}"');
   console.error('  node check-csv-batch.js --chara {charaId} --file {comments.txt}');
+  console.error('  node check-csv-batch.js --chara {charaId} --range "{comment}/{start}-{end}"');
   console.error('例:');
   console.error('  node check-csv-batch.js --chara 12687 --comments "12687yu3mu/ho,12687yu4/ho,12687yu5/ho"');
   console.error('  node check-csv-batch.js --chara 12687 --file comments.txt');
+  console.error('  node check-csv-batch.js --chara 12686 --range "12686yu7mu/sinko/1-12"');
   process.exit(1);
 }
 
@@ -74,12 +113,19 @@ function main() {
   const charaId     = getFlagValue(args, '--chara');
   const commentsArg = getFlagValue(args, '--comments');
   const fileArg     = getFlagValue(args, '--file');
+  const rangeArg    = getFlagValue(args, '--range');
 
-  if (!charaId || (!commentsArg && !fileArg)) {
+  if (!charaId || (!commentsArg && !fileArg && !rangeArg)) {
     usageAndExit();
   }
 
-  const comments = collectComments({ commentsArg, fileArg });
+  let comments;
+  try {
+    comments = collectComments({ commentsArg, fileArg, rangeArg });
+  } catch (e) {
+    console.error(`【エラー】${e.message}`);
+    process.exit(1);
+  }
   if (comments.length === 0) {
     console.error('チェック対象のコメントが1件もありません（--comments / --file の内容を確認してください）');
     process.exit(1);
