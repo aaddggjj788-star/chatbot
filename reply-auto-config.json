@@ -1,6 +1,6 @@
 {
   "enabled": false,
-  "intervalMinutes": 3,
+  "intervalMinutes": 20,
   "targetKids": [],
   "maxSendPerRun": 50,
   "retry": {
