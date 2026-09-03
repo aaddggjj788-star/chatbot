@@ -2274,51 +2274,51 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
   // ======================================================
   // 質問型コメント：OpenAIで回答内容を確認
   // ======================================================
-      if (isQuestionComment) {
-        const kanteishiQuestionText = String(
-          analysis.kanteishiBodyText || ''
-        )
-          .replace(/<br\s*\/?>/gi, '\n')
-          .replace(/<[^>]+>/g, '')
-          .trim();
+        if (isQuestionComment) {
+          const kanteishiQuestionText = String(
+            analysis.kanteishiBodyText || ''
+          )
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .trim();
 
-        const aiCheck = await checkQuestionAnswerWithAI(
-          kanteishiQuestionText,
-          combinedUserText
-        );
-
-        console.log(
-          `[AUTO-QUESTION] ${userName}: ` +
-          `answered=${aiCheck.answered} ` +
-          `relevant=${aiCheck.relevant} ` +
-          `safety=${aiCheck.safety} ` +
-          `reason="${aiCheck.reason}"`
-        );
-
-        if (!aiCheck.answered || !aiCheck.relevant) {
-          recordSkip(
-            `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
+          const aiCheck = await checkQuestionAnswerWithAI(
+            kanteishiQuestionText,
+            combinedUserText
           );
 
-          continue;
-        }
-
-        if (
-          aiCheck.safety === 'ambiguous' ||
-          aiCheck.safety === 'urgent'
-        ) {
-          recordSkip(
-            `自動返信対象外: 要確認 safety=${aiCheck.safety} (${aiCheck.reason})`
+          console.log(
+            `[AUTO-QUESTION] ${userName}: ` +
+            `answered=${aiCheck.answered} ` +
+            `relevant=${aiCheck.relevant} ` +
+            `safety=${aiCheck.safety} ` +
+            `reason="${aiCheck.reason}"`
           );
 
-          continue;
-        }
+          if (!aiCheck.answered || !aiCheck.relevant) {
+            recordSkip(
+              `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
+            );
 
-        console.log(
-          `[AUTO-QUESTION] ${userName}: 質問回答OK → 自動返信続行`
-        );
+            continue;
+          }
+
+          if (
+            aiCheck.safety === 'ambiguous' ||
+            aiCheck.safety === 'urgent'
+          ) {
+            recordSkip(
+              `自動返信対象外: 要確認 safety=${aiCheck.safety} (${aiCheck.reason})`
+            );
+
+            continue;
+          }
+
+          console.log(
+            `[AUTO-QUESTION] ${userName}: 質問回答OK → 自動返信続行`
+          );
+        }
       }
-
       if (nengenWords.length > 0) {
         const userTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
         const allUserText = userTexts.join('');
@@ -3507,78 +3507,6 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
   };
 }
 
-
-async function checkQuestionAnswerWithAI(kanteishiText, userText) {
-  try {
-    const prompt = `
-次の2つの文章を比較してください。
-
-【鑑定士メッセージ】
-${kanteishiText}
-
-【ユーザーメッセージ】
-${userText}
-
-判定条件：
-- 鑑定士メッセージに含まれる質問・回答要求・記述要求をすべて確認する
-- ユーザーの複数メッセージを合わせて、それらの要求に実質的に回答しているか判定する
-- 質問の一部にだけ答えている場合は false
-- 理由、年齢、希望内容、選択肢など具体的な回答を求めている場合、その具体的内容が含まれていなければ false
-- 鑑定士が指定した言葉を送るよう要求している場合、その言葉が含まれていなければ false
-- 「はい」「いいえ」「よろしくお願いします」「次へ進みます」「次へ進みません」など、質問への具体的回答になっていない返答は false
-- 表現や語尾が完全一致する必要はない
-- 鑑定士が求めた回答内容と指示を十分に満たしている場合のみ true
-
-JSONのみ返してください。
-
-{
-  "answered": false,
-  "required_details_provided": false,
-  "instruction_followed": false,
-  "relevant": false,
-  "reason": "質問への具体的回答、理由、指定された言葉が含まれていない"
-}
-`;
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
-      messages: [
-        {
-          role: 'system',
-          content: '質問と回答の対応関係だけを判定してください。'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      response_format: {
-        type: 'json_object'
-      }
-    });
-
-    const content =
-      response.choices?.[0]?.message?.content || '';
-
-    const result = JSON.parse(content);
-
-    return {
-      answered: result.answered === true,
-      reason: String(result.reason || '')
-    };
-
-  } catch (err) {
-    console.error(
-      '[AUTO-QUESTION] OpenAI判定エラー:',
-      err.message
-    );
-
-    return {
-      answered: false,
-      reason: `AI判定エラー: ${err.message}`
-    };
-  }
-}
 
 // ─── ope_mainフレームから最新の鑑定士コメントアウトを取得する ──────────
 // analyzeMessages と同じDOM走査（緑背景 #90EE90 が鑑定士メッセージ）で、
