@@ -2216,23 +2216,40 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       // --------------------------------------------------
       // 15文字以上なら自動返信対象外
       // --------------------------------------------------
+      const longUserMessages = userTextsForAuto
+        .map((text, index) => {
+          const normalized = normalizeMatchText(text);
+
+          return {
+            index: index + 1,
+            text: String(text || ''),
+            normalized,
+            length: [...normalized].length
+          };
+        })
+        .filter(item => item.length >= 20);
+
       if (
-        normalizedCombinedUserText.length >= 20 &&
+        longUserMessages.length > 0 &&
         !isQuestionComment
       ) {
+        const detail = longUserMessages
+          .map(item => `${item.index}通目:${item.length}文字`)
+          .join(', ');
+
         console.log(
-          `[AUTO-CHECK] ${userName}: ユーザーメッセージ群が20文字以上 → 対象外`
+          `[AUTO-CHECK] ${userName}: 20文字以上のユーザーメッセージあり → 対象外 (${detail})`
         );
 
         recordSkip(
-          `自動返信対象外: ユーザーメッセージ群が20文字以上 (${normalizedCombinedUserText.length}文字)`
+          `自動返信対象外: 1通のユーザーメッセージが20文字以上 (${detail})`
         );
 
         continue;
       }
 
       if (
-        normalizedCombinedUserText.length >= 20 &&
+        longUserMessages.length > 0 &&
         isQuestionComment
       ) {
         console.log(
