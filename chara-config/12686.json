@@ -62,6 +62,16 @@
                 "useCurrentRow": true
             }
         },
+        "yu7": {
+            "fileId": "12686yu5sinko"
+        },
+        "yu7mu": {
+            "fileId": "12686yu7musinko",
+            "ho": {
+                "searchTarget": "12686yu7mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
         "yu8": {
             "fileId": "12686yu8sinko",
             "ho": {
