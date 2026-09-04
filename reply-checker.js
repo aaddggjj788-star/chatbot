@@ -4422,8 +4422,10 @@ async function withSkippedTargetConversation(index, sendLine, fn) {
   const uid = String(entry.uid);
   const kid = String(entry.kid);
   console.log(`[MANUAL-REPLY] 対象外ID=${index} → uid=${uid} kid=${kid} userName=${entry.userName}`);
+  console.log('[AI-REPLY-DEBUG] browser起動開始');
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  console.log('[AI-REPLY-DEBUG] browser起動完了');
   const context = await browser.newContext({
     httpCredentials: {
       username: process.env.BASIC_AUTH_ID,
@@ -4433,11 +4435,23 @@ async function withSkippedTargetConversation(index, sendLine, fn) {
 
   try {
     const page = await context.newPage();
+
+    console.log('[AI-REPLY-DEBUG] page作成完了');
+
+    console.log('[AI-REPLY-DEBUG] login開始');
     await login(page);
+    console.log('[AI-REPLY-DEBUG] login完了');
+
+    console.log('[AI-REPLY-DEBUG] openSupportPage開始');
     const supportPage = await openSupportPage(page);
+    console.log('[AI-REPLY-DEBUG] openSupportPage完了');
 
     // 対象ユーザー一覧から uid・kid の両方が一致する行を特定する
+    console.log('[AI-REPLY-DEBUG] getTargetUsers開始');
+
     const targets = await getTargetUsers(supportPage);
+
+    console.log(`[AI-REPLY-DEBUG] getTargetUsers完了 ${targets.length}件`);
     const target = targets.find(t => String(t.uid) === uid && String(t.kid) === kid);
     if (!target) {
       console.log(`[MANUAL-REPLY] 対象外ID=${index}: uid=${uid} kid=${kid} が対象ユーザー一覧に見つかりません`);
@@ -4481,7 +4495,11 @@ async function withSkippedTargetConversation(index, sendLine, fn) {
       console.log(`[MANUAL-REPLY] ${userName}: #bodyKakunin のタイムアウト（続行）`);
     }
 
+    console.log('[AI-REPLY-DEBUG] fn呼び出し開始');
+
     await fn({ supportPage, target, uid, kid, userName });
+
+    console.log('[AI-REPLY-DEBUG] fn呼び出し完了');
   } catch (err) {
     console.error(`[MANUAL-REPLY] 対象外ID=${index}: 処理に失敗: ${err.message}`, err.stack);
     await sendLine(`【エラー】対象外返信に失敗しました\n対象外ID：${index}\nエラー：${err.message}`);
@@ -4903,11 +4921,15 @@ async function batchSearchAndReply(searchComment, sendLine, waitForLineReply, DR
       if (el) el.innerHTML = '';
     });
     try {
+      console.log(`[AI-REPLY-DEBUG] form submit開始 stringID=${stringID}`);
+
       await menuFrame.evaluate((sid) => {
         const form = document.getElementById(sid);
         if (!form) throw new Error(`id="${sid}" のformが見つかりません`);
         form.submit();
       }, stringID);
+
+      console.log('[AI-REPLY-DEBUG] form submit完了');
     } catch (e) {
       console.log(`[BATCH-SEARCH] ${label}: form.submit()に失敗: ${e.message}`);
       return null;
@@ -4939,7 +4961,11 @@ async function batchSearchAndReply(searchComment, sendLine, waitForLineReply, DR
     const supportPage = await openSupportPage(page);
 
     // ── 1. 対象ユーザーを走査し、最新コメントアウトが完全一致する会員を抽出 ──
+    console.log('[AI-REPLY-DEBUG] getTargetUsers開始');
+
     const targets = await getTargetUsers(supportPage);
+
+    console.log(`[AI-REPLY-DEBUG] getTargetUsers完了 ${targets.length}件`);
     console.log(`[BATCH-SEARCH] 対象ユーザー: ${targets.length}件`);
 
     for (const { userName, kid, uid, stringID, dcheckValue } of targets) {
