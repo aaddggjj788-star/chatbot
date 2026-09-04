@@ -103,7 +103,7 @@ function buildSkippedMessage() {
   }
 
   const lines = skippedUsers.map(
-    (u, i) => `${i + 1}. ${u.userName}（u_id: ${u.uid || '不明'}, k_id: ${u.kid || '不明'}）理由：${u.reason}`
+    (u, i) => `${i + 1}. ${u.userName}（u_id: ${u.uid || '不明'}, k_id: ${u.kid || '不明'}）\n理由：${u.reason}`
   );
 
   // LINEの1メッセージ上限（5000文字）を超えると送信できないため、
@@ -114,14 +114,14 @@ function buildSkippedMessage() {
   for (const line of lines) {
     if (len + line.length + 1 > MAX_LEN) break;
     shown.push(line);
-    len += line.length + 1;
+    len += line.length + 2;
   }
   const rest = lines.length - shown.length;
 
   return [
     '【返信チェック完了】',
     '対象外ユーザー：',
-    ...shown,
+    ...shown.join('\n\n'),
     ...(rest > 0 ? [`（ほか${rest}件は文字数上限のため省略）`] : []),
   ].join('\n');
 }
@@ -913,14 +913,23 @@ async function getTargetUsers(page) {
       const link = row.querySelector('a');
       const userName = link ? link.textContent.trim() : onclickEl.textContent.trim();
 
+      // 返信済み化用チェックボックス
+      const checkInput = row.querySelector(
+        'input.checkInput[name^="Dcheck["]'
+      );
+
+      const dcheckValue = checkInput
+        ? (checkInput.value || '')
+        : '';
+
       results.push({
         userName,
         kid:      m ? m[1] : '',
         uid:      m ? m[2] : '',
         stringID,
+        dcheckValue,
       });
-    }
-
+      }  
     return {
       results,
       debugInfo: {
@@ -2443,6 +2452,7 @@ async function processUsers(
 ) {
   // 今回の実行分だけを記録するため、開始時にリセットする
   skippedUsers = [];
+  let markAsRepliedTargets = [];
   let autoSendCount = 0;
   let dangerCount = 0;
   let errorCount = 0;
@@ -2452,6 +2462,140 @@ async function processUsers(
   // page = mg_ope.php（親フレームページ）
   // ope_menuフレームから対象ユーザーを取得
 let targets = await getTargetUsers(page);
+
+// ======================================================
+// 返信済み化候補を左メニューでまとめて処理
+// ======================================================
+async function markTargetsAsReplied(page, targets, dryRun = false) {
+  if (!Array.isArray(targets) || targets.length === 0) {
+    console.log('[MARK-REPLIED] 返信済み化対象なし');
+    return {
+      markedCount: 0
+    };
+  }
+
+  const menuFrame = page.frame({ name: 'ope_menu' });
+
+  if (!menuFrame) {
+    console.error(
+      '[MARK-REPLIED] ope_menuフレームが取得できません'
+    );
+
+    return {
+      markedCount: 0
+    };
+  }
+
+  // 同じDcheck値が重複していた場合に備えて除去
+  const uniqueValues = [
+    ...new Set(
+      targets
+        .map(item => String(item.dcheckValue || '').trim())
+        .filter(Boolean)
+    )
+  ];
+
+  if (uniqueValues.length === 0) {
+    console.log(
+      '[MARK-REPLIED] 有効なDcheck値がありません'
+    );
+
+    return {
+      markedCount: 0
+    };
+  }
+
+  console.log(
+    `[MARK-REPLIED] 返信済み化対象 ${uniqueValues.length}件`
+  );
+
+  if (dryRun) {
+    console.log(
+      `[DRY RUN] 返信済み化をスキップ: ${JSON.stringify(uniqueValues)}`
+    );
+
+    return {
+      markedCount: 0
+    };
+  }
+
+  let checkedCount = 0;
+
+  for (const value of uniqueValues) {
+    const checkbox = menuFrame.locator(
+      `input.checkInput[value="${value}"]`
+    );
+
+    if (await checkbox.count() === 0) {
+      console.log(
+        `[MARK-REPLIED] checkboxが見つかりません: ${value}`
+      );
+
+      continue;
+    }
+
+    try {
+      await checkbox.first().check();
+
+      checkedCount++;
+
+      console.log(
+        `[MARK-REPLIED] チェックON: ${value}`
+      );
+
+    } catch (err) {
+      console.error(
+        `[MARK-REPLIED] チェック失敗: ${value} ${err.message}`
+      );
+    }
+  }
+
+  if (checkedCount === 0) {
+    console.log(
+      '[MARK-REPLIED] チェックできた対象が0件のため終了'
+    );
+
+    return {
+      markedCount: 0
+    };
+  }
+
+  const replyButton = menuFrame.locator(
+    'input[type="button"][name="submit"][value="返信済みにする"]'
+  );
+
+  if (await replyButton.count() === 0) {
+    console.error(
+      '[MARK-REPLIED] 「返信済みにする」ボタンが見つかりません'
+    );
+
+    return {
+      markedCount: 0
+    };
+  }
+
+  // onclick内のconfirmダイアログをOK
+  page.once('dialog', async dialog => {
+    console.log(
+      `[MARK-REPLIED] ダイアログ: ${dialog.message()}`
+    );
+
+    await dialog.accept();
+  });
+
+  await replyButton.first().click();
+
+  // 左一覧の更新待ち
+  await page.waitForTimeout(1000);
+
+  console.log(
+    `[MARK-REPLIED] ${checkedCount}件を返信済みにしました`
+  );
+
+  return {
+    markedCount: checkedCount
+  };
+}
 
 console.log(`[LIST] 抽出ユーザー: ${targets.length}件`);
 
@@ -2480,7 +2624,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     return;
   }
 
-  for (const { userName, kid, uid, stringID } of targets) {
+  for (const { userName, kid, uid, stringID, dcheckValue } of targets) {
     if (_shouldStop) {
       console.log('[STOP] 停止要求により中断');
       break;
@@ -2554,6 +2698,29 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     // ─── メッセージ履歴の詳細判定 ───────────────────────────────
     const analysis = await analyzeMessages(page);
     if (!analysis.target) {
+
+      const shouldMarkAsReplied =
+        analysis.reason === '最新メッセージが鑑定士（返信済み）' ||
+        analysis.reason === 'ユーザーメッセージに「既」あり';
+
+      if (
+        shouldMarkAsReplied &&
+        dcheckValue
+      ) {
+        markAsRepliedTargets.push({
+          userName,
+          uid,
+          kid,
+          dcheckValue,
+          reason: analysis.reason
+        });
+
+        console.log(
+          `[MARK-REPLIED] ${userName}: 返信済み化候補へ追加 ` +
+          `reason="${analysis.reason}" dcheck=${dcheckValue}`
+        );
+      }
+
       console.log(`[SKIP] ${userName}: ${analysis.reason}`);
       recordSkip(analysis.reason);
       continue;
@@ -2686,6 +2853,36 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         `[AUTO-CHECK] ${userName}: 最新ユーザー本文="${normalizedUserText.slice(0, 80)}" ` +
         `文字数=${normalizedUserText.length}`
       );
+
+
+      // ここに「？ / ?」判定を追加
+      const hasUserQuestion = userTextsForAuto.some(text =>
+        /[？?]/.test(String(text || ''))
+      );
+
+      if (
+        hasUserQuestion &&
+        !isQuestionComment
+      ) {
+        console.log(
+          `[AUTO-CHECK] ${userName}: ユーザー質問（？/?）を検出 → 対象外`
+        );
+
+        recordSkip(
+          '自動返信対象外: ユーザーメッセージに質問（？/?）あり'
+        );
+
+        continue;
+      }
+
+      if (
+        hasUserQuestion &&
+        isQuestionComment
+      ) {
+        console.log(
+          `[AUTO-QUESTION] ${userName}: 質問型コメントのため？/?を許容`
+        );
+      }      
 
       // --------------------------------------------------
       // 15文字以上なら自動返信対象外
@@ -3913,11 +4110,18 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       continue;
     }
   }
+
+  const markResult = await markTargetsAsReplied(
+  page,
+  markAsRepliedTargets,
+  DRY_RUN
+  );
   return {
     sentCount: autoSendCount,
     skippedCount: skippedUsers.length,
     dangerCount,
-    errorCount
+    errorCount,
+    markedRepliedCount: markResult.markedCount
   };
 }
 
@@ -4524,7 +4728,7 @@ async function batchSearchAndReply(searchComment, sendLine, waitForLineReply, DR
     const targets = await getTargetUsers(supportPage);
     console.log(`[BATCH-SEARCH] 対象ユーザー: ${targets.length}件`);
 
-    for (const { userName, kid, uid, stringID } of targets) {
+    for (const { userName, kid, uid, stringID, dcheckValue } of targets) {
       if (_shouldStop) { console.log('[BATCH-SEARCH] 停止要求により中断'); break; }
 
       const mainFrame = await showConversation(supportPage, stringID, userName);
@@ -4722,7 +4926,16 @@ async function checkReplies(options = {}) {
           `送信件数：${result?.sentCount ?? 0}件`,
           `対象外件数：${result?.skippedCount ?? 0}件`,
           `危険文章：${result?.dangerCount ?? 0}件`,
+          `返信済み化：${result?.markedRepliedCount ?? 0}件`,
           `エラー：${result?.errorCount ?? 0}件`
+        ].join('\n')
+      );
+    }else {
+      await sendLine(
+        [
+          '【返信チェック結果】',
+          '',
+          `返信済み化：${result?.markedRepliedCount ?? 0}件`
         ].join('\n')
       );
     }
