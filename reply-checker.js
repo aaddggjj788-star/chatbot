@@ -1528,6 +1528,8 @@ function extractNickname(userTexts) {
 
     // ここではレイさんでお願いします
     /ここでは([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})さんでお願いします/,
+    // こちらではアキと呼んでください。
+    /こちらでは([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})と呼んでください/,
 
     // 友人にはケンちゃんと呼ばれます
     /友人には([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{1,12})(?:と|って)呼ばれ(?:ます|ています)/,
@@ -1567,6 +1569,10 @@ function extractNickname(userTexts) {
     }
 
     let candidate = String(match[1] || '').trim();
+
+  console.log(
+    `[NICKNAME-DEBUG] pattern=${pattern} raw="${match[1]}"`
+  );
 
     candidate = candidate.replace(
     /^(?:普段は|みんなには|みんなからは|周りからは|友達からは|友人には|こちらでは)/,
