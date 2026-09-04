@@ -321,16 +321,21 @@ function parseSubActionComment(commentStr) {
 // ho設定のreplaceHeaderで返信文の文頭部分を差し替える
 // ・<imgタグがある場合: <imgタグより上をreplaceHeaderに置換（<img以降はそのまま残す）
 // ・<imgタグがない場合: 文頭3段落をreplaceHeaderに置換（4段落目以降はそのまま残す）
-// ※CSV内の改行は実際の改行コードではなくリテラルの "\n\n"（バックスラッシュ+n×2）で
-//   段落区切りされているため、段落区切り "\n\n" で分割・再結合する。
+// ※渡されるreplyTextは、getReplyFromCSV（splitAColumn）で既に実改行へ変換済みの
+//   ケースと、テンプレート/shortReply等でリテラルの "\n"（バックスラッシュ+n）が
+//   残ったままのケースがあり得るため、リテラル "\n" を含む場合のみ実改行へ正規化して
+//   から、段落区切り（空行 = /\n\s*\n/）で分割・再結合する。
 function applyReplaceHeader(replyText, replaceHeader) {
   if (!replyText) return replaceHeader;
   const imgMatch = replyText.match(/<img/i);
   if (imgMatch) {
     return `${replaceHeader}\n${replyText.slice(imgMatch.index)}`;
   }
-  const lines = replyText.split('\\n\\n');
-  const rest = lines.slice(3).join('\\n\\n');
+  const normalizedText = replyText.includes('\\n')
+    ? replyText.replace(/\\n/g, '\n')
+    : replyText;
+  const paragraphs = normalizedText.split(/\n\s*\n/);
+  const rest = paragraphs.slice(3).join('\n\n');
   return rest ? `${replaceHeader}\n${rest}` : replaceHeader;
 }
 
