@@ -5207,4 +5207,14 @@ if (require.main === module) {
   checkReplies();
 }
 
-module.exports = { checkReplies, stopReplies, sendManualReply, inquireUserBody, inquireNextLine, batchSearchAndReply, sendLine, waitForLineReply, waitForLineReply };
+module.exports = {
+  checkReplies,
+  stopReplies,
+  sendManualReply,
+  inquireUserBody,
+  inquireNextLine,
+  batchSearchAndReply,
+  generateAiReplyForSkippedTarget,
+  sendLine,
+  waitForLineReply
+};
