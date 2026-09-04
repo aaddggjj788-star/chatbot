@@ -136,6 +136,40 @@ function stopReplyAutoScheduler() {
 }
 
 
+function isWithinReplyAutoActiveTime(config) {
+  const activeTime = config?.activeTime;
+
+  // 設定がない場合は常時稼働
+  if (!activeTime?.start || !activeTime?.end) {
+    return true;
+  }
+
+  const parseMinutes = (time) => {
+    const [h, m] = String(time).split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const startMin = parseMinutes(activeTime.start);
+  const endMin = parseMinutes(activeTime.end);
+
+  const now = new Date();
+  const currentMin = now.getHours() * 60 + now.getMinutes();
+
+  // start=end は常時稼働
+  if (startMin === endMin) {
+    return true;
+  }
+
+  // 例: 09:00～23:00
+  if (startMin < endMin) {
+    return currentMin >= startMin && currentMin < endMin;
+  }
+
+  // 例: 23:00～09:00
+  return currentMin >= startMin || currentMin < endMin;
+}
+
+
 // ======================================================
 // 自動返信 次回巡回予約
 // ======================================================
@@ -164,6 +198,18 @@ function scheduleNextReplyAutoRun() {
   // 停止されていたら何もしない
   if (!latestConfig.enabled) {
     console.log('[AUTO-REPLY] 設定OFFのため巡回を中止します');
+    return;
+  }
+
+  // 自動返信の稼働時間外ならreply-checkerを起動せず、
+  // 通知も送らずに次回巡回だけ予約する
+  if (!isWithinReplyAutoActiveTime(latestConfig)) {
+    console.log(
+      `[AUTO-REPLY] 稼働時間外のため巡回を休止します ` +
+      `(${latestConfig.activeTime?.start || '?'}～${latestConfig.activeTime?.end || '?'})`
+    );
+
+    scheduleNextReplyAutoRun();
     return;
   }
 
@@ -202,7 +248,7 @@ function scheduleNextReplyAutoRun() {
       maxSendPerRun: latestConfig.maxSendPerRun,
       retry: latestConfig.retry
     });
-
+   
   } catch (err) {
     console.error(
       '[AUTO-REPLY] reply-checker実行エラー:',

@@ -1,8 +1,12 @@
 {
-  "enabled": false,
-  "intervalMinutes": 20,
+  "enabled": true,
+  "intervalMinutes": 15,
   "targetKids": [],
   "maxSendPerRun": 50,
+  "activeTime": {
+    "start": "09:00",
+    "end": "23:00"
+  },
   "retry": {
     "login": 2,
     "pageLoad": 2
