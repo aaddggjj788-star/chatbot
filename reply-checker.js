@@ -1750,10 +1750,30 @@ async function saveMemo1(frame, userText, dryRun) {
 }
 
 // saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存（最新1件のみ）
-async function saveNickname(frame, userText, dryRun, sendLine, waitForLineReply) {
+async function saveNickname(frame, userText, dryRun, sendLine, waitForLineReply,autoMode = false) {
   let { nickname } = extractNickname([userText]);
 
   if (!nickname) {
+
+    // ======================================================
+    // 自動巡回時
+    // ニックネーム保存だけスキップして返信処理は続行
+    // ======================================================
+    if (autoMode) {
+      console.log(
+        `[SPECIAL] saveNickname: 自動巡回でニックネームを抽出できませんでした → ニックネーム保存のみスキップ`
+      );
+
+      return {
+        saved: false,
+        skipped: true
+      };
+    }
+
+    // ======================================================
+    // 手動返信チェック時
+    // 従来どおり人間へ確認
+    // ======================================================
     await sendLine(
       `【ニックネーム未取得】\n\n` +
       `ユーザーメッセージ：\n` +
@@ -1764,8 +1784,16 @@ async function saveNickname(frame, userText, dryRun, sendLine, waitForLineReply)
       `手動で入力するニックネームを送信してください。\n` +
       `（スキップする場合は「スキップ」）`
     );
+
     const reply = await waitForLineReply();
-    if (reply === 'スキップ' || !reply) return;
+
+    if (reply === 'スキップ' || !reply) {
+      return {
+        saved: false,
+        skipped: true
+      };
+    }
+
     nickname = reply;
   }
   console.log(`[SPECIAL] saveNickname: 抽出ニックネーム="${nickname}"`);
@@ -1779,10 +1807,16 @@ async function saveNickname(frame, userText, dryRun, sendLine, waitForLineReply)
   await frame.click('input[name="memo_henko"]#appointment_memo');
   await frame.waitForLoadState('networkidle').catch(() => {});
   console.log(`[SPECIAL] saveNickname: "${nickname}" 保存完了`);
+
+  return {
+    saved: true,
+    nickname
+  };
+
 }
 
 // specialProcessリストを実行する（ope_mainフレーム内で直接操作）
-async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bodyNaibuTexts) {
+async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bodyNaibuTexts,autoMode = false) {
   if (!processes || processes.length === 0) return;
 
   // div.bodyNaibu から取得したテキストを優先。なければ analysis のフォールバック
@@ -1810,7 +1844,7 @@ async function executeSpecialProcess(processes, page, uid, analysis, dryRun, bod
       if (proc === 'saveMemo1') {
         await saveMemo1(mainFrame, latestUserText, dryRun);
       } else if (proc === 'saveNickname') {
-        await saveNickname(mainFrame, latestUserText, dryRun, sendLine, waitForLineReply);
+        await saveNickname(mainFrame, latestUserText, dryRun, sendLine, waitForLineReply,autoMode);
       } else {
         console.log(`[SPECIAL] 未実装のprocess: "${proc}"`);
       }
@@ -2935,7 +2969,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         // specialProcessがある場合はbranch/searchTargetの前に実行
         if (actionCfg.specialProcess) {
           console.log(`[JSON] subAction specialProcess: ${JSON.stringify(actionCfg.specialProcess)}`);
-          await executeSpecialProcess(actionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts);
+          await executeSpecialProcess(actionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts,autoMode);
         }
 
         if (actionCfg.searchTarget) {
@@ -3094,7 +3128,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       if (hoActionCfg && !isSinkoHo) {
         if (hoActionCfg.specialProcess) {
           console.log(`[JSON] ho specialProcess: ${JSON.stringify(hoActionCfg.specialProcess)}`);
-          await executeSpecialProcess(hoActionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts);
+          await executeSpecialProcess(hoActionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts,autoMode);
         }
 
         if (hoActionCfg.branch) {
@@ -3382,7 +3416,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       if (actionCfg) {
         if (actionCfg.specialProcess) {
           console.log(`[JSON] specialProcess: ${JSON.stringify(actionCfg.specialProcess)}`);
-          await executeSpecialProcess(actionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts);
+          await executeSpecialProcess(actionCfg.specialProcess, page, uid, analysis, DRY_RUN, bodyNaibuTexts,autoMode);
         }
 
         if (actionCfg.branch) {
