@@ -4850,6 +4850,13 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
     // ・useNextComment=false（デフォルト）: 最終コメントアウトと同一
     // ・useNextComment=true: 次のコメントアウト（番号+1）
     const commentToAppend = useNextComment ? computeNextComment(latestComment) : latestComment;
+    const commentTagToAppend = commentToAppend
+      ? (
+          commentToAppend.startsWith('<!--')
+            ? commentToAppend
+            : `<!--${commentToAppend}-->`
+        )
+      : '';
 
     // 返信文の末尾にコメントアウトを付与したものを確認通知・実送信の両方で使う。
     // プレーンテキスト（例:「12686yu1/sinko/2」）はコメントアウト形式に整える。
@@ -4871,7 +4878,12 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
       '---',
       finalReplyText,
       '---',
-      '「送信」または「スキップ」',
+      '「送信」：そのまま送信',
+      '「スキップ」：送信しない',
+      '「差し込み#{文章}」：2行目の後に文章を追加',
+      '「差し込み{N}#{文章}」：指定したN行目の後に文章を追加',
+      '「差し替え#{文章}」：返信文を丸ごと差し替え',
+      '「差し替え前文#{文章}」：返信文の前半部分のみ差し替え',
     ].join('\n'));
 
     let reply;
@@ -4884,11 +4896,29 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
     }
     console.log(`[MANUAL-REPLY] uid=${uid} 確認返信: ${reply}`);
 
-    if (reply !== '送信') {
-      console.log(`[MANUAL-REPLY] uid=${uid}: 「送信」以外 → スキップ`);
-      await sendLine(`【対象外返信】会員ID：${uid}\nスキップしました`);
+    const decision = await resolveConfirmCommand({
+      reply,
+      replyText: effectiveReplyText,
+      nextComment: commentTagToAppend,
+      latestComment,
+      charaId: String(kid),
+      sendLine,
+      waitForLineReply,
+    });
+
+    if (!decision.send) {
+      console.log(
+        `[MANUAL-REPLY] uid=${uid}: ${decision.reason || 'スキップ'}`
+      );
+
+      await sendLine(
+        `【対象外返信】会員ID：${uid}\n${decision.reason || 'スキップしました'}`
+      );
+
       return;
     }
+
+    finalReplyText = decision.text;
 
     if (DRY_RUN) {
       console.log(`[DRY RUN] uid=${uid}: 対象外返信の送信をスキップ`);
