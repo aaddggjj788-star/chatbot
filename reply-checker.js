@@ -4041,73 +4041,30 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     const targetCommentLine = latestComment
       ? `対象コメントアウト：${latestComment}${historyNotFound ? '（※履歴なし→sinko/1から開始）' : ''}`
       : '対象コメントアウト：（なし）';
-    const lineMsg = analysis.hasLongMessage
-      ? [
-          '【長文メッセージあり】',
-          `ユーザー：${userName}（u_id: ${uid}）`,
-          latestKanteishiLine,
-          targetCommentLine,
-          '',
-          userMsgLabel,
-          '---',
-          (analysis.longMessageTexts || []).join('\n'),
-          '---',
-          '返信文：',
-          '---',
-          displayReplyText,
-          replyData.nextComment,
-          '---',
-          '送信する場合は「送信」',
-          'スキップする場合は「スキップ」と返信してください',
-        ].join('\n')
-      : analysis.nengenNotFound
-      ? [
-          '【念言未検出】',
-          `ユーザー：${userName}（u_id: ${uid}）`,
-          latestKanteishiLine,
-          targetCommentLine,
-          `念言：${(analysis.nengenWords || []).join('、')}`,
-          '',
-          userMsgLabel,
-          '---',
-          (analysis.nengenUserTexts || []).join('\n'),
-          '---',
-          '返信文：',
-          '---',
-          displayReplyText,
-          replyData.nextComment,
-          '---',
-          '「送信」：そのまま送信',
-          '「スキップ」：スキップ',
-          '「差し込み#{文章}」：2行目の後に挿入して確認',
-          '「差し替え#{文章}」：返信文を差し替えて確認',
-        ].join('\n')
-      : [
-          '【返信確認】',
-          `ユーザー：${userName}（u_id: ${uid}）`,
-          latestKanteishiLine,
-          targetCommentLine,
-          ...(alwaysQuoteUser ? [
-            userMsgLabel,
-            '---',
-            buildQuoteText(bodyNaibuTexts, analysis),
-            '---',
-          ] : analysis.hasConsultation ? [
-            userMsgLabel,
-            '---',
-            (analysis.consultationTexts || []).join('\n'),
-            '---',
-          ] : []),
-          '返信文：',
-          '---',
-          displayReplyText,
-          replyData.nextComment,
-          '---',
-          '「送信」：そのまま送信',
-          '「スキップ」：スキップ',
-          '「差し込み#{文章}」：2行目の後に挿入して確認',
-          '「差し替え#{文章}」：返信文を差し替えて確認',
-        ].join('\n');
+    // キャラ名：kanteishi（k_id）設定JSONの name を使用（未設定時はk_idを表示）
+    const charaName = loadCharaConfig(kid)?.name || kid;
+    // マッチワード：念言（送り返す言葉）。未検出/念言なしの場合は「なし」
+    const matchWord = (analysis.nengenWords || []).join('、') || 'なし';
+    // ─── LINE確認通知（統一フォーマット）─────────────────────────
+    // 【返信確認】【長文メッセージあり】【念言未検出】の3分岐を廃止し、
+    // 全ケースを下記の単一フォーマットで通知する。
+    const lineMsg = [
+      `キャラ名：${charaName}`,
+      `ユーザー名：${userName}（u_id: ${uid}）`,
+      latestKanteishiLine,
+      targetCommentLine,
+      `マッチワード：${matchWord}`,
+      userMsgLabel,
+      '---',
+      buildQuoteText(bodyNaibuTexts, analysis),
+      '---',
+      '返信文：',
+      '---',
+      displayReplyText,
+      replyData.nextComment,
+      '---',
+      '「送信」「スキップ」「差し込み#文章」「差し込み3#文章」「差し込み4#文章」「差し替え#文章」「差し替え前文#文章」',
+    ].join('\n');
         if (!autoMode) {
           await sendLine(lineMsg);
         }
