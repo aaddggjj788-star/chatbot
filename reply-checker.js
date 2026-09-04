@@ -4499,22 +4499,6 @@ async function generateAiReplyForSkippedTarget(index, sendLine) {
         `[AI-REPLY] 対象外ID=${index} kid=${kid} user=${userName}`
       );
 
-      await sendLine(
-        [
-          '【AI返信用会話取得テスト】',
-          `対象外ID：${index}`,
-          `ユーザー：${userName}`,
-          `u_id：${uid}`,
-          `k_id：${kid}`,
-          '',
-          '【最新鑑定士メッセージ】',
-          kanteishiText,
-          '',
-          '【ユーザーメッセージ群】',
-          combinedUserText
-        ].join('\n')
-      );
-
       console.log(
         `[AI-REPLY] userTexts=${userTexts.length}件`
       );
@@ -4528,7 +4512,90 @@ async function generateAiReplyForSkippedTarget(index, sendLine) {
         `[AI-REPLY] ユーザー本文:\n${combinedUserText}`
       );
 
-      // この次にOpenAI生成処理を入れる
+      
+
+    const profileText = JSON.stringify(profile, null, 2);
+
+    const response = await openai.responses.create({
+      model: 'gpt-5-mini',
+
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                'あなたは鑑定士の返信文を作成する補助AIです。',
+                '以下の鑑定士プロフィールと直前の会話内容を参考に、',
+                'この鑑定士本人が自然に返信したような文章を作成してください。',
+                '',
+                '【重要ルール】',
+                '・ユーザーの発言内容を無視しない',
+                '・質問がある場合は、その質問に自然に答える',
+                '・勝手に新しい設定や事実を作らない',
+                '・AI、システム、内部処理について言及しない',
+                '・管理用コメントアウトは出力しない',
+                '・返信本文だけを出力する',
+                '',
+                '【鑑定士プロフィール】',
+                profileText
+              ].join('\n')
+            }
+          ]
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                '【直前の鑑定士メッセージ】',
+                kanteishiText,
+                '',
+                '【その後のユーザーメッセージ】',
+                combinedUserText,
+                '',
+                'この流れに対する自然な返信文を作成してください。'
+              ].join('\n')
+            }
+          ]
+        }
+      ]
+    });
+
+    const aiReply =
+      response.output_text
+        ? response.output_text.trim()
+        : '';
+
+    if (!aiReply) {
+      await sendLine(
+        [
+          '【AI返信生成エラー】',
+          `対象外ID：${index}`,
+          'OpenAIから返信文を取得できませんでした'
+        ].join('\n')
+      );
+      return;
+    }
+
+    console.log(
+      `[AI-REPLY] 生成完了 対象外ID=${index} 文字数=${aiReply.length}`
+    );
+
+    await sendLine(
+      [
+        '【AI返信案】',
+        `対象外ID：${index}`,
+        `ユーザー：${userName}`,
+        `u_id：${uid}`,
+        `k_id：${kid}`,
+        '',
+        '【返信案】',
+        aiReply
+      ].join('\n')
+    );
     }
   );
 }
