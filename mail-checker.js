@@ -175,7 +175,11 @@ async function checkMail() {
       }
 
       const rawPart = msg.parts.find(p => p.which === '');
-      if (!rawPart) continue;
+      if (!rawPart) {
+        console.log('  スキップ（本文取得不可） → 既読化');
+        await markAsSeen(connection, msg); // 本文が取得できないため再試行しても解決しない
+        continue;
+      }
 
       console.log(`  [MAIL] メール処理開始 (UID:${msg.attributes.uid})`);
 
@@ -185,6 +189,7 @@ async function checkMail() {
       } catch (err) {
         console.error('メールパースエラー:', err.message);
         await sendLine(`【システムエラー】メールのパースに失敗しました：${err.message}`);
+        await markAsSeen(connection, msg); // 内容は変わらないため再試行しても解決しない
         continue;
       }
 
@@ -193,7 +198,8 @@ async function checkMail() {
       if (!TEST_MODE) {
         const subject = parsed.subject || '';
         if (!subject.includes(TARGET_SUBJECT)) {
-          console.log(`  スキップ（件名不一致） 件名="${subject}"`);
+          console.log(`  スキップ（件名不一致） 件名="${subject}" → 既読化`);
+          await markAsSeen(connection, msg); // 対象外メールのため既読化して再検出を防ぐ
           continue;
         }
       }
