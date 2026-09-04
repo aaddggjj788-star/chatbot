@@ -4309,6 +4309,112 @@ function cleanAiConversationText(text) {
 }
 
 
+async function getAiConversationTexts(page) {
+  const mainFrame = page.frame({ name: 'ope_main' });
+
+  if (!mainFrame) {
+    throw new Error('ope_mainフレームが取得できません');
+  }
+
+  return await mainFrame.evaluate(() => {
+    function normStyle(el) {
+      return (el.getAttribute('style') || '')
+        .replace(/\s/g, '')
+        .toLowerCase();
+    }
+
+    function decodeBody(text) {
+      return String(text || '')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/\x3C/g, '<')
+        .replace(/\x3E/g, '>');
+    }
+
+    function cleanBody(text) {
+      return decodeBody(text)
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+    }
+
+    const msgs = [];
+
+    for (const trEl of document.querySelectorAll('tr')) {
+      const trBg = normStyle(trEl);
+      const tdBg = Array.from(trEl.querySelectorAll('td'))
+        .map(td => normStyle(td))
+        .join('');
+
+      const bg = trBg + tdBg;
+
+      let type = null;
+
+      if (
+        bg.includes('90ee90') ||
+        bg.includes('144,238,144')
+      ) {
+        type = 'kanteishi';
+      } else if (
+        bg.includes('aaaaff') ||
+        bg.includes('ffaaaa')
+      ) {
+        type = 'user';
+      } else {
+        continue;
+      }
+
+      const bodyInput = trEl.querySelector(
+        'input[type="hidden"][id^="body_"]'
+      );
+
+      const bodyNaibu = trEl.querySelector('div.bodyNaibu');
+
+      let bodyText = '';
+
+      if (bodyInput) {
+        bodyText = bodyInput.value || '';
+      } else if (bodyNaibu) {
+        bodyText = bodyNaibu.textContent || '';
+      }
+
+      bodyText = cleanBody(bodyText);
+
+      if (!bodyText) continue;
+
+      msgs.push({
+        type,
+        bodyText
+      });
+    }
+
+    // 上が最新
+    const firstKIdx = msgs.findIndex(m => m.type === 'kanteishi');
+
+    if (firstKIdx === -1) {
+      return {
+        latestKanteishiText: '',
+        userTexts: []
+      };
+    }
+
+    const latestKanteishiText =
+      msgs[firstKIdx].bodyText || '';
+
+    const userTexts = msgs
+      .slice(0, firstKIdx)
+      .filter(m => m.type === 'user')
+      .map(m => m.bodyText)
+      .filter(Boolean);
+
+    return {
+      latestKanteishiText,
+      userTexts
+    };
+  });
+}
+
 async function generateAiReplyForSkippedTarget(index, sendLine) {
   return await withSkippedTargetConversation(
     index,
@@ -4334,16 +4440,21 @@ async function generateAiReplyForSkippedTarget(index, sendLine) {
       }
 
       // 既存の会話解析をそのまま利用
-      const analysis = await analyzeMessages(supportPage);
+      const conversation =
+        await getAiConversationTexts(supportPage);
 
       const kanteishiText =
-        cleanAiConversationText(analysis.kanteishiBodyText);
+        cleanAiConversationText(
+          conversation.latestKanteishiText
+        );
 
-      const userTexts = (analysis.bodyNaibuTexts || [])
-        .map(cleanAiConversationText)
-        .filter(Boolean);
+      const userTexts =
+        (conversation.userTexts || [])
+          .map(cleanAiConversationText)
+          .filter(Boolean);
 
-      const combinedUserText = userTexts.join('\n\n');
+      const combinedUserText =
+        userTexts.join('\n\n');
 
       if (!kanteishiText) {
         await sendLine(
