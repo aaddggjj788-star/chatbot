@@ -4415,7 +4415,11 @@ async function getAiConversationTexts(page) {
   });
 }
 
-async function generateAiReplyForSkippedTarget(index, sendLine) {
+async function generateAiReplyForSkippedTarget(
+  index,
+  sendLine,
+  waitForLineReply
+) {
   return await withSkippedTargetConversation(
     index,
     sendLine,
@@ -4583,18 +4587,17 @@ async function generateAiReplyForSkippedTarget(index, sendLine) {
     console.log(
       `[AI-REPLY] 生成完了 対象外ID=${index} 文字数=${aiReply.length}`
     );
+    console.log(
+      `[AI-REPLY] 生成した返信案を確認フローへ渡します 対象外ID=${index}`
+    );
 
-    await sendLine(
-      [
-        '【AI返信案】',
-        `対象外ID：${index}`,
-        `ユーザー：${userName}`,
-        `u_id：${uid}`,
-        `k_id：${kid}`,
-        '',
-        '【返信案】',
-        aiReply
-      ].join('\n')
+    await sendManualReply(
+      index,
+      aiReply,
+      sendLine,
+      waitForLineReply,
+      false,
+      false
     );
     }
   );
