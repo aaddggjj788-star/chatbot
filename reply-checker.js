@@ -1171,6 +1171,114 @@ async function analyzeMessages(page) {
   return { ...result, bodyNaibuTexts, hasLongMessage, longMessageTexts };
 }
 
+
+// ─── AI返答生成 ───────────────────────────────────────────
+
+
+function loadReplyAiProfile(kid) {
+  const profilePath = path.join(
+    __dirname,
+    'reply-ai-profiles',
+    `${kid}.json`
+  );
+
+  if (!fs.existsSync(profilePath)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(
+      fs.readFileSync(profilePath, 'utf8')
+    );
+  } catch (err) {
+    console.error(
+      `[AI-REPLY] プロファイル読込エラー kid=${kid}: ${err.message}`
+    );
+
+    return null;
+  }
+}
+
+
+async function getConversationForAiReply(page) {
+  const mainFrame = page.frame({ name: 'ope_main' });
+
+  if (!mainFrame) {
+    throw new Error('ope_mainフレームが取得できません');
+  }
+
+  return await mainFrame.evaluate(() => {
+    function normStyle(el) {
+      return (el.getAttribute('style') || '')
+        .replace(/\s/g, '')
+        .toLowerCase();
+    }
+
+    function getBodyText(tr) {
+      const bodyInput = tr.querySelector(
+        'input[type="hidden"][id^="body_"]'
+      );
+
+      const bodyNaibu = tr.querySelector('div.bodyNaibu');
+
+      let bodyText = '';
+
+      if (bodyInput) {
+        bodyText = bodyInput.value || '';
+      } else if (bodyNaibu) {
+        bodyText = bodyNaibu.textContent || '';
+      }
+
+      return bodyText
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+    }
+
+    const rows = Array.from(document.querySelectorAll('tr'));
+
+    const userTexts = [];
+    let latestKanteishiText = '';
+
+    for (const tr of rows) {
+      const trBg = normStyle(tr);
+
+      const tdBg = Array.from(tr.querySelectorAll('td'))
+        .map(td => normStyle(td))
+        .join('');
+
+      const bg = trBg + tdBg;
+
+      const isKanteishi =
+        bg.includes('90ee90') ||
+        bg.includes('144,238,144');
+
+      const bodyText = getBodyText(tr);
+
+      if (!bodyText) continue;
+
+      // 上から順に最新 → 過去
+      if (isKanteishi) {
+        latestKanteishiText = bodyText;
+        break;
+      }
+
+      // 最初の鑑定士メッセージに到達するまで、
+      // 上にあるユーザーメッセージをすべて集める
+      userTexts.push(bodyText);
+    }
+
+    return {
+      latestKanteishiText,
+      userTexts,
+      combinedUserText: userTexts.join('\n\n')
+    };
+  });
+}
+
 // ─── キャラ設定読み込み ───────────────────────────────────────────
 
 function loadCharaConfig(charaId) {
@@ -4184,6 +4292,112 @@ function computeNextComment(comment) {
 //   ope_mainに会話を表示 → fn({ supportPage, target, uid, kid, userName }) を呼ぶ
 // ブラウザの起動/終了はここで行い、fnの中で会話操作・通知を行う。
 // sendLine は呼び出し側（server.js）から渡す。
+
+
+function cleanAiConversationText(text) {
+  if (!text) return '';
+
+  return String(text)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+
+async function generateAiReplyForSkippedTarget(index, sendLine) {
+  return await withSkippedTargetConversation(
+    index,
+    sendLine,
+    async ({ supportPage, uid, kid, userName }) => {
+
+      // kidごとのAIプロフィール
+      const profile = loadReplyAiProfile(kid);
+
+      if (!profile) {
+        await sendLine(
+          [
+            '【AI返信生成エラー】',
+            `対象外ID：${index}`,
+            `ユーザー：${userName}`,
+            `u_id：${uid}`,
+            `k_id：${kid}`,
+            '',
+            `reply-ai-profiles/${kid}.json が見つかりません`
+          ].join('\n')
+        );
+        return;
+      }
+
+      // 既存の会話解析をそのまま利用
+      const analysis = await analyzeMessages(supportPage);
+
+      const kanteishiText =
+        cleanAiConversationText(analysis.kanteishiBodyText);
+
+      const userTexts = (analysis.bodyNaibuTexts || [])
+        .map(cleanAiConversationText)
+        .filter(Boolean);
+
+      const combinedUserText = userTexts.join('\n\n');
+
+      if (!kanteishiText) {
+        await sendLine(
+          `【AI返信生成エラー】\n対象外ID：${index}\n最新の鑑定士本文を取得できませんでした`
+        );
+        return;
+      }
+
+      if (!combinedUserText) {
+        await sendLine(
+          `【AI返信生成エラー】\n対象外ID：${index}\nユーザー本文を取得できませんでした`
+        );
+        return;
+      }
+
+      console.log(
+        `[AI-REPLY] 対象外ID=${index} kid=${kid} user=${userName}`
+      );
+
+      await sendLine(
+        [
+          '【AI返信用会話取得テスト】',
+          `対象外ID：${index}`,
+          `ユーザー：${userName}`,
+          `u_id：${uid}`,
+          `k_id：${kid}`,
+          '',
+          '【最新鑑定士メッセージ】',
+          kanteishiText,
+          '',
+          '【ユーザーメッセージ群】',
+          combinedUserText
+        ].join('\n')
+      );
+
+      console.log(
+        `[AI-REPLY] userTexts=${userTexts.length}件`
+      );
+
+
+      console.log(
+        `[AI-REPLY] 鑑定士本文:\n${kanteishiText}`
+      );
+
+      console.log(
+        `[AI-REPLY] ユーザー本文:\n${combinedUserText}`
+      );
+
+      // この次にOpenAI生成処理を入れる
+    }
+  );
+}
+
+
 async function withSkippedTargetConversation(index, sendLine, fn) {
   if (!index) {
     await sendLine('【エラー】対象外返信: 番号が指定されていません');
@@ -4967,4 +5181,4 @@ if (require.main === module) {
   checkReplies();
 }
 
-module.exports = { checkReplies, stopReplies, sendManualReply, inquireUserBody, inquireNextLine, batchSearchAndReply, sendLine, waitForLineReply };
+module.exports = { checkReplies, stopReplies, sendManualReply, inquireUserBody, inquireNextLine, batchSearchAndReply, sendLine, waitForLineReply, waitForLineReply };

@@ -824,6 +824,30 @@ async function processCommand(text, reply, source = 'LINE') {
   const nextInquiryMatch = text.match(/^対象外ID[:：]\s*(\d+)\s+次行照会$/);
   const nextMatch      = text.match(/^対象外ID[:：]\s*(\d+)\s+次行[:：]\s*([\s\S]+)$/);
   const normalMatch    = text.match(/^対象外ID[:：]\s*(\d+)\s+([\s\S]+)$/);
+  const aiReplyMatch = text.match(/^対象外ID[:：]\s*(\d+)\s+AI返信$/);
+
+  if (aiReplyMatch) {
+    const index = parseInt(aiReplyMatch[1], 10);
+
+    console.log(
+      `[${source}] AI返信生成: 対象外ID=${index}`
+    );
+
+    rc.generateAiReplyForSkippedTarget(
+      index,
+      rc.sendLine
+    ).catch(err =>
+      console.error(
+        '[AI返信生成] 実行エラー:',
+        err.message
+      )
+    );
+
+    return reply(
+      `【AI返信生成】対象外ID：${index}\n返信案の生成を開始しました`
+    );
+  }
+
   if (bunshoMatch) {
     const index = bunshoMatch[1];
     console.log(`[${source}] 本文照会: 対象外ID=${index}`);
@@ -846,6 +870,29 @@ async function processCommand(text, reply, source = 'LINE') {
       .catch(err => console.error('[MANUAL-REPLY] 実行エラー:', err.message));
     return reply(`【対象外返信】対象外ID：${index}\n処理を開始しました（次のコメントアウト）`);
   }
+
+  if (aiReplyMatch) {
+    const index = parseInt(aiReplyMatch[1], 10);
+
+    console.log(
+      `[${source}] AI返信生成: 対象外ID=${index}`
+    );
+
+    rc.generateAiReplyForSkippedTarget(
+      index,
+      rc.sendLine
+    ).catch(err =>
+      console.error(
+        '[AI返信生成] 実行エラー:',
+        err.message
+      )
+    );
+
+    return reply(
+      `【AI返信生成】対象外ID：${index}\n返信案の生成を開始しました`
+    );
+  }
+
   if (normalMatch) {
     const index = normalMatch[1];
     const replyText = normalMatch[2].trim();
