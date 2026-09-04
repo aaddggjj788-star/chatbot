@@ -4440,21 +4440,46 @@ async function generateAiReplyForSkippedTarget(index, sendLine) {
       }
 
       // 既存の会話解析をそのまま利用
-      const conversation =
-        await getAiConversationTexts(supportPage);
+  const conversation =
+    await getAiConversationTexts(supportPage);
 
-      const kanteishiText =
-        cleanAiConversationText(
-          conversation.latestKanteishiText
-        );
+  const kanteishiText =
+    cleanAiConversationText(
+      conversation.latestKanteishiText
+    );
 
-      const userTexts =
-        (conversation.userTexts || [])
-          .map(cleanAiConversationText)
-          .filter(Boolean);
+  // ユーザー本文は既存の取得処理を利用する
+  const mainFrame = supportPage.frame({ name: 'ope_main' });
 
-      const combinedUserText =
-        userTexts.join('\n\n');
+  if (!mainFrame) {
+    await sendLine(
+      `【AI返信生成エラー】\n対象外ID：${index}\nope_mainフレームを取得できませんでした`
+    );
+    return;
+  }
+
+  const rawUserTexts =
+    await getBodyNaibuTexts(mainFrame);
+
+  const userTexts =
+    (rawUserTexts || [])
+      .map(cleanAiConversationText)
+      .filter(Boolean);
+
+  const combinedUserText =
+    userTexts.join('\n\n');
+
+  console.log(
+    `[AI-REPLY] 鑑定士本文文字数=${kanteishiText.length}`
+  );
+
+  console.log(
+    `[AI-REPLY] ユーザー本文件数=${userTexts.length}`
+  );
+
+  console.log(
+    `[AI-REPLY] ユーザー本文先頭=${JSON.stringify(userTexts[0] || '')}`
+  );
 
       if (!kanteishiText) {
         await sendLine(
