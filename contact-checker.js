@@ -228,13 +228,16 @@ async function collectMemberBasicInfo(page, uid) {
 
     // 最終購入時間が本日日付と一致する場合のみ当日購入金額合計を取得する
     if (isLastPurchaseToday(info.lastPurchase)) {
-      // getBankHistory()はお知らせメール一覧から会員詳細へ戻る前提で
-      // window.history.back()を実行するため、戻り先が無くならないよう
-      // 同じURLをもう一度開いて履歴を1つ積んでおく
+      // 既に会員詳細ページ（kyouseitaikai）を開いている状態のため、
+      // getBankHistory()にskipBack:trueを渡してwindow.history.back()を行わせない。
+      // （back()すると別ページに戻ってしまい「ポイント増減履歴」クリックが
+      //   タイムアウトすることがあるため）
+      // 念のため同URLを開き直し、会員詳細ページを確実にロードした状態にしてから
+      // 履歴取得へ進む。
       await kyouseiPage.goto(kyouseiPage.url());
       await kyouseiPage.waitForLoadState('networkidle');
 
-      const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+      const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage, { skipBack: true });
       historyPage = hp;
       const todayAmount = paymentRows.reduce((sum, r) => sum + r.amount, 0);
       console.log(`[BASIC-INFO] uid=${uid}: 当日購入 ${paymentRows.length}件 合計${todayAmount}円`);

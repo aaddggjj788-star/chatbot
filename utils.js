@@ -683,12 +683,21 @@ async function resolvePrePaymentBalance(historyPage, todayRawRows, scrapeRows) {
 }
 
 async function getBankHistory(topPage, target, options = {}) {
-  const { resolvePrePayment = false } = options;
+  // skipBack: 既にkyouseitaikai（会員詳細）ページにいる場合にhistory.back()を
+  //   スキップする。BASIC-INFO取得（getMemberBasicInfo後）のように、呼び出し元で
+  //   既に会員詳細ページを開いておりブラウザバックすると別ページに戻ってしまう
+  //   ケースで true を渡す。お知らせメール一覧から会員詳細へ戻る従来ケースは
+  //   false（デフォルト）のまま。
+  const { resolvePrePayment = false, skipBack = false } = options;
   console.log(`[UTILS] kyouseiPage URL: ${target.url()}`);
 
-  console.log('[UTILS] ブラウザバックで会員詳細ページに戻る');
-  await target.evaluate(() => window.history.back());
-  await new Promise(r => setTimeout(r, 2000));
+  if (!skipBack) {
+    console.log('[UTILS] ブラウザバックで会員詳細ページに戻る');
+    await target.evaluate(() => window.history.back());
+    await new Promise(r => setTimeout(r, 2000));
+  } else {
+    console.log('[UTILS] skipBack=true のためブラウザバックをスキップ（既に会員詳細ページ）');
+  }
 
   // 会員詳細ページに戻ったこのタイミングでポイントくじクーポンのLvを取得しておく
   // （この後ポイント増減履歴へ遷移すると autoLv[116] が参照できなくなるため）
