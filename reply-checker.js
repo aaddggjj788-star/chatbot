@@ -121,7 +121,7 @@ function buildSkippedMessage() {
   return [
     '【返信チェック完了】',
     '対象外ユーザー：',
-    ...shown.join('\n\n'),
+    shown.join('\n\n'),
     ...(rest > 0 ? [`（ほか${rest}件は文字数上限のため省略）`] : []),
   ].join('\n');
 }
