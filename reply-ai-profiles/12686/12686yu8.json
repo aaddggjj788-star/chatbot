@@ -1,0 +1,83 @@
+{
+  "kid": "12686",
+  "characterName": "Ria・クロサキ",
+  "phase": "yu8",
+  "situation": "有料8日目。マイナス引力除去後、ヘブンズゲートを通過する主要工程。",
+  "startState": "yu7mu無料展開でマイナス引力除去が完了した後。ヘブンズゲート工程へ入る。",
+  "goal": "ヘブンズゲートの既存術式を順番通り進める。",
+  "currentProcess": [
+    {
+      "order": 1,
+      "name": "ヘブンズゲート開始",
+      "details": "既存画像と術式1～3を使用。"
+    },
+    {
+      "order": 2,
+      "name": "反復術式",
+      "details": "返信候補ごとに手順差があるため必ず候補を使用。"
+    },
+    {
+      "order": 3,
+      "name": "通過判定",
+      "details": "既存ログ上で完了した場合だけ通過済みと扱う。"
+    }
+  ],
+  "progressRules": [
+    "実際の進行は外部から渡される最新コメント、次行返信候補、spanRequired、検出済み送り返す言葉を優先する",
+    "既存奉言が確認できた場合だけ次行候補へ進める",
+    "必要個数が不明な工程ではAIが個数を推測しない",
+    "個数不足は外部判定に従いinsufficientSameLineまたはinsufficientNextLineを使う",
+    "質問が含まれていても回答のために進行順序を変更しない",
+    "未実施なら成果・完了・到達済み表現を使わない"
+  ],
+  "replyRules": [
+    "送り返す言葉だけの正常返信は既存次行候補へ進む",
+    "簡単な質問はshortAnswerまたはreplaceIntro",
+    "強い疑念・不安・相談はfullReply",
+    "不足は個数不足モード",
+    "既存ログの用語・口調をその日の最優先参考とする"
+  ],
+  "allowed": [
+    "現在の日程ですでに開示済みの設定説明",
+    "直前工程の補足",
+    "ユーザーの質問への回答",
+    "既案内工程への再誘導"
+  ],
+  "forbidden": [
+    "未完了でヘブンズゲート通過扱い",
+    "トリップ究極形態を先出し",
+    "yu9の奉言"
+  ],
+  "referenceLogs": [
+    {
+      "purpose": "通常返信",
+      "source": "yu8_有料8日目_コメント修正版.txt"
+    },
+    {
+      "purpose": "未返信掘り",
+      "source": "夜_レス有.txt"
+    }
+  ],
+  "spanRules": {
+    "spanCount": "外部判定値を使用。日程JSON単独では固定しない",
+    "insufficientHandling": "共通JSONのcountValidationとaiModesに従う"
+  },
+  "profileKey": "yu8",
+  "routing": {
+    "primaryCommentPrefix": "12686yu8/sinko/",
+    "selectionRule": "このsinkoパスが現在の返信ログに付いている時に本JSONを使用する",
+    "calendarDaysCovered": [
+      "yu8"
+    ],
+    "hoPathIsSupplementOnly": true
+  },
+  "calendarDaySupplements": {
+    "yu8": {
+      "role": "この返信ログと同じ暦日",
+      "hoComments": [
+        "12686yu8/ho"
+      ],
+      "rule": "掘り起こし内容は質問回答や状況補足に使えるが、返信工程はsinko候補を優先する"
+    }
+  }
+}

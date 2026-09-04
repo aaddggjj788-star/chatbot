@@ -579,6 +579,105 @@ function splitAColumn(aContent) {
   };
 }
 
+
+function resolveAiPhaseProfile(kid, latestComment) {
+  const baseKid = String(kid || '').trim();
+
+  if (!baseKid || !latestComment) {
+    return {
+      phaseKey: null,
+      phaseProfile: null,
+      requestedPhaseKey: null
+    };
+  }
+
+  // 例:
+  // 12686yu7/sinko/3
+  // 12686yu7/ho
+  // 12686mu2/sinko/4
+  const m = String(latestComment).match(
+    /^(\d+)(mu|yu)(\d+)/
+  );
+
+  if (!m) {
+    console.warn(
+      `[AI-PROFILE] 日程解析失敗 comment="${latestComment}"`
+    );
+
+    return {
+      phaseKey: null,
+      phaseProfile: null,
+      requestedPhaseKey: null
+    };
+  }
+
+  const commentKid = m[1];
+  const phaseType = m[2]; // mu / yu
+  const requestedDay = Number(m[3]);
+
+  const requestedPhaseKey =
+    `${commentKid}${phaseType}${requestedDay}`;
+
+  // 最新日程から1日ずつ下げて存在確認
+  for (let day = requestedDay; day >= 1; day--) {
+    const phaseKey =
+      `${commentKid}${phaseType}${day}`;
+
+    const phasePath = path.join(
+      __dirname,
+      'reply-ai-profiles',
+      baseKid,
+      `${phaseKey}.json`
+    );
+
+    if (!fs.existsSync(phasePath)) {
+      console.log(
+        `[AI-PROFILE] ${phaseKey}.json なし → 1つ前を確認`
+      );
+
+      continue;
+    }
+
+    try {
+      const phaseProfile = JSON.parse(
+        fs.readFileSync(phasePath, 'utf8')
+      );
+
+      console.log(
+        `[AI-PROFILE] 日程プロフィール決定 ` +
+        `requested=${requestedPhaseKey} resolved=${phaseKey}`
+      );
+
+      return {
+        phaseKey,
+        phaseProfile,
+        requestedPhaseKey
+      };
+
+    } catch (err) {
+      console.error(
+        `[AI-PROFILE] ${phaseKey}.json 読込失敗: ${err.message}`
+      );
+
+      return {
+        phaseKey,
+        phaseProfile: null,
+        requestedPhaseKey
+      };
+    }
+  }
+
+  console.warn(
+    `[AI-PROFILE] ${requestedPhaseKey}以下に使用可能な日程JSONなし`
+  );
+
+  return {
+    phaseKey: null,
+    phaseProfile: null,
+    requestedPhaseKey
+  };
+}
+
 function getReplyFromCSV(charaId, sinkoNum, fileId) {
   const { csvPath, resolvedCharaId } = resolveCsvPath(charaId, fileId);
   if (!fs.existsSync(csvPath)) throw new Error(`CSVなし: ${csvPath}`);
@@ -1175,6 +1274,84 @@ async function analyzeMessages(page) {
 
 
 // ─── AI返答生成 ───────────────────────────────────────────
+
+
+function buildAiPhaseKey(kid, latestComment) {
+  const baseKid = String(kid || '').trim();
+
+  if (!baseKid || !latestComment) {
+    return null;
+  }
+
+  // 例:
+  // 12686yu3/sinko/17
+  // 12686mu2/sinko/4
+  const m = String(latestComment).match(
+    /^(\d+)(mu\d+|yu\d+)/
+  );
+
+  if (!m) {
+    return null;
+  }
+
+  const commentKid = m[1];
+  const phase = m[2];
+
+  // 念のためkidが一致する場合だけ採用
+  if (commentKid !== baseKid) {
+    console.warn(
+      `[AI-PROFILE] kid不一致 config=${baseKid} comment=${commentKid}`
+    );
+  }
+
+  return `${commentKid}${phase}`;
+}
+
+
+function loadReplyAiContext(kid, latestComment) {
+  const baseKid = String(kid || '').trim();
+
+  const basePath = path.join(
+    __dirname,
+    'reply-ai-profiles',
+    baseKid,
+    `${baseKid}.json`
+  );
+
+  let baseProfile = null;
+
+  try {
+    if (fs.existsSync(basePath)) {
+      baseProfile = JSON.parse(
+        fs.readFileSync(basePath, 'utf8')
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[AI-PROFILE] 共通プロフィール読込失敗 kid=${baseKid}: ${err.message}`
+    );
+  }
+
+  const resolved =
+    resolveAiPhaseProfile(baseKid, latestComment);
+
+  return {
+    kid: baseKid,
+
+    // コメントアウト上の本来の日程
+    requestedPhaseKey:
+      resolved.requestedPhaseKey,
+
+    // 実際に採用されたJSONの日程
+    phaseKey:
+      resolved.phaseKey,
+
+    baseProfile,
+
+    phaseProfile:
+      resolved.phaseProfile
+  };
+}
 
 
 function loadReplyAiProfile(kid) {
@@ -4385,22 +4562,47 @@ async function generateAiReplyForSkippedTarget(
     async ({ supportPage, uid, kid, userName }) => {
 
       // kidごとのAIプロフィール
-      const profile = loadReplyAiProfile(kid);
+    const latestComment =
+      await getLatestKanteishiComment(supportPage);
 
-      if (!profile) {
-        await sendLine(
-          [
-            '【AI返信生成エラー】',
-            `対象外ID：${index}`,
-            `ユーザー：${userName}`,
-            `u_id：${uid}`,
-            `k_id：${kid}`,
-            '',
-            `reply-ai-profiles/${kid}.json が見つかりません`
-          ].join('\n')
-        );
-        return;
-      }
+    const aiContext =
+      loadReplyAiContext(kid, latestComment);
+
+    if (!aiContext.baseProfile) {
+      await sendLine(
+        [
+          '【AI返信生成エラー】',
+          `対象外ID：${index}`,
+          `ユーザー：${userName}`,
+          `u_id：${uid}`,
+          `k_id：${kid}`,
+          '',
+          `共通AIプロフィール reply-ai-profiles/${kid}.json が見つかりません`
+        ].join('\n')
+      );
+      return;
+    }
+
+    if (!aiContext.phaseProfile) {
+      await sendLine(
+        [
+          '【AI返信生成エラー】',
+          `対象外ID：${index}`,
+          `ユーザー：${userName}`,
+          `u_id：${uid}`,
+          `k_id：${kid}`,
+          '',
+          `要求フェーズ：${aiContext.requestedPhaseKey || '不明'}`,
+          '使用可能な日程別AIプロフィールが見つかりません'
+        ].join('\n')
+      );
+      return;
+    }
+
+    console.log(
+      `[AI-PROFILE] requested=${aiContext.requestedPhaseKey} ` +
+      `resolved=${aiContext.phaseKey}`
+    );
 
       // 既存の会話解析をそのまま利用
   const conversation =
@@ -4477,7 +4679,16 @@ async function generateAiReplyForSkippedTarget(
 
       
 
-    const profileText = JSON.stringify(profile, null, 2);
+    const profileText = JSON.stringify(
+      {
+        commonProfile: aiContext.baseProfile,
+        currentPhaseProfile: aiContext.phaseProfile,
+        requestedPhase: aiContext.requestedPhaseKey,
+        resolvedPhase: aiContext.phaseKey
+      },
+      null,
+      2
+    );
 
     const response = await openai.responses.create({
       model: 'gpt-5-mini',

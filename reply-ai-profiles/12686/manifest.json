@@ -1,0 +1,33 @@
+{
+  "kid": "12686",
+  "version": 2,
+  "basis": "日程名ではなく実際の返信ログsinkoパスに合わせてJSONを分割",
+  "generatedFiles": [
+    "12686.json",
+    "12686mu1.json",
+    "12686mu2.json",
+    "12686yu1.json",
+    "12686yu2.json",
+    "12686yu3mu.json",
+    "12686yu4.json",
+    "12686yu5.json",
+    "12686yu7mu.json",
+    "12686yu8.json",
+    "12686yu9.json",
+    "manifest.json",
+    "routing_map.json"
+  ],
+  "correctionsFromV1": [
+    "yu10無料展開という誤認を削除",
+    "通常yu3をyu2返信ログ系列へ統合",
+    "通常yu6・yu7・追加延長日をyu5返信ログ系列へ統合",
+    "yu10をyu9返信ログ系列へ統合",
+    "yu3muとyu7muを独立JSON化",
+    "hoパスは日程補足、sinkoパスは返信ログJSON選択という二段構造へ変更"
+  ],
+  "knownUnknowns": [
+    "yu7延長日の正式hoコメントパスは要確認",
+    "各返信のspanRequiredは外部システム値を使用",
+    "有料10日目以降さらに先の返信ログ切替地点は実sinkoパスを正とする"
+  ]
+}

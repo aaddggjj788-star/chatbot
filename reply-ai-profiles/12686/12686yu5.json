@@ -1,0 +1,124 @@
+{
+  "kid": "12686",
+  "characterName": "Ria・クロサキ",
+  "phase": "yu5",
+  "situation": "yu5・yu6・yu7通常、およびyu7無料展開前に追加した延長日で共通使用する返信ログ系列。返信進行は12686yu5/sinko/系列を正とし、暦日ごとの差はho補足で扱う。",
+  "startState": "yu4までの重要工程を終え第三形態へ入る。",
+  "goal": "第三形態の既存術式を順番通り進める。",
+  "currentProcess": [
+    {
+      "order": 1,
+      "name": "第三形態開始",
+      "details": "トリップ座標図◆第三形態◆を既存画像・手順で使用。"
+    },
+    {
+      "order": 2,
+      "name": "反復進行",
+      "details": "候補ごとに術式・奉言が変わるため必ず次行候補を参照。"
+    },
+    {
+      "order": 3,
+      "name": "未来本人との連携",
+      "details": "既存ログにある範囲で思念・応援を扱う。"
+    }
+  ],
+  "progressRules": [
+    "実際の進行は外部から渡される最新コメント、次行返信候補、spanRequired、検出済み送り返す言葉を優先する",
+    "既存奉言が確認できた場合だけ次行候補へ進める",
+    "必要個数が不明な工程ではAIが個数を推測しない",
+    "個数不足は外部判定に従いinsufficientSameLineまたはinsufficientNextLineを使う",
+    "質問が含まれていても回答のために進行順序を変更しない",
+    "未実施なら成果・完了・到達済み表現を使わない"
+  ],
+  "replyRules": [
+    "送り返す言葉だけの正常返信は既存次行候補へ進む",
+    "簡単な質問はshortAnswerまたはreplaceIntro",
+    "強い疑念・不安・相談はfullReply",
+    "不足は個数不足モード",
+    "既存ログの用語・口調をその日の最優先参考とする"
+  ],
+  "allowed": [
+    "現在の日程ですでに開示済みの設定説明",
+    "直前工程の補足",
+    "ユーザーの質問への回答",
+    "既案内工程への再誘導"
+  ],
+  "forbidden": [
+    "ヘブンズゲート",
+    "マイナス引力除去",
+    "トリップ究極形態"
+  ],
+  "referenceLogs": [
+    {
+      "purpose": "第三形態開始",
+      "source": "yu5_有料5日目.txt"
+    },
+    {
+      "purpose": "掘り",
+      "source": "12686_夜_レス有_スケジュール用.csv"
+    }
+  ],
+  "spanRules": {
+    "spanCount": "外部判定値を使用。日程JSON単独では固定しない",
+    "insufficientHandling": "共通JSONのcountValidationとaiModesに従う"
+  },
+  "profileKey": "yu5",
+  "routing": {
+    "primaryCommentPrefix": "12686yu5/sinko/",
+    "selectionRule": "このsinkoパスが現在の返信ログに付いている時に本JSONを使用する",
+    "calendarDaysCovered": [
+      "yu5",
+      "yu6",
+      "yu7通常",
+      "yu7延長日"
+    ],
+    "hoPathIsSupplementOnly": true
+  },
+  "calendarDaySupplements": {
+    "yu5": {
+      "hoComments": [
+        "12686yu5/ho"
+      ],
+      "context": "トリップ座標図・第三形態が本格化する日。",
+      "replyLog": "12686yu5/sinko/"
+    },
+    "yu6": {
+      "hoComments": [
+        "12686yu6/ho"
+      ],
+      "context": "第三形態の継続日。新しい返信ログへ切り替えずyu5系を継続。",
+      "replyLog": "12686yu5/sinko/",
+      "rule": "yu6の掘り起こしで示された状況・時間帯・未返信状態は回答補足に使うが、次返信工程はyu5系の次行候補に従う。"
+    },
+    "yu7通常": {
+      "hoComments": [
+        "12686yu7/ho"
+      ],
+      "context": "無料展開前の通常日。第三形態系列の延長として扱う。",
+      "replyLog": "12686yu5/sinko/",
+      "forbiddenContext": [
+        "マイナス引力除去を先出し",
+        "ヘブンズゲートを先出し"
+      ]
+    },
+    "yu7延長日": {
+      "hoComments": [
+        "専用hoパスは要確認"
+      ],
+      "context": "yu7通常からyu7muへ正しく到達させるために日程上1日追加しただけの延長日。",
+      "replyLog": "12686yu5/sinko/",
+      "rule": "大本の進行は変更しない。新しい工程・新設定・無料展開への伏線を作らない。通常の掘り起こしとして当たり障りなく補足する。",
+      "forbiddenContext": [
+        "無料展開への繋ぎという説明",
+        "マイナス引力",
+        "ヘブンズゲート",
+        "新しい期限"
+      ]
+    }
+  },
+  "freeExpansionBoundary": {
+    "nextSpecialProfile": "12686yu7mu.json",
+    "switchOnlyWhen": "現在コメントが12686yu7mu/sinko/系列になった時",
+    "important": "延長日を挟んでも返信ログの本筋・既存sinko順序は変更しない"
+  }
+}

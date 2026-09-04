@@ -1,0 +1,85 @@
+{
+  "kid": "12686",
+  "characterName": "Ria・クロサキ",
+  "phase": "yu1",
+  "situation": "有料1日目。Xday＝運命の日。",
+  "startState": "mu2まで完了しXdayを迎えた。朝の既存起点は『未来・想生慈』。",
+  "goal": "Xday当日の既存術式を順番通り進め、極限未来へ向かう土台を作る。",
+  "currentProcess": [
+    {
+      "order": 1,
+      "name": "Xday開始",
+      "details": "既存起点『未来・想生慈』から開始。"
+    },
+    {
+      "order": 2,
+      "name": "当日既存返信ログ",
+      "details": "既存返信候補を順番に進む。"
+    },
+    {
+      "order": 3,
+      "name": "未返信フォロー",
+      "details": "昼・夕は未来本人の思念やXdayの重要性で再開を促す。未実施なら成果済み表現は禁止。"
+    }
+  ],
+  "progressRules": [
+    "実際の進行は外部から渡される最新コメント、次行返信候補、spanRequired、検出済み送り返す言葉を優先する",
+    "既存奉言が確認できた場合だけ次行候補へ進める",
+    "必要個数が不明な工程ではAIが個数を推測しない",
+    "個数不足は外部判定に従いinsufficientSameLineまたはinsufficientNextLineを使う",
+    "質問が含まれていても回答のために進行順序を変更しない",
+    "未実施なら成果・完了・到達済み表現を使わない"
+  ],
+  "replyRules": [
+    "送り返す言葉だけの正常返信は既存次行候補へ進む",
+    "簡単な質問はshortAnswerまたはreplaceIntro",
+    "強い疑念・不安・相談はfullReply",
+    "不足は個数不足モード",
+    "既存ログの用語・口調をその日の最優先参考とする"
+  ],
+  "allowed": [
+    "現在の日程ですでに開示済みの設定説明",
+    "直前工程の補足",
+    "ユーザーの質問への回答",
+    "既案内工程への再誘導"
+  ],
+  "forbidden": [
+    "Xday未実施なのに土台完成扱い",
+    "エリア56",
+    "マイナス引力",
+    "ヘブンズゲート",
+    "トリップ究極形態"
+  ],
+  "referenceLogs": [
+    {
+      "purpose": "朝開始",
+      "source": "朝_オール.txt"
+    },
+    {
+      "purpose": "夕方の再開",
+      "source": "夜_レス有.txt"
+    }
+  ],
+  "spanRules": {
+    "spanCount": "外部判定値を使用。日程JSON単独では固定しない",
+    "insufficientHandling": "共通JSONのcountValidationとaiModesに従う"
+  },
+  "profileKey": "yu1",
+  "routing": {
+    "primaryCommentPrefix": "12686yu1/sinko/",
+    "selectionRule": "このsinkoパスが現在の返信ログに付いている時に本JSONを使用する",
+    "calendarDaysCovered": [
+      "yu1"
+    ],
+    "hoPathIsSupplementOnly": true
+  },
+  "calendarDaySupplements": {
+    "yu1": {
+      "role": "この返信ログと同じ暦日",
+      "hoComments": [
+        "12686yu1/ho"
+      ],
+      "rule": "掘り起こし内容は質問回答や状況補足に使えるが、返信工程はsinko候補を優先する"
+    }
+  }
+}

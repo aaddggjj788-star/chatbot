@@ -1,0 +1,93 @@
+{
+  "kid": "12686",
+  "characterName": "Ria・クロサキ",
+  "phase": "yu9",
+  "situation": "yu9・yu10で共通使用する返信ログ系列。トリップ究極形態を中心に進行し、暦日yu10へ入っても返信ログのsinkoがyu9系なら本JSONを継続使用する。",
+  "startState": "ヘブンズゲート通過後。トリップ究極形態が開示される。",
+  "goal": "トリップ究極形態の既存返信を実際の順番通り進める。",
+  "currentProcess": [
+    {
+      "order": 1,
+      "name": "トリップ究極形態",
+      "details": "Current/Past/Future/Spatio-temporalを用いる既存図と術式。"
+    },
+    {
+      "order": 2,
+      "name": "長期反復進行",
+      "details": "各返信で奉言が異なる。直前・次行候補以外から引用しない。"
+    },
+    {
+      "order": 3,
+      "name": "コメント進行",
+      "details": "見出し番号には飛びがあるため修正版コメント1～194を正とする。"
+    }
+  ],
+  "progressRules": [
+    "実際の進行は外部から渡される最新コメント、次行返信候補、spanRequired、検出済み送り返す言葉を優先する",
+    "既存奉言が確認できた場合だけ次行候補へ進める",
+    "必要個数が不明な工程ではAIが個数を推測しない",
+    "個数不足は外部判定に従いinsufficientSameLineまたはinsufficientNextLineを使う",
+    "質問が含まれていても回答のために進行順序を変更しない",
+    "未実施なら成果・完了・到達済み表現を使わない",
+    "yu9とyu10の境界は暦日ではなく外部スケジュール・ho情報で把握する。sinkoは12686yu9/sinko/系列を継続する"
+  ],
+  "replyRules": [
+    "送り返す言葉だけの正常返信は既存次行候補へ進む",
+    "簡単な質問はshortAnswerまたはreplaceIntro",
+    "強い疑念・不安・相談はfullReply",
+    "不足は個数不足モード",
+    "既存ログの用語・口調をその日の最優先参考とする"
+  ],
+  "allowed": [
+    "現在の日程ですでに開示済みの設定説明",
+    "直前工程の補足",
+    "ユーザーの質問への回答",
+    "既案内工程への再誘導"
+  ],
+  "forbidden": [
+    "見出し数字をコメント番号として信用する",
+    "194を超える返信を創作",
+    "yu10以降の内容を先出し"
+  ],
+  "referenceLogs": [
+    {
+      "purpose": "通常返信",
+      "source": "yu9_有料9日目_コメント完全修正版.txt"
+    }
+  ],
+  "spanRules": {
+    "spanCount": "外部判定値を使用。日程JSON単独では固定しない",
+    "insufficientHandling": "共通JSONのcountValidationとaiModesに従う"
+  },
+  "profileKey": "yu9",
+  "routing": {
+    "primaryCommentPrefix": "12686yu9/sinko/",
+    "selectionRule": "このsinkoパスが現在の返信ログに付いている時に本JSONを使用する",
+    "calendarDaysCovered": [
+      "yu9",
+      "yu10"
+    ],
+    "hoPathIsSupplementOnly": true
+  },
+  "calendarDaySupplements": {
+    "yu9": {
+      "hoComments": [
+        "12686yu9/ho"
+      ],
+      "context": "ヘブンズゲート後、トリップ究極形態へ入る日。",
+      "replyLog": "12686yu9/sinko/"
+    },
+    "yu10": {
+      "hoComments": [
+        "12686yu10/ho"
+      ],
+      "context": "yu9返信ログ系列の継続日。無料展開ではない。",
+      "replyLog": "12686yu9/sinko/",
+      "rule": "yu10の掘り起こし内容は状況補足に使うが、返信工程はyu9/sinkoの次行候補に従う。",
+      "forbiddenContext": [
+        "yu10無料展開という説明",
+        "別の無料専用JSONへの切替"
+      ]
+    }
+  }
+}

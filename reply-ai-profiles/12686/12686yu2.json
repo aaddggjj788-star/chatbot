@@ -1,0 +1,109 @@
+{
+  "kid": "12686",
+  "characterName": "Ria・クロサキ",
+  "phase": "yu2",
+  "situation": "通常返信ログ上ではyu2とyu3通常進行が同じyu2系sinkoを使用する返信系列。暦日yu3に入っても、無料展開yu3muへ切り替わるまでは本JSONを使用する。",
+  "startState": "yu1のXday進行を終え、未来へ進むトリップ技法を継続する。",
+  "goal": "第二形態の既存返信を飛ばさずその日の既存到達地点まで進む。",
+  "currentProcess": [
+    {
+      "order": 1,
+      "name": "トリップ時空座標",
+      "details": "既存画像・既存術式を使用。"
+    },
+    {
+      "order": 2,
+      "name": "第二形態",
+      "details": "左胸に図を当てる、Fを書く等、候補ごとに定義された術式をそのまま使用。"
+    },
+    {
+      "order": 3,
+      "name": "奉言",
+      "details": "各返信ごとに異なる既存奉言。外部次行候補を使用。"
+    }
+  ],
+  "progressRules": [
+    "実際の進行は外部から渡される最新コメント、次行返信候補、spanRequired、検出済み送り返す言葉を優先する",
+    "既存奉言が確認できた場合だけ次行候補へ進める",
+    "必要個数が不明な工程ではAIが個数を推測しない",
+    "個数不足は外部判定に従いinsufficientSameLineまたはinsufficientNextLineを使う",
+    "質問が含まれていても回答のために進行順序を変更しない",
+    "未実施なら成果・完了・到達済み表現を使わない"
+  ],
+  "replyRules": [
+    "送り返す言葉だけの正常返信は既存次行候補へ進む",
+    "簡単な質問はshortAnswerまたはreplaceIntro",
+    "強い疑念・不安・相談はfullReply",
+    "不足は個数不足モード",
+    "既存ログの用語・口調をその日の最優先参考とする"
+  ],
+  "allowed": [
+    "現在の日程ですでに開示済みの設定説明",
+    "直前工程の補足",
+    "ユーザーの質問への回答",
+    "既案内工程への再誘導"
+  ],
+  "forbidden": [
+    "第三形態を先出し",
+    "エリア56到達を断定",
+    "ヘブンズゲート",
+    "トリップ究極形態"
+  ],
+  "referenceLogs": [
+    {
+      "purpose": "通常進行",
+      "source": "yu2_有料2日目_コメント修正版.txt"
+    },
+    {
+      "purpose": "送り返す言葉対応",
+      "source": "12686_有料1_2_4_5_8_9日目_自動返信用_変換レポート.csv"
+    }
+  ],
+  "spanRules": {
+    "spanCount": "外部判定値を使用。日程JSON単独では固定しない",
+    "insufficientHandling": "共通JSONのcountValidationとaiModesに従う"
+  },
+  "profileKey": "yu2",
+  "routing": {
+    "primaryCommentPrefix": "12686yu2/sinko/",
+    "selectionRule": "このsinkoパスが現在の返信ログに付いている時に本JSONを使用する",
+    "calendarDaysCovered": [
+      "yu2",
+      "yu3通常"
+    ],
+    "hoPathIsSupplementOnly": true
+  },
+  "calendarDaySupplements": {
+    "yu2": {
+      "hoComments": [
+        "12686yu2/ho"
+      ],
+      "context": "トリップ時空座標・第二形態を中心とする通常進行。",
+      "allowedContext": [
+        "第二形態",
+        "未来日記",
+        "未来本人からの思念"
+      ],
+      "forbiddenContext": [
+        "エリア56到達済み",
+        "特殊トリップ技法",
+        "カウントダウンの鐘の完了"
+      ]
+    },
+    "yu3通常": {
+      "hoComments": [
+        "12686yu3/ho"
+      ],
+      "context": "yu2返信ログ系列を継続する通常日。yu3mu無料展開とは別。",
+      "rule": "yu3/hoの内容を補足に使ってよいが、次返信は12686yu2/sinko/系列の既存候補に従う。",
+      "forbiddenContext": [
+        "外部指定なしでyu3muを開始",
+        "エリア56への特殊トリップを先出し"
+      ]
+    }
+  },
+  "freeExpansionBoundary": {
+    "nextSpecialProfile": "12686yu3mu.json",
+    "switchOnlyWhen": "現在コメントが12686yu3mu/sinko/系列になった時"
+  }
+}

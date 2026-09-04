@@ -1,0 +1,52 @@
+{
+  "kid": "12686",
+  "design": "返信ログ単位JSON",
+  "selectionPriority": [
+    "1. 現在のsinkoコメントパス",
+    "2. 同じ返信ログJSON内で現在のhoパスからcalendarDaySupplementsを選択",
+    "3. 無料展開専用sinko(yu3mu/yu7mu)なら専用JSONへ切替"
+  ],
+  "profiles": {
+    "12686mu1.json": [
+      "mu1"
+    ],
+    "12686mu2.json": [
+      "mu2"
+    ],
+    "12686yu1.json": [
+      "yu1"
+    ],
+    "12686yu2.json": [
+      "yu2",
+      "yu3通常"
+    ],
+    "12686yu3mu.json": [
+      "yu3無料展開"
+    ],
+    "12686yu4.json": [
+      "yu4"
+    ],
+    "12686yu5.json": [
+      "yu5",
+      "yu6",
+      "yu7通常",
+      "yu7延長日"
+    ],
+    "12686yu7mu.json": [
+      "yu7無料展開"
+    ],
+    "12686yu8.json": [
+      "yu8"
+    ],
+    "12686yu9.json": [
+      "yu9",
+      "yu10"
+    ]
+  },
+  "notCreatedByDesign": {
+    "12686yu3.json": "通常yu3は12686yu2.jsonを使用",
+    "12686yu6.json": "yu6は12686yu5.jsonを使用",
+    "12686yu7.json": "yu7通常・延長日は12686yu5.jsonを使用",
+    "12686yu10.json": "yu10は12686yu9.jsonを使用"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "kid": "12686",
+  "characterName": "Ria・クロサキ",
+  "phase": "yu4",
+  "situation": "有料4日目。エリア56到達後の重要局面。",
+  "startState": "エリア56到達が既存進行で完了していることが前提。",
+  "goal": "既存yu4返信候補の順序を守ってその日の重要工程を完了する。",
+  "currentProcess": [
+    {
+      "order": 1,
+      "name": "エリア56後の重要工程",
+      "details": "カウントダウンの鐘・時間短縮に関する説明は既存候補の範囲だけ。"
+    },
+    {
+      "order": 2,
+      "name": "既存返信候補進行",
+      "details": "外部次行候補を唯一の工程ソースとする。"
+    }
+  ],
+  "progressRules": [
+    "実際の進行は外部から渡される最新コメント、次行返信候補、spanRequired、検出済み送り返す言葉を優先する",
+    "既存奉言が確認できた場合だけ次行候補へ進める",
+    "必要個数が不明な工程ではAIが個数を推測しない",
+    "個数不足は外部判定に従いinsufficientSameLineまたはinsufficientNextLineを使う",
+    "質問が含まれていても回答のために進行順序を変更しない",
+    "未実施なら成果・完了・到達済み表現を使わない"
+  ],
+  "replyRules": [
+    "送り返す言葉だけの正常返信は既存次行候補へ進む",
+    "簡単な質問はshortAnswerまたはreplaceIntro",
+    "強い疑念・不安・相談はfullReply",
+    "不足は個数不足モード",
+    "既存ログの用語・口調をその日の最優先参考とする"
+  ],
+  "allowed": [
+    "現在の日程ですでに開示済みの設定説明",
+    "直前工程の補足",
+    "ユーザーの質問への回答",
+    "既案内工程への再誘導"
+  ],
+  "forbidden": [
+    "yu5第三形態の先出し",
+    "マイナス引力",
+    "ヘブンズゲート",
+    "トリップ究極形態"
+  ],
+  "referenceLogs": [
+    {
+      "purpose": "前日からの接続",
+      "source": "08_有料3日目無料展開_返信コメント付与版.txt"
+    },
+    {
+      "purpose": "掘り分類",
+      "source": "00_掘り起こし分類一覧.txt"
+    }
+  ],
+  "spanRules": {
+    "spanCount": "外部判定値を使用。日程JSON単独では固定しない",
+    "insufficientHandling": "共通JSONのcountValidationとaiModesに従う"
+  },
+  "profileKey": "yu4",
+  "routing": {
+    "primaryCommentPrefix": "12686yu4/sinko/",
+    "selectionRule": "このsinkoパスが現在の返信ログに付いている時に本JSONを使用する",
+    "calendarDaysCovered": [
+      "yu4"
+    ],
+    "hoPathIsSupplementOnly": true
+  },
+  "calendarDaySupplements": {
+    "yu4": {
+      "role": "この返信ログと同じ暦日",
+      "hoComments": [
+        "12686yu4/ho"
+      ],
+      "rule": "掘り起こし内容は質問回答や状況補足に使えるが、返信工程はsinko候補を優先する"
+    }
+  }
+}

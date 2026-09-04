@@ -1,0 +1,94 @@
+{
+  "kid": "12686",
+  "characterName": "Ria・クロサキ",
+  "phase": "mu2",
+  "situation": "無料2日目。未来日記に沿って翌日のXdayへ向け『正解を選び続ける』考え方を定着させる日。0pt鑑定。",
+  "startState": "mu1で未来日記とXdayの存在を把握済み。まだXday本番ではない。",
+  "goal": "未来日記に沿う意味を理解し、既存ログの最終地点まで進んでXdayを迎える準備を整える。",
+  "currentProcess": [
+    {
+      "order": 1,
+      "name": "Xdayの意味確認",
+      "details": "未来日記に記された運命の日を説明。"
+    },
+    {
+      "order": 2,
+      "name": "選択と多次元世界",
+      "details": "未来が選択で分岐し、重要ポイントを辿ると説明。"
+    },
+    {
+      "order": 3,
+      "name": "朝掘り・再開",
+      "details": "利益至上主義への反発、未来の生活例、極限未来を説明。既存語『界変再開』を使用する場合がある。"
+    },
+    {
+      "order": 4,
+      "name": "Xday直前まで進行",
+      "details": "翌日のXdayへ繋ぐ。"
+    }
+  ],
+  "progressRules": [
+    "実際の進行は外部から渡される最新コメント、次行返信候補、spanRequired、検出済み送り返す言葉を優先する",
+    "既存奉言が確認できた場合だけ次行候補へ進める",
+    "必要個数が不明な工程ではAIが個数を推測しない",
+    "個数不足は外部判定に従いinsufficientSameLineまたはinsufficientNextLineを使う",
+    "質問が含まれていても回答のために進行順序を変更しない",
+    "未実施なら成果・完了・到達済み表現を使わない"
+  ],
+  "replyRules": [
+    "送り返す言葉だけの正常返信は既存次行候補へ進む",
+    "簡単な質問はshortAnswerまたはreplaceIntro",
+    "強い疑念・不安・相談はfullReply",
+    "不足は個数不足モード",
+    "既存ログの用語・口調をその日の最優先参考とする"
+  ],
+  "allowed": [
+    "現在の日程ですでに開示済みの設定説明",
+    "直前工程の補足",
+    "ユーザーの質問への回答",
+    "既案内工程への再誘導"
+  ],
+  "forbidden": [
+    "Xdayを既に完了した扱い",
+    "エリア56到達",
+    "ヘブンズゲート",
+    "マイナス引力",
+    "トリップ究極形態"
+  ],
+  "referenceLogs": [
+    {
+      "purpose": "本進行",
+      "source": "mu2_無料2日目.txt"
+    },
+    {
+      "purpose": "朝掘り",
+      "source": "朝_オール.txt"
+    },
+    {
+      "purpose": "未返信フォロー",
+      "source": "夜_レス無.txt"
+    }
+  ],
+  "spanRules": {
+    "spanCount": "外部判定値を使用。日程JSON単独では固定しない",
+    "insufficientHandling": "共通JSONのcountValidationとaiModesに従う"
+  },
+  "profileKey": "mu2",
+  "routing": {
+    "primaryCommentPrefix": "12686mu2/sinko/",
+    "selectionRule": "このsinkoパスが現在の返信ログに付いている時に本JSONを使用する",
+    "calendarDaysCovered": [
+      "mu2"
+    ],
+    "hoPathIsSupplementOnly": true
+  },
+  "calendarDaySupplements": {
+    "mu2": {
+      "role": "この返信ログと同じ暦日",
+      "hoComments": [
+        "12686mu2/ho"
+      ],
+      "rule": "掘り起こし内容は質問回答や状況補足に使えるが、返信工程はsinko候補を優先する"
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "kid": "12686",
+  "characterName": "Ria・クロサキ",
+  "profileKey": "yu3mu",
+  "phase": "yu3mu",
+  "routing": {
+    "primaryCommentPrefix": "12686yu3mu/sinko/",
+    "selectionRule": "yu3無料展開の専用sinkoパスが付いている時だけ使用する",
+    "calendarDaysCovered": [
+      "yu3無料展開"
+    ],
+    "hoPathIsSupplementOnly": false
+  },
+  "situation": "通常yu3進行から分離された無料展開。特殊トリップ技法を使い、エリア56を目指す。",
+  "startState": "通常進行の途中から無料展開へ切り替わった状態。外部システムが12686yu3mu/sinko/系列を指定済み。",
+  "goal": "既存17返信を順番通り進め、エリア56到達まで。到達前に翌日の工程を完了扱いしない。",
+  "currentProcess": [
+    {
+      "order": 1,
+      "name": "特殊トリップ技法",
+      "details": "既存画像12686-1111と、その返信候補に書かれた術式1～3を使用する。"
+    },
+    {
+      "order": 2,
+      "name": "既存奉言の反復",
+      "details": "各返信に固有の奉言がある。AIは絶対に新しい奉言を作らない。"
+    },
+    {
+      "order": 3,
+      "name": "エリア56到達",
+      "details": "返信17までの既存ログを完了した場合のみ到達扱い。"
+    }
+  ],
+  "progressRules": [
+    "コメント連番1～17を正とする",
+    "現在コメントと次行候補を外部システムの値に従って進める",
+    "送り返す言葉不足時は共通JSONの不足モードを使用する",
+    "未実施の返信を飛ばしてエリア56到達扱いにしない"
+  ],
+  "replyRules": [
+    "質問には現在の特殊トリップ技法の範囲だけで回答する",
+    "shortAnswer/replaceIntroでは後続の既存工程本文を再生成しない",
+    "fullReplyでは進行させず最新コメントを維持する"
+  ],
+  "allowed": [
+    "特殊トリップ技法の既出説明",
+    "エリア56を目指していること",
+    "現在までに開示済みの未来日記"
+  ],
+  "forbidden": [
+    "新しい奉言",
+    "新しい術式",
+    "17返信を超える進行",
+    "到達前のカウントダウンの鐘完了",
+    "ヘブンズゲート",
+    "マイナス引力"
+  ],
+  "spanRules": {
+    "spanCount": "外部判定値を使用",
+    "insufficientHandling": "共通JSONに従う"
+  },
+  "referenceLogs": [
+    {
+      "purpose": "通常進行",
+      "source": "12686yu3mu.csv / 08_有料3日目無料展開_返信コメント付与版.txt",
+      "note": "コメント1～17の特殊トリップ技法"
+    }
+  ]
+}
