@@ -1262,7 +1262,7 @@ function isLikelyNicknameFinal(candidate) {
   if (!s) return false;
 
   // 長すぎるものは除外
-  if ([...s].length < 2 || [...s].length > 8) {
+  if ([...s].length < 1 || [...s].length > 8) {
     return false;
   }
 
