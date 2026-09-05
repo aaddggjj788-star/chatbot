@@ -1,0 +1,28 @@
+{
+  "kid": "12526",
+  "baseProfile": "12526.json",
+  "phaseProfiles": [
+    "12526mu1.json",
+    "12526mu2.json",
+    "12526yu1.json",
+    "12526yu2.json",
+    "12526yu3.json",
+    "12526yu4.json",
+    "12526yu5.json",
+    "12526yu6.json",
+    "12526yu7.json",
+    "12526yu8.json",
+    "12526yu9.json",
+    "12526yu10.json",
+    "12526yu3mu.json",
+    "12526yu10mu.json",
+    "12526yu11.json",
+    "12526yu17mu.json"
+  ],
+  "notes": [
+    "共通設定は12526.json、日程・特殊進行はphaseProfilesへ分離。",
+    "有料1～3日目、4～7日目、8～10日目はそれぞれ共通返信ログを共有するが、日程認識のため日別JSONを用意。",
+    "有料11日目以降は元ログ自体が共通返信ログのため12526yu11.jsonを通常進行の共通phaseとして使用。",
+    "特殊無料展開は12526yu3mu.json、12526yu10mu.json、12526yu17mu.jsonへ分離。"
+  ]
+}

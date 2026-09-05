@@ -1,0 +1,20 @@
+{
+  "kid": "12526",
+  "routingPolicy": {
+    "baseProfile": "12526.json",
+    "phaseProfileRule": "最新コメントアウトの mu/yu + 日数を基準に対応JSONを選択する。特殊無料展開フラグがある場合はspecialMappingsを優先する。",
+    "fallback": "該当日JSONが存在しない場合、同じmu/yu区分内で日数を1ずつ戻し、最初に見つかったJSONを使用する。これによりyu12以降の通常進行はyu11へフォールバックする。",
+    "doNotCrossBoundary": true
+  },
+  "specialMappings": {
+    "yu3mu": "12526yu3mu.json",
+    "yu10mu": "12526yu10mu.json",
+    "yu17mu": "12526yu17mu.json"
+  },
+  "rangeNotes": {
+    "yu1-yu3": "各日別JSON。共通返信ログは有料1日目以降返信系列。",
+    "yu4-yu7": "各日別JSON。共通返信ログは有料4日目以降返信系列。",
+    "yu8-yu10": "各日別JSON。共通返信ログは有料8日目以降返信系列。",
+    "yu11+": "12526yu11.jsonを通常進行の共通phaseとして使用。"
+  }
+}
