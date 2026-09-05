@@ -619,6 +619,52 @@ async function getFfffe0Candidates(page) {
   return candidates;
 }
 
+
+
+async function countSupportTargets() {
+  console.log('[SUPPORT-COUNT] 件数確認開始');
+
+  const { chromium } = require('playwright');
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox']
+  });
+
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  try {
+    const page = await context.newPage();
+
+    await login(page);
+    await openSupportPage(page);
+
+    const candidates = await getFfffe0Candidates(page);
+    const count = candidates.length;
+
+    console.log(`[SUPPORT-COUNT] 対象件数=${count}`);
+
+    return count;
+
+  } catch (err) {
+    console.error(
+      '[SUPPORT-COUNT] 件数取得エラー:',
+      err.message
+    );
+
+    return null;
+
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+
 // ─── ope_menuフレーム内でreplay(stringID)相当のform submitを実行し、 ──
 // ope_mainフレームの#bodyKakuninが更新されるのを待つ
 // （reply-checker.js の processUsers と同じAjax更新待ちパターン）
@@ -701,6 +747,55 @@ async function getLatestUserMessage(page) {
   } catch (e) {
     console.error('[ERROR] getLatestUserMessage:', e.message);
     return '';
+  }
+}
+
+
+
+
+async function countSupportTargets() {
+  console.log('=== support-checker 件数確認開始 ===');
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox']
+  });
+
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  try {
+    const page = await context.newPage();
+
+    await login(page);
+
+    const supportPage = await openSupportPage(page);
+
+    const candidates =
+      await getFfffe0Candidates(supportPage);
+
+    const count = candidates.length;
+
+    console.log(
+      `[SUPPORT-COUNT] サポート対象：${count}件`
+    );
+
+    return count;
+
+  } catch (err) {
+    console.error(
+      '[SUPPORT-COUNT] 件数取得エラー:',
+      err.message
+    );
+
+    return null;
+
+  } finally {
+    await browser.close().catch(() => {});
   }
 }
 
@@ -1402,4 +1497,8 @@ if (require.main === module) {
   checkSupport();
 }
 
-module.exports = { checkSupport, stopSupport };
+module.exports = {
+  checkSupport,
+  stopSupport,
+  countSupportTargets
+};

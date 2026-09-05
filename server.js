@@ -1091,12 +1091,15 @@ async function processCommand(text, reply, source = 'LINE') {
 
     checkReplies()
       .then(async () => {
-        const supportCount = await countSupportTargets();
-        const contactCount = await countContactTargets();
+        console.log('[COUNT-CHECK][MANUAL] 件数確認開始');
 
-        console.log(
-          `[COUNT-CHECK][MANUAL] support=${supportCount} contact=${contactCount}`
-        );
+        console.log('[COUNT-CHECK][MANUAL] support確認開始');
+        const supportCount = await countSupportTargets();
+        console.log(`[COUNT-CHECK][MANUAL] support=${supportCount}`);
+
+        console.log('[COUNT-CHECK][MANUAL] contact確認開始');
+        const contactCount = await countContactTargets();
+        console.log(`[COUNT-CHECK][MANUAL] contact=${contactCount}`);
 
         if (
           (supportCount ?? 0) > 0 ||

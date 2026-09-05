@@ -616,6 +616,54 @@ async function openContactThread(contactPage, uid) {
   return threadPage;
 }
 
+
+async function countContactTargets() {
+  console.log('[CONTACT-COUNT] 件数確認開始');
+
+  const { chromium } = require('playwright');
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox']
+  });
+
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  try {
+    const page = await context.newPage();
+
+    await login(page);
+
+    const contactPage = await openContactPage(page);
+
+    await runContactSearch(contactPage);
+
+    const contacts = await getUnprocessedContacts(contactPage);
+    const count = contacts.length;
+
+    console.log(`[CONTACT-COUNT] 対象件数=${count}`);
+
+    return count;
+
+  } catch (err) {
+    console.error(
+      '[CONTACT-COUNT] 件数取得エラー:',
+      err.message
+    );
+
+    return null;
+
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+
 // STEP4で開いたthreadPage（mg_contact_edit.php）から全メッセージ本文を取得する。
 // background-color: #aaaaffのtr内のtextarea（name="mess[...]"）から
 // 各メッセージの本文を取得し、"---"区切りで連結する
@@ -1202,6 +1250,54 @@ function stopContacts() {
   console.log('=== contact-checker 停止要求 ===');
 }
 
+
+async function countContactTargets() {
+  console.log('=== contact-checker 件数確認開始 ===');
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox']
+  });
+
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  try {
+    const page = await context.newPage();
+
+    await login(page);
+
+    const contactPage = await openContactPage(page);
+
+    await runContactSearch(contactPage);
+
+    const contacts = await getUnprocessedContacts(contactPage);
+
+    const count = contacts.length;
+
+    console.log(
+      `[CONTACT-COUNT] 未処理コンタクト：${count}件`
+    );
+
+    return count;
+
+  } catch (err) {
+    console.error(
+      '[CONTACT-COUNT] 件数取得エラー:',
+      err.message
+    );
+
+    return null;
+
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 async function checkContacts() {
   _shouldStop = false;
   console.log('=== contact-checker 起動 ===');
@@ -1235,4 +1331,8 @@ if (require.main === module) {
   checkContacts();
 }
 
-module.exports = { checkContacts, stopContacts };
+module.exports = {
+  checkContacts,
+  stopContacts,
+  countContactTargets
+};
