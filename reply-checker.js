@@ -393,11 +393,242 @@ async function confirmSecondarySend({ label, text, sendLine, waitForLineReply })
   return { send: false, reason: `${label}でスキップを選択` };
 }
 
+
+async function generateAiConfirmText({
+  supportPage,
+  charaId,
+  latestComment,
+  mode,
+  existingReplyText = ''
+}) {
+  if (!supportPage) {
+    throw new Error('AI返信生成用のsupportPageがありません');
+  }
+
+  const kidMatch = String(charaId || '').match(/^(\d+)/);
+  const kid = kidMatch ? kidMatch[1] : '';
+
+  if (!kid) {
+    throw new Error(`AI返信生成用kidを取得できません: ${charaId}`);
+  }
+
+  const aiContext = loadReplyAiContext(
+    kid,
+    latestComment
+  );
+
+  if (!aiContext?.baseProfile) {
+    throw new Error(
+      `AI基本プロフィールが見つかりません kid=${kid}`
+    );
+  }
+
+  if (!aiContext?.phaseProfile) {
+    throw new Error(
+      `AI日程プロフィールが見つかりません kid=${kid} comment=${latestComment}`
+    );
+  }
+
+  const conversation =
+    await getAiConversationTexts(supportPage);
+
+  const kanteishiText =
+    cleanAiConversationText(
+      conversation.latestKanteishiText
+    );
+
+  const mainFrame =
+    supportPage.frame({ name: 'ope_main' });
+
+  if (!mainFrame) {
+    throw new Error(
+      'AI返信生成時にope_mainフレームを取得できません'
+    );
+  }
+
+  const rawUserTexts =
+    await getBodyNaibuTexts(mainFrame);
+
+  const userTexts =
+    (rawUserTexts || [])
+      .map(cleanAiConversationText)
+      .filter(Boolean);
+
+  const combinedUserText =
+    userTexts.join('\n\n');
+
+  if (!kanteishiText) {
+    throw new Error(
+      '最新の鑑定士本文を取得できません'
+    );
+  }
+
+  if (!combinedUserText) {
+    throw new Error(
+      'ユーザー本文を取得できません'
+    );
+  }
+
+  const profileText = JSON.stringify(
+    {
+      commonProfile:
+        aiContext.baseProfile,
+
+      currentPhaseProfile:
+        aiContext.phaseProfile,
+
+      requestedPhase:
+        aiContext.requestedPhaseKey,
+
+      resolvedPhase:
+        aiContext.phaseKey
+    },
+    null,
+    2
+  );
+
+  const modeRules =
+    aiContext.baseProfile?.aiModes?.[mode] || {};
+
+  const modeInstruction = {
+    fullReply: [
+      'ユーザーの疑問・不安・反論・確認に対する完成した返信本文を作成してください。',
+      'ユーザーが本当に尋ねている核心へ直接回答してください。',
+      '必要な理由説明を十分に行ってください。',
+      '既存の次工程本文を付け足さないでください。',
+      '管理用コメントアウトは出力しないでください。'
+    ],
+
+    shortAnswer: [
+      'ユーザーへの補足回答部分だけを作成してください。',
+      '原則1～3文程度にしてください。',
+      'この後ろには既存の鑑定本文が続きます。',
+      '工程説明や締めの文章は追加しないでください。',
+      '管理用コメントアウトは出力しないでください。'
+    ],
+
+    replaceIntro: [
+      '既存返信文の冒頭へ入れる、ユーザーへの回答・受け止め部分だけを作成してください。',
+      'この後ろには既存の鑑定工程本文がそのまま続きます。',
+      '後続本文の工程を先取りしたり繰り返したりしないでください。',
+      '管理用コメントアウトは出力しないでください。'
+    ]
+  };
+
+  const selectedInstruction =
+    modeInstruction[mode];
+
+  if (!selectedInstruction) {
+    throw new Error(
+      `未対応AI返信モードです: ${mode}`
+    );
+  }
+
+  console.log(
+    `[AI-CONFIRM] kid=${kid} mode=${mode} ` +
+    `requested=${aiContext.requestedPhaseKey} ` +
+    `resolved=${aiContext.phaseKey}`
+  );
+
+  const response =
+    await openai.responses.create({
+      model: 'gpt-5-mini',
+
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                'あなたは鑑定士本人の返信文章を作成するAIです。',
+                '',
+                '以下の鑑定士プロフィール・現在の日程設定・会話内容を厳守してください。',
+                '',
+                '【絶対ルール】',
+                '・鑑定士本人として回答する',
+                '・ユーザーの疑問や不安を無視しない',
+                '・存在しない設定、工程、効果を作らない',
+                '・サポート担当者のような文章にしない',
+                '・AI、JSON、システム、内部処理について言及しない',
+                '・管理用コメントアウトを出力しない',
+                '・返信本文だけを出力する',
+                '',
+                `【今回のAIモード】${mode}`,
+                ...selectedInstruction.map(
+                  v => `・${v}`
+                ),
+                '',
+                '【モード固有JSONルール】',
+                JSON.stringify(
+                  modeRules,
+                  null,
+                  2
+                ),
+                '',
+                '【鑑定士プロフィール】',
+                profileText
+              ].join('\n')
+            }
+          ]
+        },
+
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                '【直前の鑑定士メッセージ】',
+                kanteishiText,
+                '',
+                '【その後のユーザーメッセージ】',
+                combinedUserText,
+                '',
+                '【現在送信予定の既存本文】',
+                cleanAiConversationText(
+                  existingReplyText
+                ),
+                '',
+                '上記を踏まえて今回のモードに必要な文章だけを生成してください。'
+              ].join('\n')
+            }
+          ]
+        }
+      ]
+    });
+
+  const aiText =
+    response.output_text
+      ? response.output_text.trim()
+      : '';
+
+  if (!aiText) {
+    throw new Error(
+      'OpenAIからAI返信本文を取得できませんでした'
+    );
+  }
+
+  console.log(
+    `[AI-CONFIRM] 生成完了 mode=${mode} ` +
+    `文字数=${aiText.length}`
+  );
+
+  return aiText;
+}
+
 // 返信確認コマンドを解決し、最終的に送信するテキストを決定する共通処理。
 // 差し込み・差し替え系は confirmSecondarySend で生成結果を再確認してから返す。
 // 戻り値: { send: true, text } | { send: false, reason }
 async function resolveConfirmCommand({
-  reply, replyText, nextComment, latestComment, charaId, sendLine, waitForLineReply,
+  reply,
+  replyText,
+  nextComment,
+  latestComment,
+  charaId,
+  supportPage,
+  sendLine,
+  waitForLineReply,
 }) {
   const cmd = parseConfirmCommand(reply);
   const tail = nextComment || '';
@@ -410,32 +641,146 @@ async function resolveConfirmCommand({
   // 差し込み#（2行目）/ 差し込み{N}#（N行目）
   // 「テンプレート{番号}」指定はcharaId対応のテンプレート本文に置換する
   if (cmd.kind === 'sashikomi') {
-    const insertText = resolveTemplateText(charaId, cmd.text.trim()).replace(/\\n/g, '\n');
-    const splicedText = buildSplicedReply(replyText, insertText, cmd.lineNum) + '\n' + tail;
-    const label = cmd.lineNum === 2 ? '差し込み確認' : `差し込み確認（${cmd.lineNum}行目）`;
-    return await confirmSecondarySend({ label, text: splicedText, sendLine, waitForLineReply });
+    let insertText;
+
+    if (cmd.text.trim() === 'AI返信') {
+      insertText =
+        await generateAiConfirmText({
+          supportPage,
+          charaId,
+          latestComment,
+          mode: 'shortAnswer',
+          existingReplyText: replyText
+        });
+    } else {
+      insertText =
+        resolveTemplateText(
+          charaId,
+          cmd.text.trim()
+        ).replace(/\\n/g, '\n');
+    }
+
+    const splicedText =
+      buildSplicedReply(
+        replyText,
+        insertText,
+        cmd.lineNum
+      ) +
+      '\n' +
+      tail;
+
+    const label =
+      cmd.text.trim() === 'AI返信'
+        ? (
+            cmd.lineNum === 2
+              ? 'AI差し込み確認'
+              : `AI差し込み確認（${cmd.lineNum}行目）`
+          )
+        : (
+            cmd.lineNum === 2
+              ? '差し込み確認'
+              : `差し込み確認（${cmd.lineNum}行目）`
+          );
+
+    return await confirmSecondarySend({
+      label,
+      text: splicedText,
+      sendLine,
+      waitForLineReply
+    });
   }
 
   // 差し替え#（返信文を丸ごと差し替え）
   // 差し替え文章にコメントアウトが含まれない場合は最新コメントアウトを付与する
   if (cmd.kind === 'sashikae') {
-    let replacedText = resolveTemplateText(charaId, cmd.text.trim()).replace(/\\n/g, '\n');
-    const hasCommentTag = /<!--.*-->/.test(replacedText);
-    if (!hasCommentTag && latestComment) {
-      const commentTag = latestComment.startsWith('<!--') ? latestComment : `<!--${latestComment}-->`;
-      replacedText = `${replacedText}\n${commentTag}`;
+    let replacedText;
+
+    if (cmd.text.trim() === 'AI返信') {
+      replacedText =
+        await generateAiConfirmText({
+          supportPage,
+          charaId,
+          latestComment,
+          mode: 'fullReply',
+          existingReplyText: replyText
+        });
+    } else {
+      replacedText =
+        resolveTemplateText(
+          charaId,
+          cmd.text.trim()
+        ).replace(/\\n/g, '\n');
     }
-    return await confirmSecondarySend({ label: '差し替え確認', text: replacedText, sendLine, waitForLineReply });
+
+    const hasCommentTag =
+      /<!--.*-->/.test(replacedText);
+
+    if (!hasCommentTag && latestComment) {
+      const commentTag =
+        latestComment.startsWith('<!--')
+          ? latestComment
+          : `<!--${latestComment}-->`;
+
+      replacedText =
+        `${replacedText}\n${commentTag}`;
+    }
+
+    return await confirmSecondarySend({
+      label:
+        cmd.text.trim() === 'AI返信'
+          ? 'AI差し替え確認'
+          : '差し替え確認',
+
+      text: replacedText,
+      sendLine,
+      waitForLineReply
+    });
   }
 
   // 差し替え前文#（文頭のみ差し替え。imgタグがあればそれより上、なければ文頭3行を差し替え）
   // 既存の replaceHeader ロジック（applyReplaceHeader）を再利用する
-  if (cmd.kind === 'sashikaeZenbun') {
-    const zenbun = resolveTemplateText(charaId, cmd.text.trim()).replace(/\\n/g, '\n');
-    const replacedBody = applyReplaceHeader(replyText, zenbun).replace(/\\n/g, '\n');
-    const replacedText = replacedBody + '\n' + tail;
-    return await confirmSecondarySend({ label: '差し替え前文確認', text: replacedText, sendLine, waitForLineReply });
+if (cmd.kind === 'sashikaeZenbun') {
+  let zenbun;
+
+  if (cmd.text.trim() === 'AI返信') {
+    zenbun =
+      await generateAiConfirmText({
+        supportPage,
+        charaId,
+        latestComment,
+        mode: 'replaceIntro',
+        existingReplyText: replyText
+      });
+  } else {
+    zenbun =
+      resolveTemplateText(
+        charaId,
+        cmd.text.trim()
+      ).replace(/\\n/g, '\n');
   }
+
+  const replacedBody =
+    applyReplaceHeader(
+      replyText,
+      zenbun
+    ).replace(/\\n/g, '\n');
+
+  const replacedText =
+    replacedBody +
+    '\n' +
+    tail;
+
+  return await confirmSecondarySend({
+    label:
+      cmd.text.trim() === 'AI返信'
+        ? 'AI差し替え前文確認'
+        : '差し替え前文確認',
+
+    text: replacedText,
+    sendLine,
+    waitForLineReply
+  });
+}
 
   return { send: false, reason: 'LINEでスキップを選択' };
 }
@@ -4242,7 +4587,17 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       displayReplyText,
       replyData.nextComment,
       '---',
-      '「送信」「スキップ」「差し込み#文章」「差し込み3#文章」「差し込み4#文章」「差し替え#文章」「差し替え前文#文章」',
+      '「送信」：そのまま送信',
+      '【AI返信】',
+      '「スキップ」：送信しない',
+      '「差し込み#{文章}」：2行目の後に文章を追加',
+      '「差し込み{N}#{文章}」：指定したN行目の後に文章を追加',
+      '「差し替え#{文章}」：返信文を丸ごと差し替え',
+      '「差し替え前文#{文章}」：返信文の前半部分のみ差し替え',
+      '「差し込み#AI返信」：回答を2行目へ差し込み',
+      '「差し込み{N}#AI返信」：回答を指定位置へ差し込み',
+      '「差し替え#AI返信」：返信全文を生成',
+      '「差し替え前文#AI返信」：冒頭回答のみ生成',
     ].join('\n');
         if (!autoMode) {
           await sendLine(lineMsg);
@@ -4333,6 +4688,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       nextComment: replyData.nextComment,
       latestComment,
       charaId,
+      supportPage: page,
       sendLine,
       waitForLineReply,
     });
@@ -5049,11 +5405,16 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
       finalReplyText,
       '---',
       '「送信」：そのまま送信',
+      '【AI返信】',
       '「スキップ」：送信しない',
       '「差し込み#{文章}」：2行目の後に文章を追加',
       '「差し込み{N}#{文章}」：指定したN行目の後に文章を追加',
       '「差し替え#{文章}」：返信文を丸ごと差し替え',
       '「差し替え前文#{文章}」：返信文の前半部分のみ差し替え',
+      '「差し込み#AI返信」：回答を2行目へ差し込み',
+      '「差し込み{N}#AI返信」：回答を指定位置へ差し込み',
+      '「差し替え#AI返信」：返信全文を生成',
+      '「差し替え前文#AI返信」：冒頭回答のみ生成',
     ].join('\n'));
 
     let reply;
@@ -5072,6 +5433,7 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
       nextComment: commentTagToAppend,
       latestComment,
       charaId: String(kid),
+      supportPage,
       sendLine,
       waitForLineReply,
     });
@@ -5205,8 +5567,17 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
       displayReplyText,
       replyData.nextComment,
       '---',
-      '「送信」「スキップ」「差し込み#文章」「差し込み3#文章」「差し込み4#文章」',
-      '「差し替え#文章」「差し替え前文#文章」',
+      '「送信」：そのまま送信',
+      '【AI返信】',
+      '「スキップ」：送信しない',
+      '「差し込み#{文章}」：2行目の後に文章を追加',
+      '「差し込み{N}#{文章}」：指定したN行目の後に文章を追加',
+      '「差し替え#{文章}」：返信文を丸ごと差し替え',
+      '「差し替え前文#{文章}」：返信文の前半部分のみ差し替え',
+      '「差し込み#AI返信」：回答を2行目へ差し込み',
+      '「差し込み{N}#AI返信」：回答を指定位置へ差し込み',
+      '「差し替え#AI返信」：返信全文を生成',
+      '「差し替え前文#AI返信」：冒頭回答のみ生成',
     ].join('\n'));
 
     let reply;
@@ -5226,6 +5597,7 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
       nextComment: replyData.nextComment,
       latestComment: targetComment,
       charaId,
+      supportPage,
       sendLine,
       waitForLineReply,
     });
