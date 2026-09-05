@@ -249,9 +249,14 @@ function scheduleNextReplyAutoRun() {
       retry: latestConfig.retry
     });
 
+    console.log('[COUNT-CHECK][AUTO] 件数確認開始');
 
     const supportCount = await countSupportTargets();
-    const contactCount = await countContactTargets();    
+    const contactCount = await countContactTargets();
+
+    console.log(
+      `[COUNT-CHECK][AUTO] support=${supportCount} contact=${contactCount}`
+    );
 
     if (
       (supportCount ?? 0) > 0 ||
@@ -348,25 +353,39 @@ function scheduleNextReplyAutoRun() {
 // support-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let checkSupport = () => console.warn('support-checker 未ロード');
 let stopSupport  = () => console.warn('support-checker 未ロード');
+let countSupportTargets = async () => null;
+
 try {
   const sc = require('./support-checker');
+
   checkSupport = sc.checkSupport;
   stopSupport  = sc.stopSupport;
   countSupportTargets = sc.countSupportTargets;
+
 } catch (e) {
-  console.warn('support-checker のロードに失敗しました:', e.message);
+  console.warn(
+    'support-checker のロードに失敗しました:',
+    e.message
+  );
 }
 
 // contact-checker は依存パッケージが別環境にある場合があるため安全に読み込む
 let checkContacts = () => console.warn('contact-checker 未ロード');
 let stopContacts  = () => console.warn('contact-checker 未ロード');
 let countContactTargets = async () => null;
+
 try {
   const cc = require('./contact-checker');
+
   checkContacts = cc.checkContacts;
   stopContacts  = cc.stopContacts;
+  countContactTargets = cc.countContactTargets;
+
 } catch (e) {
-  console.warn('contact-checker のロードに失敗しました:', e.message);
+  console.warn(
+    'contact-checker のロードに失敗しました:',
+    e.message
+  );
 }
 
 // 「コンタクトチェック開始」の多重起動防止
@@ -1067,10 +1086,37 @@ async function processCommand(text, reply, source = 'LINE') {
     if (isReplyCheckerRunning) {
       return reply('【返信チェック】既に動作中です');
     }
+
     isReplyCheckerRunning = true;
+
     checkReplies()
+      .then(async () => {
+        const supportCount = await countSupportTargets();
+        const contactCount = await countContactTargets();
+
+        console.log(
+          `[COUNT-CHECK][MANUAL] support=${supportCount} contact=${contactCount}`
+        );
+
+        if (
+          (supportCount ?? 0) > 0 ||
+          (contactCount ?? 0) > 0
+        ) {
+          await rc.sendLine(
+            [
+              '【関連チェック件数】',
+              '',
+              `サポート対象：${supportCount ?? 0}件`,
+              `コンタクト対象：${contactCount ?? 0}件`
+            ].join('\n')
+          );
+        }
+      })
       .catch(err => console.error('[REPLY] エラー:', err.message))
-      .finally(() => { isReplyCheckerRunning = false; });
+      .finally(() => {
+        isReplyCheckerRunning = false;
+      });
+
     return reply('返信チェックを開始しました');
   }
 
