@@ -821,7 +821,7 @@ async function getBankHistory(topPage, target, options = {}) {
       const point = parseSignedInt(c[2]);
       const amountMatch = (c[4] || '').match(/決済金額\s*[:：]\s*([\d,]+)円/);
       const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
-      const isBankTransfer = c[3] === '銀行振込' || (c[4] || '').includes('銀行振込');
+      const isBankTransfer =String(c[1] || '').includes('銀行振込');
       return { time: c[0], point, amount, isBankTransfer, raw: c.join(' | ') };
     })
     .filter(r => !Number.isNaN(r.point) && r.amount > 0);
