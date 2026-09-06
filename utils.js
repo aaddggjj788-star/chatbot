@@ -161,7 +161,16 @@ async function setLoveLevel(page, uid, charaId, level) {
 async function getCurrentPoint(kyouseiPage) {
   return await kyouseiPage.evaluate(() => {
     const el = document.querySelector('input[name="update[point]"]');
-    return el ? parseInt(el.value) : null;
+
+    if (!el) return null;
+
+    const raw = String(el.value || '');
+
+    const m = raw.match(/-?[\d,]+/);
+
+    return m
+      ? parseInt(m[0].replace(/,/g, ''), 10)
+      : null;
   });
 }
 
@@ -772,7 +781,7 @@ async function getBankHistory(topPage, target, options = {}) {
     .filter(r => r.type === 'payment')
     .map(r => {
       const c = r.cells;
-      const point = parseInt(c[2], 10);
+      const point = parseSignedInt(c[2]);
       const amountMatch = (c[4] || '').match(/決済金額\s*[:：]\s*([\d,]+)円/);
       const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
       const isBankTransfer = c[3] === '銀行振込' || (c[4] || '').includes('銀行振込');
@@ -788,7 +797,7 @@ async function getBankHistory(topPage, target, options = {}) {
       return {
         time: c[0],
         actionName: c[1] || '',
-        point: parseInt(c[2], 10) || 0,
+        point: parseSignedInt(c[2]),
         target: c[3] || '',
         raw: c.join(' | '),
       };
