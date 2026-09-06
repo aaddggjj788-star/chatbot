@@ -548,16 +548,30 @@ const HISTORY_SEARCH = {
 //   決済金額（"…円"）・符号付きの変動量・時刻表記は残高から除外する。無ければ null。
 function historyRowBalance(r) {
   const cells = r.cells || [];
-  for (let i = cells.length - 1; i >= 3; i--) { // c0=時刻 c1=種別 c2=変動量 は除外
-    const raw = String(cells[i] || '').trim();
-    if (!raw) continue;
-    if (raw.includes('円')) continue;                  // 決済金額など
-    if (/[:：]/.test(raw)) continue;                    // 時刻/コロン混じりは除外
-    if (/^[+\-]/.test(raw)) continue;                   // 符号付き=変動量
-    if (!/^\d{1,3}(?:,\d{3})+$|^\d+$/.test(raw)) continue; // 符号なし整数（カンマ区切り可）のみ
-    return parseInt(raw.replace(/,/g, ''), 10);
+
+  // 決済行には「処理後ポイント残高」が表示されない。
+  // 5列目(index=4)は決済額、
+  // 6列目(index=5)は備考、
+  // 7列目(index=6)は参考値なので残高として使用しない。
+  if (r.type === 'payment') {
+    return null;
   }
-  return null;
+
+  // 行動履歴・手動操作では
+  // 6列目(index=5)がその操作後のポイント残高。
+  const raw = String(cells[5] || '').trim();
+
+  if (!raw) return null;
+
+  // "21,482" / "21482" の形式だけ許可
+  if (!/^\d{1,3}(?:,\d{3})+$|^\d+$/.test(raw)) {
+    return null;
+  }
+
+  return parseInt(
+    raw.replace(/,/g, ''),
+    10
+  );
 }
 // 当日(JST)の年月日を取得する
 function jstToday() {
