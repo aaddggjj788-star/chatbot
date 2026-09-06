@@ -29,6 +29,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 const {
   openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
@@ -36,8 +37,10 @@ const {
   runPaymentCommand,
 } = require('./utils');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
-
 const anthropic = new Anthropic();
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -1272,81 +1275,181 @@ async function matchTemplate(inquiryText, charaId = null) {
     }
   }
 
-  // 2. Claude APIによる分類（従来ロジック）
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-5',
-    max_tokens: 100,
-    system: 'テンプレートIDのみをJSON形式で返してください。',
-    messages: [{
-      role: 'user',
-      content: `以下の問い合わせに最も近いテンプレートIDを返してください。
-該当なしの場合はnullを返してください。
+// 2. OpenAIによるテンプレート分類
+  const response = await openai.responses.create({
+    model: 'gpt-5-mini',
 
-テンプレートID一覧：
-withdraw: 退会したい・退会申請
-mail_open: メールが開けない・メールが見れない・メールボックスが開かない
-no_reply: 先生から返事が来ない・返信がない・連絡がない
-unclear: 問い合わせ内容が意味不明・何を聞いているかわからない
-message_to_teacher: 先生への伝言・先生に伝えてほしい
-login: ログインできない・サイトに入れない
-point_purchase: ポイントの買い方・購入方法・決済方法を知りたい
-free_period: 無料期間はいつまでか・無料はどのくらいか
-discount_ticket: 割引チケット・ガチャチケット・クーポンの使い方
+    input: [
+      {
+        role: 'system',
+        content: [
+          {
+            type: 'input_text',
+            text: [
+              'RUNEサポート問い合わせをテンプレート分類してください。',
+              '問い合わせ内容の意味を見て、最も適切なtemplateIdを1つ選んでください。',
+              '',
+              '【重要】',
+              '・該当しない場合はtemplateId=null',
+              '・ポイント残高、付与ポイント、ポイント計算、購入後の反映、ポイント不足などは必ずnull',
+              '・point_purchaseはポイントの購入方法や決済方法を知りたい場合のみ',
+              '・単語一致だけでなく問い合わせ全体の意図で判断する',
+              '・推測で無理にテンプレートへ分類しない'
+            ].join('\n')
+          }
+        ]
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: [
+              '【テンプレート一覧】',
+              'withdraw: 退会したい・退会申請',
+              'mail_open: メールが開けない・メールが見れない・メールボックスが開かない',
+              'no_reply: 先生から返事が来ない・返信がない・連絡がない',
+              'unclear: 問い合わせ内容が意味不明・何を聞いているかわからない',
+              'message_to_teacher: 先生への伝言・先生に伝えてほしい',
+              'login: ログインできない・サイトに入れない',
+              'point_purchase: ポイントの買い方・購入方法・決済方法を知りたい',
+              'free_period: 無料期間はいつまでか・無料はどのくらいか',
+              'discount_ticket: 割引チケット・ガチャチケット・クーポンの使い方',
+              '',
+              `【問い合わせ内容】`,
+              inquiryText
+            ].join('\n')
+          }
+        ]
+      }
+    ],
 
-ポイントの残高・計算・反映などに関する問い合わせはnullを返してください。
-購入方法を聞いている場合のみpoint_purchaseを選択してください。
-
-問い合わせ内容：${inquiryText}
-
-{"templateId": "ID"} の形式で返してください。`,
-    }],
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'support_template_match',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            templateId: {
+              type: ['string', 'null'],
+              enum: [
+                'withdraw',
+                'mail_open',
+                'no_reply',
+                'unclear',
+                'message_to_teacher',
+                'login',
+                'point_purchase',
+                'free_period',
+                'discount_ticket',
+                null
+              ]
+            }
+          },
+          required: ['templateId'],
+          additionalProperties: false
+        }
+      }
+    }
   });
 
-  const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
-  const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+  const parsed = JSON.parse(response.output_text);
   const id = parsed.templateId || null;
-  if (!id) return null;
-  // Claudeが返したテンプレートにcharaId制約がある場合は一致時のみ採用
-  const picked = templates.find(t => t.id === id);
-  if (picked && !charaOk(picked)) {
-    console.log(`[TEMPLATE] ${id} はcharaId=${picked.charaId}専用のため対象外（現在=${charaId}）`);
-    return null;
-  }
-  return id;
-}
-
-// ─── テンプレート該当なし時、Claude APIで返答文を自動生成する ──────────
-// （contact-checker.js の generateReplyWithClaude と同じロジック）
-// 生成失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
-async function generateReplyWithClaude(inquiryText, supplement = null) {
-  let userPrompt = `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`;
-  if (supplement) {
-    userPrompt += `\n\nオペレーターからの補足指示：${supplement}\nこの補足も踏まえて返答文を生成してください。`;
+    // Claudeが返したテンプレートにcharaId制約がある場合は一致時のみ採用
+    const picked = templates.find(t => t.id === id);
+    if (picked && !charaOk(picked)) {
+      console.log(`[TEMPLATE] ${id} はcharaId=${picked.charaId}専用のため対象外（現在=${charaId}）`);
+      return null;
+    }
+    return id;
   }
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-5',
-    max_tokens: 1024,
-    system: 'あなたはRUNEというサービスのサポートセンタースタッフです。\n' +
-      '以下のルールに従って返答文を生成してください。\n\n' +
-      '・問い合わせは全て会員IDに紐づいています\n' +
-      '・アカウント情報・ポイント数・注文番号・キャンペーン名などは\n' +
-      '  こちら側で確認済みの前提で対応してください\n' +
-      '・ユーザーに追加情報を聞き返すことは絶対にしないでください\n' +
-      '・対応済みの内容がある場合はその内容を踏まえた返答をしてください\n' +
-      '・丁寧な敬語で簡潔に返答してください\n' +
-      '・「会員様」という表記は使わず「お客様」に統一してください\n' +
-      '・対応内容の説明は簡潔にしてください\n' +
-      '  例：「〇ptを追加いたしました」「割引率を〇ptへ修正いたしました」程度で十分です\n' +
-      '  レベル番号・割引前後の詳細な数値・変更理由の説明は入れないでください\n' +
-      '  細かい説明はユーザーを混乱させる可能性があるため避けてください\n' +
-      '・最後にRUNEインフォメーションという署名を入れてください',
-    messages: [{ role: 'user', content: userPrompt }],
-  });
+  // ─── テンプレート該当なし時、Claude APIで返答文を自動生成する ──────────
+  // （contact-checker.js の generateReplyWithClaude と同じロジック）
+  // 生成失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
+  async function generateReplyWithOpenAI(
+    inquiryText,
+    supplement = null,
+    memberInfoText = null
+  ) {
+    const contextText =
+      memberInfoText && String(memberInfoText).trim()
+        ? String(memberInfoText).trim()
+        : '取得済み会員情報なし';
 
-  const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
-  return text || null;
-}
+    const supplementText =
+      supplement && String(supplement).trim()
+        ? String(supplement).trim()
+        : 'なし';
+
+    const response = await openai.responses.create({
+      model: 'gpt-5-mini',
+
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                'あなたはRUNEのサポートセンタースタッフです。',
+                'ユーザーへの実際の返信文だけを作成してください。',
+                '',
+                '【最重要】',
+                '・提供された会員情報、取得結果、ポイント照合結果を事実として最優先してください。',
+                '・取得済みの情報をユーザーへ再確認しないでください。',
+                '・存在しない事実を推測・創作しないでください。',
+                '・取得結果と問い合わせ内容が食い違う場合は、取得結果を根拠に説明してください。',
+                '・ポイント差異が0の場合は、正常に反映されている旨を案内してください。',
+                '・ポイント不足が確認できた場合のみ、不足している旨を案内してください。',
+                '・ポイント過剰が確認できた場合も事実だけを簡潔に案内してください。',
+                '・内部処理、管理画面、JSON、AI、計算ロジックという言葉はユーザーへ出さないでください。',
+                '・「会員様」は使わず「お客様」を使用してください。',
+                '・問い合わせへの回答を先に書いてください。',
+                '・必要以上に長く説明しないでください。',
+                '・丁寧で自然なサポート文にしてください。',
+                '・最後に「RUNEインフォメーション」を署名として入れてください。',
+                '',
+                '【禁止】',
+                '・確認済みのポイント数をもう一度ユーザーに尋ねる',
+                '・決済日時や金額を取得済みなのに再度尋ねる',
+                '・「確認いたしますのでお待ちください」など、実際には行わない未来の対応を約束する',
+                '・根拠のない謝罪や補償案内',
+                '・取得情報に無いキャンペーンや特典を作る'
+              ].join('\n')
+            }
+          ]
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                '【ユーザー問い合わせ】',
+                inquiryText,
+                '',
+                '【取得済み会員情報・確認結果】',
+                contextText,
+                '',
+                '【オペレーター補足】',
+                supplementText,
+                '',
+                '上記だけを根拠に、ユーザーへ送信する完成した返信文を作成してください。'
+              ].join('\n')
+            }
+          ]
+        }
+      ]
+    });
+
+    const text =
+      String(response.output_text || '').trim();
+
+    return text || null;
+  }
 
 // テンプレート自動返答の送信処理（reply-checker.js の sendReplyText と同じ
 // ロジック: ope_mainフレーム内の textarea#mess_body に入力して #chara_mail_send をクリック）
@@ -1674,7 +1777,10 @@ async function checkSupport() {
         if (!templateId) {
           let aiReplyText = null;
           try {
-            aiReplyText = await generateReplyWithClaude(latestMessage, supplement);
+            aiReplyText = await generateReplyWithOpenAI(
+              latestMessage,
+              supplement
+            );
           } catch (e) {
             console.log(`[AI-REPLY] ${candidate.userName}: 返答文生成に失敗: ${e.message}`);
           }
