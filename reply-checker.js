@@ -5614,6 +5614,203 @@ async function inquireUserBody(index, sendLine) {
   });
 }
 
+// 最新コメントアウトがho系の場合、CSVにho自体の行が存在しないため
+// getReplyFromCSVByTarget では次行を取得できずエラーになる。
+// この関数は processUsers の /hoモード処理と同じロジック（JSONのho設定=
+// searchTarget / timeBasedSearch / branch / nextTarget / useCurrentRow /
+// fallback と、根底ルール=resolveCsvPath→履歴sinko検索→sinko+1）を再利用して
+// 「次に送信される文章」を解決する。
+// 次行照会（inquireNextLine）から使う読み取り専用の解決処理のため、
+// specialProcess のような副作用のある処理は実行しない。
+// 戻り値: { replyData, latestComment, charaId } / 解析不可時: { error }
+async function resolveHoNextReplyForInquiry(page, hoComment) {
+  // hoコメントから baseId・typeNum・hoType を抽出（processUsersの/hoモードと同じ）
+  const hoMatch = hoComment.match(/^(\d+)((?:yu|mu)\d+\w*)\/(?:sinko\/)?(\w+)(?:\/\w+)*$/);
+  if (!hoMatch) {
+    return { error: `hoコメントの形式を解析できませんでした: ${hoComment}` };
+  }
+
+  const hoBaseId  = hoMatch[1];
+  const hoTypeNum = hoMatch[2];
+  let   hoType    = hoMatch[3];
+  const charaId   = hoBaseId + hoTypeNum;
+
+  // "ho/1"のようにho種別と数字がスラッシュ区切りの場合は数字を結合してho1等に揃える
+  if (!/\d$/.test(hoType)) {
+    const numSuffixMatch = hoComment.match(/\/(\d+)$/);
+    if (numSuffixMatch) hoType = hoType + numSuffixMatch[1];
+  }
+
+  // JSON設定の読み込みとphase解決
+  const hoCharaCfg    = loadCharaConfig(hoBaseId);
+  const hoPhaseResult = (hoCharaCfg && hoTypeNum) ? resolveHoPhase(hoCharaCfg, hoTypeNum, hoType) : null;
+  let   hoPhaseCfg    = hoPhaseResult?.cfg ?? null;
+  if (isPhaseBlocked(hoPhaseCfg)) {
+    console.log(`[次行照会] hoPhase "${hoPhaseResult?.key}" 時間帯制限 → フォールバックへ`);
+    hoPhaseCfg = null;
+  }
+
+  // actionCfg決定: 完全一致優先 → 数値サフィックス除去で前方一致
+  let hoActionCfg = null;
+  if (hoPhaseCfg && hoType) {
+    hoActionCfg = hoPhaseCfg[hoType] ?? null;
+    if (!hoActionCfg) {
+      const baseKey = hoType.replace(/\d+$/, '');
+      if (baseKey !== hoType && hoPhaseCfg[baseKey]) hoActionCfg = hoPhaseCfg[baseKey];
+    }
+  }
+  if (hoActionCfg && isPhaseBlocked(hoActionCfg)) {
+    console.log(`[次行照会] hoAction "${hoType}" 時間帯制限 → フォールバックへ`);
+    hoActionCfg = null;
+  }
+
+  // hoFileIdはactionCfg自身のfileIdのみを使う（processUsersと同じ）
+  const hoFileId = hoActionCfg?.fileId ?? null;
+  const isSinkoHo = /\/sinko\/ho/.test(hoComment);
+
+  console.log(`[次行照会] /hoモード comment="${hoComment}" hoType="${hoType}" phase=${hoPhaseResult?.key} actionCfg=${JSON.stringify(hoActionCfg)}`);
+
+  // 履歴コメント・ユーザーテキストを取得（履歴検索・branch判定に使用）
+  let analysis = null;
+  try {
+    analysis = await analyzeMessages(page);
+  } catch (e) {
+    console.log(`[次行照会] analyzeMessages失敗（履歴検索はrireki再検索に委ねる）: ${e.message}`);
+  }
+  const allKanteishiComments = analysis?.allKanteishiComments || [];
+  const bodyNaibuTexts       = analysis?.bodyNaibuTexts || [];
+
+  let replyData     = null;
+  let latestComment = hoComment;
+
+  // ─── JSON設定に基づく処理分岐（processUsersの/hoモードと同じ）──────────
+  if (hoActionCfg && !isSinkoHo) {
+    if (hoActionCfg.branch) {
+      const latestText = bodyNaibuTexts.length > 0 ? bodyNaibuTexts[0] : (analysis?.latestUserTexts?.[0] || '');
+      const branchChoice = detectBranchChoice([latestText]);
+      const branchTarget = branchChoice === 'A' ? hoActionCfg.branch.positive : hoActionCfg.branch.negative;
+      console.log(`[次行照会] ho分岐自動判定: ${branchChoice} → ${branchTarget}`);
+      replyData = getReplyFromCSVByTarget(charaId, branchTarget, true, hoFileId);
+    } else if (hoActionCfg.timeBasedSearch) {
+      const now = new Date();
+      const curMin = now.getHours() * 60 + now.getMinutes();
+      let selected = null;
+      for (const [cKey, cVal] of Object.entries(hoActionCfg.timeBasedSearch)) {
+        const bm = cKey.match(/^before(\d{3,4})$/);
+        const am = cKey.match(/^after(\d{3,4})$/);
+        if (bm) {
+          const t = bm[1].padStart(4, '0');
+          const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+          if (curMin < tMin) { selected = cVal; break; }
+        } else if (am) {
+          const t = am[1].padStart(4, '0');
+          const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+          if (curMin >= tMin) { selected = cVal; break; }
+        }
+      }
+      if (selected) {
+        const useCurrentRow  = selected.useCurrentRow === true;
+        const selectedFileId = selected.fileId ?? hoFileId;
+        console.log(`[次行照会] ho timeBasedSearch → "${selected.searchTarget}" useCurrentRow=${useCurrentRow} fileId=${selectedFileId}`);
+        replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, selectedFileId);
+      } else {
+        console.log(`[次行照会] ho timeBasedSearch: 一致する時間帯なし → フォールバックへ`);
+      }
+    } else if (hoActionCfg.searchTarget) {
+      const useCurrentRow = hoActionCfg.useCurrentRow === true;
+      console.log(`[次行照会] ho searchTarget="${hoActionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
+      replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.searchTarget, useCurrentRow, hoFileId);
+    } else if (hoActionCfg.nextTarget) {
+      console.log(`[次行照会] ho nextTarget="${hoActionCfg.nextTarget}"`);
+      replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.nextTarget, true, hoFileId);
+    } else if (hoActionCfg.useCurrentRow) {
+      // searchTarget系の指定がなくuseCurrentRowのみ: hoコメント自身の行（文頭）を取得
+      const currentRowData = getReplyFromCSVByTarget(charaId, hoComment, true, hoFileId);
+      if (currentRowData && hoActionCfg.workflowMarker && hoActionCfg.useHistorySearch) {
+        // 履歴の最新sinko/hisの次行からworkflowMarker以降を工程部分として結合
+        const historySinkoComments = allKanteishiComments.filter(c =>
+          c.startsWith(charaId + '/') && /(?:sinko|his\w*)\/?(\d+)/.test(c));
+        if (historySinkoComments.length > 0) {
+          const histSinkoNums = historySinkoComments
+            .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+            .filter(n => n !== null);
+          const maxSinko = Math.max(...histSinkoNums);
+          const historyNextData = getReplyFromCSV(charaId, maxSinko, hoFileId);
+          if (historyNextData) {
+            const markerIdx = historyNextData.replyText.indexOf(hoActionCfg.workflowMarker);
+            const workflowPart = markerIdx >= 0
+              ? historyNextData.replyText.slice(markerIdx)
+              : historyNextData.replyText;
+            replyData = {
+              title: currentRowData.title,
+              replyText: currentRowData.replyText + '\n\n' + workflowPart,
+              nextComment: historyNextData.nextComment,
+            };
+          }
+        }
+      }
+      if (!replyData) replyData = currentRowData;
+    }
+  }
+
+  // ─── フォールバック（根底ルール）: resolveCsvPath→履歴sinko検索→sinko+1 ──
+  if (!replyData) {
+    const hoRootFileId = hoPhaseCfg?.fileId ?? null;
+    const { resolvedCharaId } = resolveCsvPath(charaId, hoRootFileId);
+    const searchCharaId = hoRootFileId
+      ? hoRootFileId.replace(/sinko$|his$/, '')
+      : resolvedCharaId;
+    console.log(`[次行照会] ho 根底ルール: charaId=${charaId} fileId=${hoRootFileId} → resolvedCharaId=${resolvedCharaId} searchCharaId=${searchCharaId}`);
+
+    let historySinkoComments = allKanteishiComments.filter(c =>
+      c.startsWith(searchCharaId + '/') && /(?:sinko|his\w*)\/?(\d+)/.test(c));
+
+    if (historySinkoComments.length === 0) {
+      // 表示中の履歴になければ mg_k_rireki.php（履歴100件）で再検索
+      console.log(`[次行照会] ho: 表示中の履歴に${searchCharaId}のsinko/hisコメントなし → mg_k_rireki.php で再検索`);
+      let rirekiResult = null;
+      try {
+        rirekiResult = await searchSinkoFromRirekiHistory(page, searchCharaId);
+      } catch (e) {
+        console.error(`[次行照会] ho 履歴再検索失敗: ${e.message}`);
+      }
+      if (rirekiResult) historySinkoComments = rirekiResult.sinkoComments;
+    }
+
+    if (historySinkoComments.length > 0) {
+      const histSinkoNums = historySinkoComments
+        .map(c => { const m = c.match(/(?:sinko|his\w*)\/?(\d+)/); return m ? parseInt(m[1], 10) : null; })
+        .filter(n => n !== null);
+      const maxSinko = Math.max(...histSinkoNums);
+      latestComment = historySinkoComments.find(c => {
+        const m = c.match(/(?:sinko|his\w*)\/?(\d+)/);
+        return m && parseInt(m[1], 10) === maxSinko;
+      }) || hoComment;
+      console.log(`[次行照会] /ho 根底ルール sinko+1 searchCharaId=${searchCharaId} fileId=${hoRootFileId} maxSinko=${maxSinko}`);
+      replyData = getReplyFromCSV(searchCharaId, maxSinko, hoRootFileId);
+    } else if (hoActionCfg?.fallback?.searchTarget) {
+      const fbCfg = hoActionCfg.fallback;
+      const fbUseCurrentRow = fbCfg.useCurrentRow === true;
+      const fbFileId = fbCfg.fileId ?? hoFileId;
+      console.log(`[次行照会] /ho 根底ルール 履歴になし → fallback.searchTarget="${fbCfg.searchTarget}" useCurrentRow=${fbUseCurrentRow} fileId=${fbFileId}`);
+      replyData = getReplyFromCSVByTarget(charaId, fbCfg.searchTarget, fbUseCurrentRow, fbFileId);
+      latestComment = fbCfg.searchTarget;
+    } else {
+      console.log(`[次行照会] /ho 根底ルール 履歴になし → ${searchCharaId}/sinko/1 を送信`);
+      replyData = getReplyFromCSVByTarget(searchCharaId, `${searchCharaId}/sinko/1`, true, hoRootFileId);
+      latestComment = hoComment;
+    }
+  }
+
+  // replaceHeader: ho設定があれば返信文の文頭を差し替える
+  if (replyData && hoActionCfg?.replaceHeader) {
+    replyData.replyText = applyReplaceHeader(replyData.replyText, hoActionCfg.replaceHeader);
+    console.log(`[次行照会] ho replaceHeader適用`);
+  }
+
+  return { replyData, latestComment, charaId };
+}
+
 // ─── 対象外ユーザーの次行照会（コメントアウトの次行文章を確認して送信）──────
 // LINE/Slackコマンド「対象外ID:{番号} 次行照会」から呼び出す。
 // 対象ユーザーの最新コメントアウトからCSVの「次の行」の文章を取得して提示し、
@@ -5638,20 +5835,47 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
       latestComment.split(',').map(s => s.trim()).filter(Boolean).pop() || latestComment.trim();
 
     // ── コメントアウトからcharaIdを解析してCSVの次行文章を取得 ──
-    const parsed = parseCommentStr(targetComment);
-    if (!parsed) {
-      await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\nコメントアウトの形式を解析できませんでした`);
-      return;
-    }
-    const charaId = parsed.baseId + parsed.typeNum;
+    // 最新コメントアウトがho系の場合、CSVにho自体の行が存在しないため
+    // getReplyFromCSVByTarget では次行を取得できずエラーになる。
+    // その場合は hoモード（processUsersの/ho処理）と同じロジックで解決する。
+    const isHo = /\/[a-zA-Z]*[Hh]o\d*(?:\/\w+)*$/.test(targetComment);
 
+    let charaId;
     let replyData;
-    try {
-      replyData = getReplyFromCSVByTarget(charaId, targetComment, false);
-    } catch (e) {
-      await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\n次行文章の取得に失敗しました\n${e.message}`);
-      return;
+    // resolveConfirmCommand に渡す最新コメント（hoは解決後のsinko等に置き換わる）
+    let effectiveComment = targetComment;
+
+    if (isHo) {
+      let hoResult;
+      try {
+        hoResult = await resolveHoNextReplyForInquiry(supportPage, targetComment);
+      } catch (e) {
+        await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\nho次行文章の取得に失敗しました\n${e.message}`);
+        return;
+      }
+      if (hoResult.error) {
+        await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\n${hoResult.error}`);
+        return;
+      }
+      charaId = hoResult.charaId;
+      replyData = hoResult.replyData;
+      effectiveComment = hoResult.latestComment || targetComment;
+    } else {
+      const parsed = parseCommentStr(targetComment);
+      if (!parsed) {
+        await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\nコメントアウトの形式を解析できませんでした`);
+        return;
+      }
+      charaId = parsed.baseId + parsed.typeNum;
+
+      try {
+        replyData = getReplyFromCSVByTarget(charaId, targetComment, false);
+      } catch (e) {
+        await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\n次行文章の取得に失敗しました\n${e.message}`);
+        return;
+      }
     }
+
     if (!replyData || !replyData.replyText) {
       await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\n次行文章が空でした（末尾到達等）`);
       return;
@@ -5698,7 +5922,7 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
       reply,
       replyText: replyData.replyText,
       nextComment: replyData.nextComment,
-      latestComment: targetComment,
+      latestComment: effectiveComment,
       charaId,
       supportPage,
       sendLine,
