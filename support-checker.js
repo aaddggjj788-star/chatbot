@@ -285,7 +285,21 @@ async function collectMemberInfo(page, uid) {
 
     // 3. 当日購入履歴（getMailRows()でmg_mail_edit.phpへ遷移済みのため
     //    getBankHistory()内のwindow.history.back()で会員詳細へ戻れる）
-    const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+    const {
+      paymentRows,
+      actionRows,
+      manualRows,
+      historyPage: hp,
+      couponLevel,
+      prePayment
+    } = await getBankHistory(
+      page,
+      kyouseiPage,
+      {
+        resolvePrePayment: true
+      }
+    );
+
     historyPage = hp;
     console.log(`[MEMBER-INFO] uid=${uid}: 当日購入履歴 ${paymentRows.length}件`);
     if (paymentRows.length === 0) {
@@ -293,22 +307,157 @@ async function collectMemberInfo(page, uid) {
       return lines;
     }
 
-    // 4. 想定ポイントと実際の付与ポイントを照合（checkPointDiff と同じ計算）
-    const totalAmount = paymentRows.reduce((sum, r) => sum + r.amount, 0);
-    const normalPt = paymentRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
+    // 4. 決済前・決済後最大ポイントと期待ポイントを照合
+    const totalAmount = paymentRows.reduce(
+      (sum, r) => sum + r.amount,
+      0
+    );
+
+    const normalPt = paymentRows.reduce(
+      (sum, r) => sum + Math.floor(r.amount / 10),
+      0
+    );
+
     const servicePt = paymentRows.reduce(
-      (sum, r) => sum + (r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0), 0);
-    const campaignBonus = calcExpectedPoints(totalAmount, campaigns, mailCampaigns).campaignBonus;
-    const expectedPt = normalPt + servicePt + campaignBonus;
-    const actualPt = paymentRows.reduce((sum, r) => sum + r.point, 0);
+      (sum, r) =>
+        sum +
+        (
+          r.isBankTransfer
+            ? Math.floor(r.amount * 0.005)
+            : 0
+        ),
+      0
+    );
+
+    const campaignBonus =
+      calcExpectedPoints(
+        totalAmount,
+        campaigns,
+        mailCampaigns
+      ).campaignBonus;
+
+
+    // ポイントくじクーポン分
+    let couponPt = 0;
+
+    const couponInfo =
+      couponLevel != null
+        ? couponLevelMap[couponLevel]
+        : null;
+
+    if (
+      couponInfo &&
+      totalAmount >= couponInfo.minAmount
+    ) {
+      couponPt = couponInfo.pt;
+    }
+
+
+    const expectedPt =
+      normalPt +
+      servicePt +
+      campaignBonus +
+      couponPt;
+
 
     lines.push('当日購入履歴：有');
-    lines.push(`当日購入総額：${totalAmount.toLocaleString('en-US')}円`);
-    // 決済前ポイント = 現在のポイント - 当日追加された実際のポイント合計
-    if (hasPoint) lines.push(`決済前ポイント：${point - actualPt}pt`);
-    lines.push(`想定追加ポイント：${expectedPt}pt（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}）`);
-    lines.push(`実際の追加ポイント：${actualPt}pt`);
-    lines.push(`差異：${actualPt - expectedPt}pt`);
+    lines.push(
+      `当日購入総額：${totalAmount.toLocaleString('en-US')}円`
+    );
+
+
+    // ------------------------------------------------------
+    // 決済前ポイント・決済後最大ポイント・実増ポイント
+    // ------------------------------------------------------
+
+    if (
+      prePayment &&
+      prePayment.ok
+    ) {
+      const beforePoint =
+        prePayment.beforePoint;
+
+      let maxPoint =
+        beforePoint;
+
+      for (
+        const row of prePayment.postRows || []
+      ) {
+        if (
+          row.balance != null &&
+          row.balance > maxPoint
+        ) {
+          maxPoint =
+            row.balance;
+        }
+      }
+
+      const actualIncrease =
+        maxPoint - beforePoint;
+
+      const diff =
+        actualIncrease - expectedPt;
+
+      lines.push(
+        `決済前ポイント：${beforePoint}pt`
+      );
+
+      lines.push(
+        `決済後最大ポイント：${maxPoint}pt`
+      );
+
+      lines.push(
+        `実際の追加ポイント：${actualIncrease}pt`
+      );
+
+      lines.push(
+        `想定追加ポイント：${expectedPt}pt` +
+        `（通常${normalPt}` +
+        `+サービス${servicePt}` +
+        `+補助${campaignBonus}）`
+      );
+
+      lines.push(
+        `差異：${diff}pt`
+      );
+
+
+      console.log(
+        `[POINT-CHECK] uid=${uid} ` +
+        `現在=${hasPoint ? point : '不明'}pt ` +
+        `決済前=${beforePoint}pt ` +
+        `決済後最大=${maxPoint}pt ` +
+        `実増=${actualIncrease}pt ` +
+        `購入額=${totalAmount}円 ` +
+        `期待=${expectedPt}pt ` +
+        `差異=${diff}pt`
+      );
+
+    } else {
+
+      lines.push(
+        '決済前ポイント：取得できませんでした'
+      );
+
+      lines.push(
+        '決済後最大ポイント：取得できませんでした'
+      );
+
+      lines.push(
+        `想定追加ポイント：${expectedPt}pt`
+      );
+
+      if (
+        prePayment &&
+        prePayment.ok === false
+      ) {
+        console.log(
+          `[POINT-CHECK] uid=${uid}: ` +
+          `決済前ポイント取得失敗 ` +
+          `reason=${prePayment.reason}`
+        );
+      }
+    }
   } catch (e) {
     console.log(`[MEMBER-INFO] uid=${uid}: 会員情報の取得に失敗: ${e.message}`);
     lines.push('会員情報の取得に失敗しました');
@@ -510,7 +659,21 @@ async function notifyBankHistory(page, uid) {
     await kyouseiPage.goto(kyouseiPage.url());
     await kyouseiPage.waitForLoadState('networkidle');
 
-    const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+    const {
+      paymentRows,
+      actionRows,
+      manualRows,
+      historyPage: hp,
+      couponLevel,
+      prePayment
+    } = await getBankHistory(
+      page,
+      kyouseiPage,
+      {
+        resolvePrePayment: true
+      }
+    );
+
     historyPage = hp;
     console.log(`[BANK-CHECK] uid=${uid}: 当日決済履歴 ${paymentRows.length}件`);
     if (paymentRows.length === 0) {
