@@ -358,23 +358,247 @@ async function collectMemberInfo(page, uid) {
       prePayment &&
       prePayment.ok
     ) {
-      const beforePoint =
-        prePayment.beforePoint;
+    const beforePoint =
+      prePayment.beforePoint;
 
-      let maxPoint =
-        beforePoint;
+    let maxPoint =
+      beforePoint;
 
-      for (
-        const row of prePayment.postRows || []
-      ) {
-        if (
-          row.balance != null &&
-          row.balance > maxPoint
-        ) {
+    let hasPostBalance = false;
+
+    // ------------------------------------------------------
+    // まず既存履歴内から、決済後に表示された残高の最大値を取得
+    // ------------------------------------------------------
+    for (
+      const row of prePayment.postRows || []
+    ) {
+      if (row.balance != null) {
+        hasPostBalance = true;
+
+        if (row.balance > maxPoint) {
           maxPoint =
             row.balance;
         }
       }
+    }
+
+
+    // ------------------------------------------------------
+    // 決済後に残高表示行が1件も無い場合
+    // +1ptして残高表示用の手動操作履歴を発生させる
+    // ------------------------------------------------------
+    if (!hasPostBalance) {
+      console.log(
+        `[POINT-PROBE] uid=${uid}: ` +
+        '決済後の残高表示行なし → +1pt確認を実行'
+      );
+
+      let probePage = null;
+      let probeHistoryPage = null;
+      let probeAdded = false;
+
+      try {
+        // 会員詳細ページを新しく開く
+        probePage =
+          await openKyouseitaikai(page, uid);
+
+        if (
+          !probePage.url().includes('mg_kyoseitaikai')
+        ) {
+          throw new Error(
+            `+1確認用の会員詳細ページを開けませんでした URL=${probePage.url()}`
+          );
+        }
+
+        // +1する直前の現在ポイント
+        const probeBeforePoint =
+          await getCurrentPoint(probePage);
+
+        if (
+          probeBeforePoint === null ||
+          Number.isNaN(probeBeforePoint)
+        ) {
+          throw new Error(
+            '+1確認前の所持ポイントを取得できませんでした'
+          );
+        }
+
+        console.log(
+          `[POINT-PROBE] uid=${uid}: ` +
+          `+1前=${probeBeforePoint}pt`
+        );
+
+        // --------------------------------------------------
+        // +1pt
+        // --------------------------------------------------
+        await adjustPoint(
+          probePage,
+          1,
+          '+'
+        );
+
+        probeAdded = true;
+
+        const probeAfterPoint =
+          await getCurrentPoint(probePage);
+
+        console.log(
+          `[POINT-PROBE] uid=${uid}: ` +
+          `+1後=${probeAfterPoint}pt`
+        );
+
+        // --------------------------------------------------
+        // +1で発生した履歴を再取得
+        // --------------------------------------------------
+        const probeHistory =
+          await getBankHistory(
+            page,
+            probePage,
+            {
+              resolvePrePayment: false,
+              skipBack: true
+            }
+          );
+
+        probeHistoryPage =
+          probeHistory.historyPage;
+
+        // "21,482" → 21482
+        const parsePointValue = value => {
+          const m =
+            String(value || '')
+              .match(/[\d,]+/);
+
+          return m
+            ? parseInt(
+                m[0].replace(/,/g, ''),
+                10
+              )
+            : null;
+        };
+
+        // --------------------------------------------------
+        // 今回作った +1pt の手動操作履歴を探す
+        //
+        // 5列目(before) = +1する直前のポイント
+        // 6列目(after)  = +1された後のポイント
+        // --------------------------------------------------
+        const probeRow =
+          (probeHistory.manualRows || [])
+            .find(row => {
+              const before =
+                parsePointValue(row.before);
+
+              const after =
+                parsePointValue(row.after);
+
+              return (
+                row.pointChange === 1 &&
+                before === probeBeforePoint &&
+                after === probeBeforePoint + 1
+              );
+            });
+
+        if (probeRow) {
+          const detectedBefore =
+            parsePointValue(probeRow.before);
+
+          // +1操作の「操作前ポイント」を
+          // 決済後ポイントとして採用する
+          maxPoint =
+            detectedBefore;
+
+          console.log(
+            `[POINT-PROBE] uid=${uid}: ` +
+            `+1履歴を確認 ` +
+            `before=${probeRow.before} ` +
+            `after=${probeRow.after} ` +
+            `→ 決済後ポイント=${maxPoint}pt`
+          );
+
+        } else {
+          // 履歴行が見つからなかった場合でも
+          // +1直前に会員詳細から取得した現在ポイントを使用
+          maxPoint =
+            probeBeforePoint;
+
+          console.log(
+            `[POINT-PROBE] uid=${uid}: ` +
+            '+1履歴行を特定できませんでした ' +
+            `→ +1直前ポイント=${maxPoint}pt を使用`
+          );
+        }
+
+      } catch (probeErr) {
+        console.log(
+          `[POINT-PROBE] uid=${uid}: ` +
+          `+1確認失敗: ${probeErr.message}`
+        );
+
+      } finally {
+
+        // --------------------------------------------------
+        // +1した場合は必ず -1して元へ戻す
+        // --------------------------------------------------
+        if (probeAdded) {
+          let rollbackPage = null;
+
+          try {
+            rollbackPage =
+              await openKyouseitaikai(
+                page,
+                uid
+              );
+
+            await adjustPoint(
+              rollbackPage,
+              1,
+              '-'
+            );
+
+            const restoredPoint =
+              await getCurrentPoint(
+                rollbackPage
+              );
+
+            console.log(
+              `[POINT-PROBE] uid=${uid}: ` +
+              `+1確認分を-1して復元完了 ` +
+              `現在=${restoredPoint}pt`
+            );
+
+          } catch (rollbackErr) {
+            console.error(
+              `[POINT-PROBE] uid=${uid}: ` +
+              `【重要】+1確認分の復元に失敗しました: ` +
+              rollbackErr.message
+            );
+
+          } finally {
+            if (rollbackPage) {
+              await rollbackPage
+                .close()
+                .catch(() => {});
+            }
+          }
+        }
+
+        if (
+          probeHistoryPage &&
+          probeHistoryPage !== probePage
+        ) {
+          await probeHistoryPage
+            .close()
+            .catch(() => {});
+        }
+
+        if (probePage) {
+          await probePage
+            .close()
+            .catch(() => {});
+        }
+      }
+    }
 
       const actualIncrease =
         maxPoint - beforePoint;
