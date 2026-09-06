@@ -644,11 +644,34 @@ async function resolvePrePaymentBalance(historyPage, todayRawRows, scrapeRows) {
 
   function buildResult(beforePoint, sourceDate, ordered, firstPayment) {
     const fpTs = tsOf(firstPayment);
-    // 決済行以降の当日行（決済後の最大残高を算出するため残高値を保持）
-    const postRows = ordered
-      .filter(r => tsOf(r) >= fpTs)
-      .map(r => ({ type: r.type, time: r.time, balance: historyRowBalance(r) }));
-    return { ok: true, beforePoint, sourceDate, postRows };
+
+    const targetRows = ordered
+      .filter(r => tsOf(r) >= fpTs);
+
+    const postRows = targetRows.map((r, index) => {
+      const balance = historyRowBalance(r);
+
+      console.log(
+        `[POINT-ROW-DEBUG] index=${index} ` +
+        `type=${r.type} ` +
+        `time="${r.time}" ` +
+        `balance=${balance} ` +
+        `cells=${JSON.stringify(r.cells || [])}`
+      );
+
+      return {
+        type: r.type,
+        time: r.time,
+        balance
+      };
+    });
+
+    return {
+      ok: true,
+      beforePoint,
+      sourceDate,
+      postRows
+    };
   }
 
   // rows を時系列昇順に整列し、firstPayment 直前の残高表示行から決済前ポイントを求める
