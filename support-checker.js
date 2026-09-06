@@ -337,27 +337,11 @@ async function collectMemberInfo(page, uid) {
       ).campaignBonus;
 
 
-    // ポイントくじクーポン分
-    let couponPt = 0;
-
-    const couponInfo =
-      couponLevel != null
-        ? couponLevelMap[couponLevel]
-        : null;
-
-    if (
-      couponInfo &&
-      totalAmount >= couponInfo.minAmount
-    ) {
-      couponPt = couponInfo.pt;
-    }
-
 
     const expectedPt =
       normalPt +
       servicePt +
-      campaignBonus +
-      couponPt;
+      campaignBonus;
 
 
     lines.push('当日購入履歴：有');
