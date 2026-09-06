@@ -3583,7 +3583,10 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       // 送り返す言葉が取得できた場合、
       // 最新ユーザー本文との部分一致を確認
       // --------------------------------------------------
-      if (nengenWords.length > 0) {
+      if (
+        nengenWords.length > 0 &&
+        !isQuestionComment
+      ) {
         const unmatchedWords = nengenWords.filter(word =>
           !matchesReturnWord(
             normalizedCombinedUserText,
@@ -3609,6 +3612,25 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
       }
 
+      if (
+        nengenWords.length > 0 &&
+        isQuestionComment
+      ) {
+        console.log(
+          `[AUTO-QUESTION] ${userName}: ` +
+          '質問型コメントのため送り返す言葉一致判定をスキップ → OpenAI判定へ'
+        );
+      }
+
+      if (
+        nengenWords.length > 0 &&
+        isQuestionComment
+      ) {
+        console.log(
+          `[AUTO-QUESTION] ${userName}: 質問型コメントのため送り返す言葉一致判定をスキップ → OpenAI判定へ`
+        );
+      }
+
 
   // ======================================================
   // 質問型コメント：OpenAIで回答内容を確認
@@ -3630,6 +3652,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
             `[AUTO-QUESTION] ${userName}: ` +
             `answered=${aiCheck.answered} ` +
             `relevant=${aiCheck.relevant} ` +
+            `hasFollowupQuestion=${aiCheck.hasFollowupQuestion} ` +
             `safety=${aiCheck.safety} ` +
             `reason="${aiCheck.reason}"`
           );
@@ -3637,6 +3660,14 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           if (!aiCheck.answered || !aiCheck.relevant) {
             recordSkip(
               `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
+            );
+
+            continue;
+          }
+
+          if (aiCheck.hasFollowupQuestion) {
+            recordSkip(
+              `自動返信対象外: ユーザーから追加質問あり (${aiCheck.reason})`
             );
 
             continue;
@@ -3654,7 +3685,8 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           }
 
           console.log(
-            `[AUTO-QUESTION] ${userName}: 質問回答OK → 自動返信続行`
+            `[AUTO-QUESTION] ${userName}: ` +
+            '質問回答OK・追加質問なし → 自動返信続行'
           );
         }
       }
@@ -5283,10 +5315,44 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
           content: [
             {
               type: 'input_text',
-              text:
-                '鑑定士の質問に対して、ユーザーが実質的に回答しているかだけを判定してください。' +
-                '単なる挨拶、相槌、質問と無関係な返答は answered=false としてください。' +
-                '表現が完全一致する必要はありません。'
+              text: [
+                '鑑定士の質問に対するユーザー返信を判定してください。',
+                '',
+                '【判定項目】',
+                '1. answered',
+                '鑑定士の質問に対して、ユーザーが実質的な回答をしているか。',
+                '',
+                '2. relevant',
+                'ユーザー返信が鑑定士の質問内容と関係しているか。',
+                '',
+                '3. hasFollowupQuestion',
+                'ユーザーが鑑定士から追加の説明・回答・確認を必要とする質問を残しているか。',
+                '',
+                '【hasFollowupQuestion の重要ルール】',
+                '・文中に「？」「?」があるだけでは true にしない。',
+                '・ユーザー自身の迷い、自問自答、考え直しは追加質問ではない。',
+                '・最終的に回答が示されており、鑑定士へ返答を求める問いが残っていなければ false。',
+                '・鑑定士へ意味、理由、効果、方法、確認などの返答を求めている場合のみ true。',
+                '',
+                '【例】',
+                '「2かな？ いや、やっぱり3だと思います」',
+                '→ answered=true, relevant=true, hasFollowupQuestion=false',
+                '',
+                '「最初は1かと思いましたが、考えると2です」',
+                '→ answered=true, relevant=true, hasFollowupQuestion=false',
+                '',
+                '「2です。これは何の意味があるんですか？」',
+                '→ answered=true, relevant=true, hasFollowupQuestion=true',
+                '',
+                '「3だと思います。これで本当に分かるんでしょうか」',
+                '→ answered=true, relevant=true, hasFollowupQuestion=true',
+                '',
+                '「よろしくお願いします」',
+                '→ answered=false',
+                '',
+                '表現の完全一致は必要ありません。',
+                '数字、選択肢名、言い換え、文章での回答も意味が一致していれば回答として扱ってください。'
+              ].join('\n')
             }
           ]
         },
@@ -5317,6 +5383,9 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
               relevant: {
                 type: 'boolean'
               },
+              hasFollowupQuestion: {
+                type: 'boolean'
+              },
               safety: {
                 type: 'string',
                 enum: [
@@ -5332,6 +5401,7 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
             required: [
               'answered',
               'relevant',
+              'hasFollowupQuestion',
               'safety',
               'reason'
             ],
@@ -5346,6 +5416,8 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
     return {
       answered: result.answered === true,
       relevant: result.relevant === true,
+      hasFollowupQuestion:
+        result.hasFollowupQuestion === true,
       safety: result.safety || 'ambiguous',
       reason: String(result.reason || '')
     };
@@ -5359,6 +5431,7 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
     return {
       answered: false,
       relevant: false,
+      hasFollowupQuestion: true,
       safety: 'ambiguous',
       reason: `AI判定エラー: ${err.message}`
     };
