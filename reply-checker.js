@@ -3416,6 +3416,32 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     const subActionComments = allComments.map(parseSubActionComment).filter(Boolean);
     const hasSubAction = subActionComments.length > 0;
 
+    // ─── 判定5: コメントアウト判定（最新鑑定士メッセージのみ）──
+
+    // /mtm を含むコメントがある → スキップ（/his との共存は除外）
+    // /do は別途 CSV 検索で処理するためスキップしない
+    const hasMtm = allComments.some(c => /\/mtm\b/.test(c));
+    if (hasMtm) {
+      const hasBothMtmAndHis = allComments.some(c => /\/mtm\b/.test(c) && /\/his/.test(c));
+      if (!hasBothMtmAndHis) {
+        console.log(`[SKIP] ${userName}: /mtm コメントあり（/his なし）`);
+        recordSkip('/mtm コメントあり（/his なし）');
+        continue;
+      }
+      console.log(`[INFO] ${userName}: /mtm と /his が共存 → スキップしない`);
+    }
+
+    // ho系コメントの検出（数値サフィックス・接頭辞付きも含む: ho1, sinkoHo, noresHo, hiruHo1等）
+    const hoComments = allComments.filter(c => /\/[a-zA-Z]*[Hh]o\d*(?:\/\w+)*$/.test(c));
+    const hasHo = hoComments.length > 0;
+
+    // /sinko も /his も /ho も subAction も含まれない → スキップ
+    if (!hasSubAction && !hasHo && !allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
+      console.log(`[SKIP] ${userName}: /sinko・/his・/ho・subActionコメントなし`);
+      recordSkip('/sinko・/his・/ho・subActionコメントなし');
+      continue;
+    }
+        
     // ─── 判定4: span個数とユーザーメッセージ通数の照合 ──────────
     // subActionコメントあり（requiredMessages独自判定を使う）→ span照合スキップ
     // spanMatchExclude: 最新コメントアウトが除外リストに含まれる場合はスキップ
@@ -3717,32 +3743,6 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         analysis.consultationTexts = [];
         analysis.nengenNotFound = false;
       }
-    }
-
-    // ─── 判定5: コメントアウト判定（最新鑑定士メッセージのみ）──
-
-    // /mtm を含むコメントがある → スキップ（/his との共存は除外）
-    // /do は別途 CSV 検索で処理するためスキップしない
-    const hasMtm = allComments.some(c => /\/mtm\b/.test(c));
-    if (hasMtm) {
-      const hasBothMtmAndHis = allComments.some(c => /\/mtm\b/.test(c) && /\/his/.test(c));
-      if (!hasBothMtmAndHis) {
-        console.log(`[SKIP] ${userName}: /mtm コメントあり（/his なし）`);
-        recordSkip('/mtm コメントあり（/his なし）');
-        continue;
-      }
-      console.log(`[INFO] ${userName}: /mtm と /his が共存 → スキップしない`);
-    }
-
-    // ho系コメントの検出（数値サフィックス・接頭辞付きも含む: ho1, sinkoHo, noresHo, hiruHo1等）
-    const hoComments = allComments.filter(c => /\/[a-zA-Z]*[Hh]o\d*(?:\/\w+)*$/.test(c));
-    const hasHo = hoComments.length > 0;
-
-    // /sinko も /his も /ho も subAction も含まれない → スキップ
-    if (!hasSubAction && !hasHo && !allComments.some(c => c.includes('/sinko') || c.includes('/his'))) {
-      console.log(`[SKIP] ${userName}: /sinko・/his・/ho・subActionコメントなし`);
-      recordSkip('/sinko・/his・/ho・subActionコメントなし');
-      continue;
     }
 
     let charaId = null;
