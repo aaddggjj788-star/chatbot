@@ -3359,7 +3359,25 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       continue;
     }
 
-    // ─── 受信時刻チェック（20分以内はスキップ）────────────────────
+    // ─── 経過時間の判定基準を解決（phaseごとのminElapsedMinutes対応）──
+    // 最新コメントアウトからphaseを解決し、そのphaseに minElapsedMinutes が
+    // 設定されていればその値を経過時間の判定基準に使う。未設定ならデフォルト15分。
+    const DEFAULT_MIN_ELAPSED = 15;
+    let minElapsedMinutes = DEFAULT_MIN_ELAPSED;
+    {
+      const _comments = analysis.kanteishiComments || [];
+      const _latestComment = getLatestSinkoComment(_comments) || _comments[0] || null;
+      const _parsed = _latestComment ? parseCommentStr(_latestComment) : null;
+      const _phaseResult = _parsed ? resolvePhaseCfg(_parsed, loadCharaConfig(kid)) : null;
+      if (typeof _phaseResult?.cfg?.minElapsedMinutes === 'number') {
+        minElapsedMinutes = _phaseResult.cfg.minElapsedMinutes;
+        console.log(
+          `[TIMER] ${userName}: phase "${_phaseResult.key}" のminElapsedMinutes=${minElapsedMinutes}分を使用`
+        );
+      }
+    }
+
+    // ─── 受信時刻チェック（minElapsedMinutes未満はスキップ）────────────────────
     const receivedAt = parseMessageTime(analysis.latestUserTime || '');
     if (receivedAt) {
       const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
@@ -3367,18 +3385,18 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         autoMode &&
         String(kid) === '12541';
 
-      if (elapsedMin < 15 && !bypassWaitForAutoTest) {
+      if (elapsedMin < minElapsedMinutes && !bypassWaitForAutoTest) {
         console.log(
-          `[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → 15分未満のためスキップ`
+          `[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分 → ${minElapsedMinutes}分未満のためスキップ`
         );
 
-        recordSkip('15分未満のためスキップ');
+        recordSkip(`${minElapsedMinutes}分未満のためスキップ`);
         continue;
       }
 
-      if (elapsedMin < 15 && bypassWaitForAutoTest) {
+      if (elapsedMin < minElapsedMinutes && bypassWaitForAutoTest) {
         console.log(
-          `[AUTO-TEST] ${userName}: kid=12541 のため15分待機をバイパス`
+          `[AUTO-TEST] ${userName}: kid=12541 のため${minElapsedMinutes}分待機をバイパス`
         );
       }
       console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 処理続行`);
