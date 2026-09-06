@@ -3086,6 +3086,7 @@ async function processUsers(
   skippedUsers = [];
   let markAsRepliedTargets = [];
   let autoSendCount = 0;
+  let autoSendResults = [];
   let dangerCount = 0;
   let errorCount = 0;
   // 対象外一覧ファイルも新しい返信チェック開始時に上書きリセットする
@@ -4620,8 +4621,12 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       await sendFrame.click('#chara_mail_send');
       await sendFrame.waitForLoadState('networkidle').catch(() => {});
       console.log(`[SEND] ${userName} 送信完了`);
-      await sendLine(`【送信完了】${uid}へ${kid}からの返信を送信しました`);
-    }
+
+      if (!autoMode) {
+        await sendLine(
+          `【送信完了】${uid}へ${kid}からの返信を送信しました`
+        );
+      }
 
     // ======================================================
     // 自動返信モード
@@ -4659,6 +4664,12 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       );
 
       await sendReplyText(textToSend);
+
+      autoSendResults.push({
+        userName,
+        uid,
+        kid
+      });
 
       autoSendCount++;
 
@@ -4718,6 +4729,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
   );
   return {
     sentCount: autoSendCount,
+    sendResults: autoSendResults,
     skippedCount: skippedUsers.length,
     dangerCount,
     errorCount,
@@ -5937,15 +5949,36 @@ async function checkReplies(options = {}) {
 
     // 自動巡回時は集計通知を先に出す
     if (autoMode) {
+      const sendResults =
+        Array.isArray(result?.sendResults)
+          ? result.sendResults
+          : [];
+
+      const sendResultLines =
+        sendResults.length > 0
+          ? sendResults.map(
+              item =>
+                `・${item.uid}へ${item.kid}より送信しました`
+            )
+          : [
+              '送信対象はありませんでした'
+            ];
+
       await sendLine(
         [
-          '【自動返信チェック完了】',
+          '【送信結果】',
           '',
-          `送信件数：${result?.sentCount ?? 0}件`,
-          `対象外件数：${result?.skippedCount ?? 0}件`,
-          `危険文章：${result?.dangerCount ?? 0}件`,
-          `返信済み化：${result?.markedRepliedCount ?? 0}件`,
-          `エラー：${result?.errorCount ?? 0}件`
+          ...sendResultLines,
+          '',
+          `合計：${result?.sentCount ?? 0}件`
+        ].join('\n')
+      );
+
+      await sendLine(
+        [
+          '【開封済み件数】',
+          '',
+          `返信済み化：${result?.markedRepliedCount ?? 0}件`
         ].join('\n')
       );
     }else {
