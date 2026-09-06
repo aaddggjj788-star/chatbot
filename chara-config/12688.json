@@ -4,7 +4,13 @@
         "start": "23:00",
         "end": "09:00"
     },
-    "spanMatchExclude": [],
+    "spanMatchExclude": [
+        "12688mu2/sinko/1",
+        "12688mu2/sinko/2",
+        "12688mu2/sinko/4",
+        "12688mu2/sinko/5",
+        "12688mu2/sinko/6"
+    ],
     "phases": {
         "mu1": {
             "fileId": "12688mu1sinko",
