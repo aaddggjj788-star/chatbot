@@ -9,7 +9,8 @@
         "12688mu2/sinko/2",
         "12688mu2/sinko/4",
         "12688mu2/sinko/5",
-        "12688mu2/sinko/6"
+        "12688mu2/sinko/6",
+        "12688mu2/ho"
     ],
     "phases": {
         "mu1": {
@@ -24,6 +25,7 @@
         },        
         "mu2": {
             "fileId": "12688mu2sinko",
+            "minElapsedMinutes": 25,
             "do1": {
                 "fileId": "12688mu2hissinko",
                 "searchTarget": "12688mu2/his/1",
