@@ -271,16 +271,29 @@ async function collectMemberInfo(page, uid) {
 
     // 2. 当日配信メールからキャンペーン情報を取得（失敗時は補助0として続行）
     const campaigns = [];
-    let mailCampaigns = []; // メール本文で検出した week/campaign 等（mail-campaign-info.json照合用）
+    let mailCampaigns = [];
+
     try {
-      const mailRows = await getMailRows(kyouseiPage, SUPPORT_CHECK_TEST_MODE);
-      for (const row of mailRows) {
-        campaigns.push(...await parseCampaignWithClaude(row.bodyHtml));
-      }
-      mailCampaigns = mailRows.map(r => r.campaign).filter(Boolean);
-      console.log(`[MEMBER-INFO] uid=${uid}: 当日配信メール${mailRows.length}件 キャンペーン${campaigns.length}件 検出コメント${mailCampaigns.length}件`);
+      const mailRows = await getMailRows(
+        kyouseiPage,
+        SUPPORT_CHECK_TEST_MODE
+      );
+
+      mailCampaigns = mailRows
+        .map(r => r.campaign)
+        .filter(Boolean);
+
+      console.log(
+        `[MEMBER-INFO] uid=${uid}: ` +
+        `当日配信メール${mailRows.length}件 ` +
+        `JSONキャンペーン候補${mailCampaigns.length}件`
+      );
+
     } catch (e) {
-      console.log(`[MEMBER-INFO] uid=${uid}: キャンペーン情報の取得に失敗: ${e.message}`);
+      console.log(
+        `[MEMBER-INFO] uid=${uid}: ` +
+        `キャンペーン情報の取得に失敗: ${e.message}`
+      );
     }
 
     // 3. 当日購入履歴（getMailRows()でmg_mail_edit.phpへ遷移済みのため

@@ -352,28 +352,26 @@ function calcExpectedPoints(amount, campaigns, mailCampaigns = []) {
   }
 
   // ── フォールバック: 既存のClaude API解析(campaigns)から計算 ─────────────
-  let campaignBonus = 0;
+  const campaignBonus = 0;
+  const total =
+    normalPt +
+    servicePt +
+    campaignBonus;
 
-  const fixedApplicable = campaigns.filter(c => c.type === 'fixed' && amount >= c.amount);
-  if (fixedApplicable.length > 0) {
-    campaignBonus += Math.max(...fixedApplicable.map(c => Math.floor(c.bonus / 10)));
-  }
+  console.log(
+    `[UTILS] 期待値: 対応するキャンペーンJSONなし → 補助0pt`
+  );
 
-  const rateApplicable = campaigns.filter(c => c.type === 'rate' && amount >= c.amount);
-  if (rateApplicable.length > 0) {
-    const bestRate = Math.max(...rateApplicable.map(c => c.rate));
-    campaignBonus += Math.round(normalPt * bestRate) - normalPt;
-  }
-
-  const percentApplicable = campaigns.filter(c => c.type === 'percent' && amount >= c.amount);
-  if (percentApplicable.length > 0) {
-    const bestPercent = Math.max(...percentApplicable.map(c => c.rate));
-    campaignBonus += Math.floor((amount * bestPercent) / 100 / 10);
-  }
-
-  const total = normalPt + servicePt + campaignBonus;
-  return { normalPt, servicePt, campaignBonus, total, source: 'claude' };
-}
+  return {
+    normalPt,
+    servicePt,
+    campaignBonus,
+    total,
+    discount: null,
+    discountDurationHours: null,
+    source: 'no-rule',
+    matched: null
+  };
 
 // ─── お知らせメール一覧テーブルから本日8:00以降の行を取得 ────────────
 // （support-checker.js の getTodayCampaignRows と同じロジック）
