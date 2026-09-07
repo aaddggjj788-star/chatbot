@@ -231,6 +231,38 @@ const couponLevelMap = {
   58: { pt: 2000, minAmount: 15000 },
 };
 
+
+
+function calcCouponPoint(couponLevel, totalAmount) {
+  if (couponLevel == null) {
+    return 0;
+  }
+
+  const info = couponLevelMap[couponLevel];
+
+  if (!info) {
+    console.log(
+      `[UTILS] ポイントくじクーポン: Lv.${couponLevel} は対象ルールなし`
+    );
+    return 0;
+  }
+
+  if (totalAmount < info.minAmount) {
+    console.log(
+      `[UTILS] ポイントくじクーポン: Lv.${couponLevel} ` +
+      `購入額${totalAmount}円 < 条件${info.minAmount}円 → 0pt`
+    );
+    return 0;
+  }
+
+  console.log(
+    `[UTILS] ポイントくじクーポン: Lv.${couponLevel} ` +
+    `購入額${totalAmount}円 → ${info.pt}pt`
+  );
+
+  return info.pt;
+}
+
 /**
  * 割引率チェックと適用フロー
  * campaigns: support-checker.jsで取得したキャンペーン情報
@@ -1126,6 +1158,6 @@ module.exports = {
   adjustPoint, setPointLevel, getPointLevel, getCouponLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
-  getCampaignInfo, formatCampaignInfo,
+  getCampaignInfo, formatCampaignInfo, calcCouponPoint,
   calcPaymentPoints, processPayment, runPaymentCommand,
 };

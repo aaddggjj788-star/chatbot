@@ -33,7 +33,7 @@ const OpenAI = require('openai');
 const {
   openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
-  calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
+  calcExpectedPoints, calcCouponPoint, getMailRows, getBankHistory, checkPointDiff,
   runPaymentCommand,
 } = require('./utils');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
@@ -354,10 +354,17 @@ async function collectMemberInfo(page, uid) {
 
 
 
+    const couponPt =
+      calcCouponPoint(
+        couponLevel,
+        totalAmount
+      );
+
     const expectedPt =
       normalPt +
       servicePt +
-      campaignBonus;
+      campaignBonus +
+      couponPt;
 
 
     lines.push('当日購入履歴：有');
