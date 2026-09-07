@@ -372,7 +372,7 @@ function calcExpectedPoints(amount, campaigns, mailCampaigns = []) {
     source: 'no-rule',
     matched: null
   };
-
+  }
 // ─── お知らせメール一覧テーブルから本日8:00以降の行を取得 ────────────
 // （support-checker.js の getTodayCampaignRows と同じロジック）
 // target: Page または Frame（.evaluate()を持つオブジェクト）
