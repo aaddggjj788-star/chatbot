@@ -53,7 +53,7 @@ const path = require('path');
 const {
   openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
-  calcExpectedPoints, getMailRows, getBankHistory, checkPointDiff,
+  calcExpectedPoints, calcCouponPoint, getMailRows, getBankHistory, checkPointDiff,
   formatCampaignInfo,
   runPaymentCommand,
 } = require('./utils');
@@ -165,6 +165,7 @@ function parseCommand(reply) {
     level:      body.match(/レベル変更:(\d+)/)?.[1] ?? null,
     start:      body.includes('開始'),
     supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
+    manual:     body.includes('手動対応'),
     template:   (m => (m ? parseInt(m[1], 10) : null))(body.match(/テンプレート(\d+)/)),
     payment:    (m => (m ? { uid: m[1], amount: parseInt(m[2].replace(/,/g, ''), 10) } : null))(body.match(/(\d+)\s+([\d,]+)円\s*入金/)),
     mail:       body.includes('メール確認'),
@@ -291,9 +292,6 @@ async function collectMemberInfo(page, uid) {
     let mailCampaigns = []; // メール本文で検出した week/campaign 等（mail-campaign-info.json照合用）
     try {
       const mailRows = await getMailRows(kyouseiPage);
-      for (const row of mailRows) {
-        campaigns.push(...await parseCampaignWithClaude(row.bodyHtml));
-      }
       mailCampaigns = mailRows.map(r => r.campaign).filter(Boolean);
       console.log(`[MEMBER-INFO] uid=${uid}: 当日配信メール${mailRows.length}件 キャンペーン${campaigns.length}件 検出コメント${mailCampaigns.length}件`);
     } catch (e) {
@@ -302,7 +300,11 @@ async function collectMemberInfo(page, uid) {
 
     // 3. 当日購入履歴（getMailRows()でmg_mail_edit.phpへ遷移済みのため
     //    getBankHistory()内のwindow.history.back()で会員詳細へ戻れる）
-    const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+    const {
+      paymentRows,
+      historyPage: hp,
+      couponLevel
+    } = await getBankHistory(page, kyouseiPage);
     historyPage = hp;
     console.log(`[MEMBER-INFO] uid=${uid}: 当日購入履歴 ${paymentRows.length}件`);
     if (paymentRows.length === 0) {
@@ -315,15 +317,34 @@ async function collectMemberInfo(page, uid) {
     const normalPt = paymentRows.reduce((sum, r) => sum + Math.floor(r.amount / 10), 0);
     const servicePt = paymentRows.reduce(
       (sum, r) => sum + (r.isBankTransfer ? Math.floor(r.amount * 0.005) : 0), 0);
-    const campaignBonus = calcExpectedPoints(totalAmount, campaigns, mailCampaigns).campaignBonus;
-    const expectedPt = normalPt + servicePt + campaignBonus;
+    const campaignBonus =
+      calcExpectedPoints(
+        totalAmount,
+        campaigns,
+        mailCampaigns
+      ).campaignBonus;
+
+    const couponPt =
+      calcCouponPoint(
+        couponLevel,
+        totalAmount
+      );
+
+    const expectedPt =
+      normalPt +
+      servicePt +
+      campaignBonus +
+      couponPt;
     const actualPt = paymentRows.reduce((sum, r) => sum + r.point, 0);
 
     lines.push('当日購入履歴：有');
     lines.push(`当日購入総額：${totalAmount.toLocaleString('en-US')}円`);
     // 決済前ポイント = 現在のポイント - 当日追加された実際のポイント合計
     if (hasPoint) lines.push(`決済前ポイント：${point - actualPt}pt`);
-    lines.push(`想定追加ポイント：${expectedPt}pt（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}）`);
+    lines.push(
+      `想定追加ポイント：${expectedPt}pt` +
+      `（通常${normalPt}+サービス${servicePt}+補助${campaignBonus}+くじ${couponPt}）`
+    );
     lines.push(`実際の追加ポイント：${actualPt}pt`);
     lines.push(`差異：${actualPt - expectedPt}pt`);
   } catch (e) {
@@ -443,7 +464,11 @@ async function notifyBankHistory(page, uid) {
     await kyouseiPage.goto(kyouseiPage.url());
     await kyouseiPage.waitForLoadState('networkidle');
 
-    const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage);
+    const {
+      paymentRows,
+      historyPage: hp,
+      couponLevel
+    } = await getBankHistory(page, kyouseiPage);
     historyPage = hp;
     console.log(`[BANK-CHECK] uid=${uid}: 当日決済履歴 ${paymentRows.length}件`);
     if (paymentRows.length === 0) {
