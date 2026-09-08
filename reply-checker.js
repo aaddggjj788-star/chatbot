@@ -134,9 +134,11 @@ function getSkippedAutoGenerateCandidates(list) {
     const reason =
       String(item.reason || '');
 
-    // 第1段階では「20文字以上」だけ対象
-    return reason.includes(
-      '自動返信対象外: 1通のユーザーメッセージが20文字以上'
+    return (
+      reason.includes(
+        '自動返信対象外: 1通のユーザーメッセージが20文字以上'
+      ) ||
+      reason.startsWith('span不足:')
     );
   });
 }
@@ -3668,11 +3670,54 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       if (_spanRangeMatch) {
         const minOffset = _spanRangeMatch.minOffset ?? 0;
         console.log(`[SPAN-CHECK] ${userName}: spanMatchRange一致 (${_spanRangeMatch.from}〜${_spanRangeMatch.to}, minOffset=${minOffset})`);
-        if (spanCount < userMsgCount - minOffset) {
-          console.log(`[SKIP] ${userName}: span個数(${spanCount}) < ユーザーメッセージ通数(${userMsgCount})-${minOffset}`);
-          recordSkip(`span個数(${spanCount}) < ユーザーメッセージ通数(${userMsgCount})-${minOffset}`);
-          continue;
-        }
+      if (spanCount < userMsgCount - minOffset) {
+        const requiredSpanCount =
+          userMsgCount - minOffset;
+
+        const spanShortage =
+          requiredSpanCount - spanCount;
+
+        const latestComment =
+          getLatestSinkoComment(allComments) ||
+          allComments[0] ||
+          '';
+
+        const userTextsForSpan =
+          (analysis.userMessages || [])
+            .map(m => String(m?.bodyText || m?.text || '').trim())
+            .filter(Boolean);
+
+        const combinedUserTextForSpan =
+          userTextsForSpan.join('\n\n');
+
+        console.log(
+          `[SKIP] ${userName}: ` +
+          `span不足=${spanShortage} ` +
+          `(span=${spanCount}, required=${requiredSpanCount})`
+        );
+
+        recordSkip(
+          `span不足: ${spanShortage}個 ` +
+          `(span=${spanCount}, required=${requiredSpanCount})`,
+          {
+            receivedAt:
+              analysis.latestUserTime || '',
+
+            userText:
+              combinedUserTextForSpan,
+
+            latestComment,
+
+            spanCount,
+
+            requiredSpanCount,
+
+            spanShortage
+          }
+        );
+
+        continue;
+      }
       } else if (userMsgCount < spanCount) {
         console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount})`);
         recordSkip(`ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount})`);
@@ -5959,7 +6004,40 @@ async function classifyLongSkippedWithAI(item) {
 
   return result;
 }
+function classifySpanShortage(item) {
+  const shortage =
+    Number(item.spanShortage || 0);
 
+  if (shortage === 1) {
+    return {
+      questionType:
+        'span_shortage',
+
+      hasReplyWord:
+        null,
+
+      action:
+        'insert_next',
+
+      reason:
+        '必要工程が1つ不足しているため、補足案内を差し込んでから次の鑑定文へ進めます。'
+    };
+  }
+
+  return {
+    questionType:
+      'span_shortage',
+
+    hasReplyWord:
+      null,
+
+    action:
+      'reply_and_resume',
+
+    reason:
+      `必要工程が${shortage}個不足しているため、鑑定は進めず、不足工程を行ってから再度連絡するよう案内します。`
+  };
+}
 async function processLongSkippedAutoCandidates() {
   if (
     !fs.existsSync(
@@ -6018,10 +6096,22 @@ async function processLongSkippedAutoCandidates() {
         continue;
       }
 
-      const ai =
-        await classifyLongSkippedWithAI(
-          item
-        );
+      let ai;
+
+      if (
+        String(item.reason || '').startsWith(
+          'span不足:'
+        )
+      ) {
+        ai =
+          classifySpanShortage(item);
+
+      } else {
+        ai =
+          await classifyLongSkippedWithAI(
+            item
+          );
+      }
 
 
       console.log(
