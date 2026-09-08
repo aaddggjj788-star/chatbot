@@ -5,6 +5,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
 const rc = require('./reply-checker');
+const supportChecker = require('./support-checker');
+const contactChecker = require('./contact-checker');
 const generatedQueue = require('./generated-queue');
 const REPLY_AUTO_CONFIG_FILE = path.join(
   __dirname,
@@ -86,8 +88,12 @@ async function executeNewGeneratedItems(beforeIds = []) {
 
   const newItems =
     pendingItems.filter(item =>
-      item.source === 'reply-skipped' &&
-      !beforeSet.has(String(item.id))
+      !beforeSet.has(String(item.id)) &&
+      (
+        item.source === 'reply-skipped' ||
+        item.source === 'support' ||
+        item.source === 'contact'
+      )
     );
 
   if (newItems.length === 0) {
@@ -107,17 +113,39 @@ async function executeNewGeneratedItems(beforeIds = []) {
       console.log(
         `[GENERATED-AUTO-EXEC] ` +
         `生成ID=${item.id} ` +
+        `source=${item.source} ` +
         `uid=${item.uid} ` +
-        `kid=${item.kid} ` +
+        `kid=${item.kid || '-'} ` +
         `action=${item.action}`
       );
 
-      const sent =
-        await rc.executeGeneratedSkippedPlan(
-          item,
-          rcSendLine,
-          process.env.DRY_RUN === 'true'
-        );
+        let sent = false;
+
+        if (item.source === 'reply-skipped') {
+          sent =
+            await rc.executeGeneratedSkippedPlan(
+              item,
+              rcSendLine,
+              process.env.DRY_RUN === 'true'
+            );
+
+        } else if (item.source === 'support') {
+          sent =
+            await supportChecker.executeGeneratedSupportReply(
+              item
+            );
+
+        } else if (item.source === 'contact') {
+          sent =
+            await contactChecker.executeGeneratedContactReply(
+              item
+            );
+
+        } else {
+          throw new Error(
+            `未対応の生成sourceです: ${item.source}`
+          );
+        }
 
       if (sent) {
         generatedQueue.markGeneratedItemSent(
@@ -1046,23 +1074,40 @@ if (generatedSendMatch) {
     );
   }
 
-  if (item.source !== 'reply-skipped') {
-    return reply(
-      `【生成ID:${id}】現在この送信処理は reply-skipped のみ対応しています`
-    );
-  }
-
   await reply(
     `【生成ID:${id}】送信処理を開始しました`
   );
 
   try {
-  const sent =
-    await rc.executeGeneratedSkippedPlan(
-      item,
-      rcSendLine,
-      process.env.DRY_RUN === 'true'
-    );
+      let sent = false;
+
+      if (item.source === 'reply-skipped') {
+        sent =
+          await rc.executeGeneratedSkippedPlan(
+            item,
+            rcSendLine,
+            process.env.DRY_RUN === 'true'
+          );
+
+      } else if (item.source === 'support') {
+        sent =
+          await supportChecker.executeGeneratedSupportReply(
+            item,
+            process.env.DRY_RUN === 'true'
+          );
+
+      } else if (item.source === 'contact') {
+        sent =
+          await contactChecker.executeGeneratedContactReply(
+            item,
+            process.env.DRY_RUN === 'true'
+          );
+
+      } else {
+        throw new Error(
+          `未対応の生成sourceです: ${item.source}`
+        );
+      }
 
     if (sent) {
       generatedQueue.markGeneratedItemSent(id);

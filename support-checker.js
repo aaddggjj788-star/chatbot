@@ -29,6 +29,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const generatedQueue = require('./generated-queue');
 const OpenAI = require('openai');
 const {
   openKyouseitaikai, adjustPoint, setPointLevel, getPointLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
@@ -1919,40 +1920,81 @@ async function checkSupport() {
             console.log(`[AI-REPLY] ${candidate.userName}: 返答文生成に失敗: ${e.message}`);
           }
 
-          if (aiReplyText) {
-            await sendLine([
-              '【AI生成返答】',
-              `ユーザー：${candidate.userName}`,
-              '---',
-              aiReplyText,
-              '---',
-              '「送信」：そのまま送信',
-              '「差し替え#文章」：内容を変更して送信',
-              '「手動対応」：手動対応を通知して次のユーザーへ',
-              '「スキップ」：通知なしで次のユーザーへ',
-            ].join('\n'));
+        if (aiReplyText) {
+          const queueSourceData = {
+            source: 'support',
+            uid: candidate.uid,
+            kid:
+              candidate.kid ||
+              candidate.charaId ||
+              '',
+            receivedAt:
+              candidate.receivedAt ||
+              '',
+            userText:
+              latestMessage || ''
+          };
 
-            let aiReply = null;
-            try {
-              aiReply = await waitForLineReply();
-            } catch (e) {
-              console.log(`[TIMEOUT] ${candidate.userName}: AI生成返答確認 5分タイムアウト → 手動対応へ`);
-            }
-            console.log(`[LINE] AI生成返答確認返信: ${aiReply}`);
+          const generatedItem =
+            generatedQueue.addGeneratedItem({
+              ...queueSourceData,
 
-            // 未返信（タイムアウト）も手動対応として通知する
-            if (aiReply === '送信') {
-              await sendSupportReplyText(page, candidate.userName, aiReplyText);
-            } else if (aiReply && aiReply.startsWith('差し替え#')) {
-              const replacedText = aiReply.replace(/^差し替え#/, '').trim();
-              await sendSupportReplyText(page, candidate.userName, replacedText);
-            } else if (!aiReply || aiReply.includes('手動対応')) {
-              console.log(`[MANUAL] ${candidate.userName}: AI生成返答を送信せず手動対応`);
-              await notifyManual(candidate.userName, candidate.uid);
-            } else {
-              console.log(`[AI-REPLY] ${candidate.userName}: AI生成返答をスキップ（通知なし）`);
-            }
-          }
+              userName:
+                candidate.userName || '',
+
+              reason:
+                'support-ai-reply',
+
+              decision: {
+                questionType:
+                  'support',
+
+                hasReplyWord:
+                  null,
+
+                action:
+                  'support_reply',
+
+                reason:
+                  supplement
+                    ? 'サポート問い合わせに対して補足情報を含めAI返信を生成'
+                    : 'サポート問い合わせに対してAI返信を生成'
+              },
+
+              replyDraft:
+                aiReplyText,
+
+              commands: [
+                'SUPPORT_SEND'
+              ],
+
+              action:
+                'support_reply',
+
+              generatedText:
+                aiReplyText,
+
+              comment:
+                '',
+
+              finalText:
+                ''
+            });
+
+          console.log(
+            `[GENERATED-QUEUE][SUPPORT] ` +
+            `uid=${candidate.uid} ` +
+            `生成キューへ保存`
+          );
+
+          await sendLine([
+            '【サポートAI返信を生成リストへ保存】',
+            `ユーザー：${candidate.userName}`,
+            `会員ID：${candidate.uid}`,
+            '',
+            aiReplyText
+          ].join('\n'));
+        }
         
 
         console.log(`[STEP3] ${candidate.userName}: 返答生成フロー完了 → 次のユーザーへ`);
@@ -2199,6 +2241,98 @@ async function checkSupport() {
   }
 }
 
+async function executeGeneratedSupportReply(item) {
+  if (!item?.uid) {
+    throw new Error('support生成データにuidがありません');
+  }
+
+  const replyText =
+    String(
+      item.replyDraft ||
+      item.generatedText ||
+      ''
+    ).trim();
+
+  if (!replyText) {
+    throw new Error('support生成返信文が空です');
+  }
+
+  console.log(
+    `[GENERATED-SUPPORT] ` +
+    `uid=${item.uid} 送信処理開始`
+  );
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox']
+  });
+
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  try {
+    const page = await context.newPage();
+
+    await login(page);
+    await openSupportPage(page);
+
+    // 現在サポート対象になっているユーザー一覧を取得
+    const candidates =
+      await getFfffe0Candidates(page);
+
+    const target =
+      candidates.find(candidate =>
+        String(candidate.uid) ===
+        String(item.uid)
+      );
+
+    if (!target) {
+      throw new Error(
+        `現在のサポート対象一覧にuid=${item.uid}が見つかりません`
+      );
+    }
+
+    console.log(
+      `[GENERATED-SUPPORT] ` +
+      `uid=${item.uid} ` +
+      `stringID=${target.stringID} ` +
+      `user=${target.userName}`
+    );
+
+    const clicked =
+      await clickTargetUserByStringID(
+        page,
+        target.stringID
+      );
+
+    if (!clicked) {
+      throw new Error(
+        '対象ユーザーのサポート画面を開けませんでした'
+      );
+    }
+
+    await sendSupportReplyText(
+      page,
+      target.userName,
+      replyText
+    );
+
+    console.log(
+      `[GENERATED-SUPPORT] ` +
+      `uid=${item.uid} 送信処理完了`
+    );
+
+    return true;
+
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 function stopSupport() {
   _shouldStop = true;
   console.log('=== support-checker 停止要求 ===');
@@ -2211,5 +2345,6 @@ if (require.main === module) {
 module.exports = {
   checkSupport,
   stopSupport,
-  countSupportTargets
+  countSupportTargets,
+  executeGeneratedSupportReply
 };

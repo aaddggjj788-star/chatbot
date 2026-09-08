@@ -48,6 +48,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const { chromium } = require('playwright');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const axios = require('axios');
+const generatedQueue = require('./generated-queue');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -1175,33 +1176,83 @@ async function processContacts(page) {
         }
 
         if (aiReplyText) {
+          const queueResult =
+            generatedQueue.addGeneratedItem({
+              source: 'contact',
+
+              uid:
+                contact.uid || '',
+
+              kid: '',
+
+              userName:
+                contact.username || '',
+
+              receivedAt:
+                contact.datetime || '',
+
+              userText:
+                content || '',
+
+              reason:
+                'contact-ai-reply',
+
+              decision: {
+                questionType:
+                  'contact',
+
+                hasReplyWord:
+                  null,
+
+                action:
+                  'contact_reply',
+
+                reason:
+                  supplement
+                    ? 'コンタクト問い合わせに対して補足内容を含めAI返信を生成'
+                    : 'コンタクト問い合わせに対してAI返信を生成'
+              },
+
+              replyDraft:
+                aiReplyText,
+
+              commands: [
+                'CONTACT_SEND'
+              ],
+
+              action:
+                'contact_reply',
+
+              generatedText:
+                aiReplyText,
+
+              comment:
+                '',
+
+              finalText:
+                ''
+            });
+
+          const generatedItem =
+            queueResult?.item || null;
+
+          console.log(
+            `[GENERATED-QUEUE][CONTACT] ` +
+            `uid=${contact.uid} ` +
+            `created=${queueResult?.created === true} ` +
+            `id=${generatedItem?.id || '不明'}`
+          );
+
           await sendLine([
-            '【AI生成返答】',
-            '---',
-            aiReplyText,
-            '---',
-            '「送信」：そのまま送信',
-            '「スキップ」：手動対応へ',
-            '「差し替え#文章」：内容を変更して送信',
+            '【コンタクトAI返信を生成リストへ保存】',
+            `生成ID：${generatedItem?.id || '不明'}`,
+            `ユーザー：${contact.username}`,
+            `会員ID：${contact.uid}`,
+            '',
+            aiReplyText
           ].join('\n'));
 
-          let aiReply = null;
-          try {
-            aiReply = await waitForLineReply();
-          } catch (e) {
-            console.log(`[TIMEOUT] uid=${contact.uid}: AI生成返答確認 5分タイムアウト → 手動対応へ`);
-          }
-          console.log(`[LINE] AI生成返答確認返信: ${aiReply}`);
-
-          if (aiReply === '送信') {
-            await submitContactReply(threadPage, aiReplyText, contact.uid, 'AI生成返答');
-            continue;
-          } else if (aiReply && aiReply.startsWith('差し替え#')) {
-            const replacedText = aiReply.replace(/^差し替え#/, '').trim();
-            await submitContactReply(threadPage, replacedText, contact.uid, 'AI生成返答（差し替え）');
-            continue;
-          }
-          console.log(`[AI-REPLY] uid=${contact.uid}: AI生成返答をスキップ → 手動対応フローへ`);
+          continue;
         }
       }
 
@@ -1270,6 +1321,88 @@ async function processContacts(page) {
 
 // ─── エントリポイント ─────────────────────────────────────────────
 
+async function executeGeneratedContactReply(item) {
+  if (!item?.uid) {
+    throw new Error('contact生成データにuidがありません');
+  }
+
+  const replyText =
+    String(
+      item.replyDraft ||
+      item.generatedText ||
+      ''
+    ).trim();
+
+  if (!replyText) {
+    throw new Error('contact生成返信文が空です');
+  }
+
+  console.log(
+    `[GENERATED-CONTACT] ` +
+    `uid=${item.uid} 送信処理開始`
+  );
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox']
+  });
+
+  const context = await browser.newContext({
+    httpCredentials: {
+      username: process.env.BASIC_AUTH_ID,
+      password: process.env.BASIC_AUTH_PASS,
+    },
+  });
+
+  let threadPage = null;
+
+  try {
+    const page = await context.newPage();
+
+    await login(page);
+
+    threadPage =
+      await openContactThread(
+        page,
+        item.uid
+      );
+
+    if (!threadPage) {
+      throw new Error(
+        'コンタクトスレッドを開けませんでした'
+      );
+    }
+
+    const sent =
+      await submitContactReply(
+        threadPage,
+        replyText,
+        item.uid,
+        '生成リストAI返答'
+      );
+
+    if (!sent) {
+      throw new Error(
+        'コンタクト返信送信が完了しませんでした'
+      );
+    }
+
+    console.log(
+      `[GENERATED-CONTACT] ` +
+      `uid=${item.uid} 送信処理完了`
+    );
+
+    return true;
+
+  } finally {
+    if (threadPage) {
+      await threadPage.close().catch(() => {});
+    }
+
+    await browser.close().catch(() => {});
+  }
+}
+
 function stopContacts() {
   _shouldStop = true;
   console.log('=== contact-checker 停止要求 ===');
@@ -1311,5 +1444,6 @@ if (require.main === module) {
 module.exports = {
   checkContacts,
   stopContacts,
-  countContactTargets
+  countContactTargets,
+  executeGeneratedContactReply
 };
