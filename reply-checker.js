@@ -5353,6 +5353,77 @@ async function withTargetConversationByUidKid(uid, kid, sendLine, fn, label = '�
   }
 }
 
+async function sendGeneratedSkippedReply(uid, kid, finalText, sendLine, DRY_RUN = false) {
+  if (!uid || !kid) {
+    await sendLine('【エラー】生成返信: uidまたはkidが不足しています');
+    return false;
+  }
+
+  if (!finalText || !String(finalText).trim()) {
+    await sendLine('【エラー】生成返信: 送信文章が空です');
+    return false;
+  }
+
+  let sent = false;
+
+  await withTargetConversationByUidKid(
+    uid,
+    kid,
+    sendLine,
+    async ({ supportPage, userName }) => {
+      const sendFrame = supportPage.frame({ name: 'ope_main' });
+
+      if (!sendFrame) {
+        await sendLine(
+          `【エラー】生成返信\n会員ID：${uid}\n送信フレーム取得に失敗しました`
+        );
+        return;
+      }
+
+      if (DRY_RUN) {
+        console.log(
+          `[DRY RUN][GENERATED-REPLY] uid=${uid} kid=${kid} ` +
+          `送信予定="${String(finalText).slice(0, 80)}"`
+        );
+
+        await sendLine(
+          `【DRY RUN】生成返信の送信をスキップしました\n` +
+          `会員ID：${uid}\n` +
+          `ユーザー：${userName}`
+        );
+
+        return;
+      }
+
+      await sendFrame.fill(
+        'textarea#mess_body',
+        String(finalText)
+      );
+
+      await sendFrame.click('#chara_mail_send');
+
+      await sendFrame
+        .waitForLoadState('networkidle')
+        .catch(() => {});
+
+      console.log(
+        `[GENERATED-REPLY] uid=${uid} kid=${kid} (${userName}) 送信完了`
+      );
+
+      sent = true;
+
+      await sendLine(
+        `【生成返信送信完了】\n` +
+        `会員ID：${uid}\n` +
+        `ユーザー：${userName}`
+      );
+    },
+    '生成返信'
+  );
+
+  return sent;
+}
+
 async function withSkippedTargetConversation(index, sendLine, fn) {
   if (!index) {
     await sendLine(
@@ -6451,6 +6522,7 @@ module.exports = {
   checkReplies,
   stopReplies,
   sendManualReply,
+  sendGeneratedSkippedReply,
   inquireUserBody,
   inquireNextLine,
   batchSearchAndReply,
