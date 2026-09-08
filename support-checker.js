@@ -130,7 +130,7 @@ function waitForLineReply() {
 }
 
 // ─── 処理コマンド解析 ─────────────────────────────────────────────
-// 「開始」「開始#補足」「手動対応」「スキップ」「〇pt追加」「〇pt減算」「レベル変更:〇」
+// 「開始」「開始#補足」「テンプレート{番号}」「手動対応」「スキップ」「〇pt追加」「〇pt減算」「レベル変更:〇」
 // 「メール確認」「決済確認」「絆変更:{キャラID}:{value}」「{uid} {金額}円 入金」
 // および上記の組み合わせ（例:「メール確認 決済確認 開始」）に対応する。
 // 各コマンドは末尾に来る組み合わせもあるためincludesで判定する。
@@ -147,6 +147,7 @@ function parseCommand(reply) {
     start:      body.includes('開始'),
     supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
     manual:     body.includes('手動対応'),
+    template:   (m => (m ? parseInt(m[1], 10) : null))(body.match(/テンプレート(\d+)/)),
     payment:    (m => (m ? { uid: m[1], amount: parseInt(m[2].replace(/,/g, ''), 10) } : null))(body.match(/(\d+)\s+([\d,]+)円\s*入金/)),
     mail:       body.includes('メール確認'),
     bank:       body.includes('決済確認'),
@@ -155,6 +156,24 @@ function parseCommand(reply) {
   };
 }
 
+function buildTemplateListLines() {
+  try {
+    const templates = JSON.parse(
+      fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')
+    ).templates;
+
+    return [
+      '【テンプレート一覧】',
+      ...templates.map((t, i) => `${i + 1}: ${t.id}`)
+    ];
+  } catch (e) {
+    console.log(
+      '[TEMPLATE] テンプレート一覧の読み込みに失敗:',
+      e.message
+    );
+    return [];
+  }
+}
 // 「手動対応」コマンド用の通知（返答生成は行わず、担当者へ対応を依頼する）
 async function notifyManual(userName, uid) {
   await sendLine(`【手動対応】${userName}（uid:${uid || '不明'}）の対応をお願いします`);
@@ -1718,7 +1737,12 @@ async function checkSupport() {
         ], '返答生成へ');
         if (!cmd) continue;
 
-        const { start: startMatch, supplement, manual: manualMatch } = cmd;
+        const {
+          start: startMatch,
+          supplement,
+          manual: manualMatch,
+          template: templateNum
+        } = cmd;
         const cmdReply = cmd.reply;
 
         // 3. 「手動対応」：LINEへ手動対応を通知して次のユーザーへ
@@ -1859,8 +1883,95 @@ async function checkSupport() {
       ], 'キャンペーン・ポイントチェックを実行');
       if (!cmd) continue;
 
-      const { start: startMatch, supplement, manual: manualMatch } = cmd;
+      const {
+        start: startMatch,
+        supplement,
+        manual: manualMatch,
+        template: templateNum
+      } = cmd;
       const startReply = cmd.reply;
+
+
+
+      // ─── 「テンプレート{番号}」指定時は共通テンプレートで返答 ─────────────
+      if (templateNum) {
+        const templates = JSON.parse(
+          fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')
+        ).templates;
+
+        const template = templates[templateNum - 1];
+
+        if (!template) {
+          console.log(
+            `[TEMPLATE] ${candidate.userName}: ` +
+            `テンプレート${templateNum}は存在しません`
+          );
+
+          await sendLine(
+            `【エラー】テンプレート${templateNum}は存在しません` +
+            `（1〜${templates.length}で指定してください）`
+          );
+
+          continue;
+        }
+
+        await sendLine([
+          '【テンプレート返答候補】',
+          `ユーザー：${candidate.userName}`,
+          `テンプレート${templateNum}：${template.id}`,
+          '---',
+          template.response,
+          '---',
+          '「送信」：そのまま送信',
+          '「手動対応」：手動対応へ',
+          '「スキップ」：次のユーザーへ',
+        ].join('\n'));
+
+        let tReply = null;
+
+        try {
+          tReply = await waitForLineReply();
+        } catch (e) {
+          console.log(
+            `[TIMEOUT] ${candidate.userName}: ` +
+            `テンプレート確認 5分タイムアウト → 手動対応へ`
+          );
+
+          await notifyManual(
+            candidate.userName,
+            candidate.uid
+          );
+
+          continue;
+        }
+
+        console.log(
+          `[LINE] テンプレート確認返信: ${tReply}`
+        );
+
+        if (tReply === '送信') {
+          await sendSupportReplyText(
+            page,
+            candidate.userName,
+            template.response
+          );
+        } else if (
+          tReply &&
+          tReply.includes('手動対応')
+        ) {
+          await notifyManual(
+            candidate.userName,
+            candidate.uid
+          );
+        } else {
+          console.log(
+            `[TEMPLATE] ${candidate.userName}: ` +
+            `テンプレート送信をスキップ`
+          );
+        }
+
+        continue;
+      }
 
       // 3. 「手動対応」：LINEへ手動対応を通知して次の候補へ
       if (manualMatch) {

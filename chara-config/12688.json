@@ -25,7 +25,7 @@
         },
         "mu2his": {
             "fileId": "12688mu2hissinko"
-        },        
+        },
         "mu2": {
             "fileId": "12688mu2sinko",
             "minElapsedMinutes": 25,
@@ -48,6 +48,10 @@
         },
         "yu2": {
             "fileId": "12688yu2sinko",
+            "noresho": {
+                "searchTarget": "12688yu2/ho",
+                "useCurrentRow": true
+            },
             "ho": {
                 "searchTarget": "12688yu2/sinko/1",
                 "useCurrentRow": true
