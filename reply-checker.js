@@ -3530,6 +3530,123 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       recordSkip('/sinko・/his・/ho・subActionコメントなし');
       continue;
     }
+
+
+    // ======================================================
+    // 自動巡回限定：20文字以上をspan判定より先に確認
+    // ======================================================
+    if (autoMode) {
+      const userTextsForAuto =
+        bodyNaibuTexts.length > 0
+          ? bodyNaibuTexts
+          : (analysis.latestUserTexts || []);
+
+      const combinedUserText = userTextsForAuto
+        .map(text => String(text || '').trim())
+        .filter(Boolean)
+        .join('\n\n');
+
+      // 質問型コメントは既存仕様どおり20文字制限を解除する
+      const questionComments =
+        loadReplyAutoQuestionComments();
+
+      const isQuestionComment =
+        allComments.some(comment =>
+          questionComments.has(
+            String(comment).trim()
+          )
+        );
+
+      // 送り返す言葉も、この時点で先に取得しておく
+      const kanteishiBody =
+        analysis.kanteishiBodyText || '';
+
+      const nengenWords = [];
+
+      const nengenRe =
+        /<span class="fortune-word-insert">([^<]+)<\/span>/g;
+
+      let nengenM;
+
+      while (
+        (nengenM =
+          nengenRe.exec(kanteishiBody)) !== null
+      ) {
+        nengenWords.push(
+          nengenM[1]
+        );
+      }
+
+      const longUserMessages =
+        userTextsForAuto
+          .map((text, index) => {
+            const normalized =
+              normalizeMatchText(text);
+
+            return {
+              index: index + 1,
+              text: String(text || ''),
+              normalized,
+              length: [...normalized].length
+            };
+          })
+          .filter(
+            item => item.length >= 20
+          );
+
+      if (
+        longUserMessages.length > 0 &&
+        !isQuestionComment
+      ) {
+        const detail =
+          longUserMessages
+            .map(
+              item =>
+                `${item.index}通目:${item.length}文字`
+            )
+            .join(', ');
+
+        console.log(
+          `[AUTO-CHECK] ${userName}: ` +
+          `20文字以上のユーザーメッセージあり ` +
+          `→ span判定より先に対象外 (${detail})`
+        );
+
+        recordSkip(
+          `自動返信対象外: 1通のユーザーメッセージが20文字以上 (${detail})`,
+          {
+            receivedAt:
+              analysis.latestUserTime || '',
+
+            userText:
+              combinedUserText,
+
+            latestComment:
+              getLatestSinkoComment(
+                allComments
+              ) ||
+              allComments[0] ||
+              '',
+
+            expectedReplyWords:
+              nengenWords
+          }
+        );
+
+        continue;
+      }
+
+      if (
+        longUserMessages.length > 0 &&
+        isQuestionComment
+      ) {
+        console.log(
+          `[AUTO-QUESTION] ${userName}: ` +
+          `質問型コメント一致 → ` +
+          `20文字制限を解除してspan判定へ`
+        );
+      }
+    }
         
     // ─── 判定4: span個数とユーザーメッセージ通数の照合 ──────────
     // subActionコメントあり（requiredMessages独自判定を使う）→ span照合スキップ
@@ -3650,64 +3767,6 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
       }      
 
-      // --------------------------------------------------
-      // 15文字以上なら自動返信対象外
-      // --------------------------------------------------
-      const longUserMessages = userTextsForAuto
-        .map((text, index) => {
-          const normalized = normalizeMatchText(text);
-
-          return {
-            index: index + 1,
-            text: String(text || ''),
-            normalized,
-            length: [...normalized].length
-          };
-        })
-        .filter(item => item.length >= 20);
-
-      if (
-        longUserMessages.length > 0 &&
-        !isQuestionComment
-      ) {
-        const detail = longUserMessages
-          .map(item => `${item.index}通目:${item.length}文字`)
-          .join(', ');
-
-        console.log(
-          `[AUTO-CHECK] ${userName}: 20文字以上のユーザーメッセージあり → 対象外 (${detail})`
-        );
-
-      recordSkip(
-        `自動返信対象外: 1通のユーザーメッセージが20文字以上 (${detail})`,
-        {
-          receivedAt:
-            analysis.latestUserTime || '',
-
-          userText:
-            combinedUserText,
-
-          latestComment:
-            getLatestSinkoComment(allComments) ||
-            allComments[0] ||
-            '',
-
-          expectedReplyWords:
-            nengenWords
-        }
-      );
-
-        continue;
-      }
-
-      if (
-        longUserMessages.length > 0 &&
-        isQuestionComment
-      ) {
-        console.log(
-          `[AUTO-QUESTION] ${userName}: 質問型コメント一致 → 20文字制限を解除`
-        );
-      }
 
       // --------------------------------------------------
       // 送り返す言葉が取得できた場合、
