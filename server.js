@@ -60,9 +60,106 @@ let replyAutoTimer = null;
 // 自動返信巡回 設定管理
 // ======================================================
 
+
+async function executeNewGeneratedItems(beforeIds = []) {
+  const config =
+    loadReplyAutoConfig();
+
+  if (!config.generatedAutoExecute) {
+    console.log(
+      '[GENERATED-AUTO-EXEC] 自動実行OFF → キュー保存のみ'
+    );
+    return;
+  }
+
+  const beforeSet =
+    new Set(
+      (beforeIds || []).map(id =>
+        String(id)
+      )
+    );
+
+  const pendingItems =
+    generatedQueue.listGeneratedItems({
+      status: 'pending'
+    });
+
+  const newItems =
+    pendingItems.filter(item =>
+      item.source === 'reply-skipped' &&
+      !beforeSet.has(String(item.id))
+    );
+
+  if (newItems.length === 0) {
+    console.log(
+      '[GENERATED-AUTO-EXEC] 今回の新規生成なし'
+    );
+    return;
+  }
+
+  console.log(
+    `[GENERATED-AUTO-EXEC] ` +
+    `新規${newItems.length}件を自動実行します`
+  );
+
+  for (const item of newItems) {
+    try {
+      console.log(
+        `[GENERATED-AUTO-EXEC] ` +
+        `生成ID=${item.id} ` +
+        `uid=${item.uid} ` +
+        `kid=${item.kid} ` +
+        `action=${item.action}`
+      );
+
+      const sent =
+        await rc.executeGeneratedSkippedPlan(
+          item,
+          rcSendLine,
+          process.env.DRY_RUN === 'true'
+        );
+
+      if (sent) {
+        generatedQueue.markGeneratedItemSent(
+          item.id
+        );
+
+        console.log(
+          `[GENERATED-AUTO-EXEC] ` +
+          `生成ID=${item.id} → sent`
+        );
+
+      } else {
+        generatedQueue.markGeneratedItemError(
+          item.id,
+          '自動実行が完了しませんでした'
+        );
+
+        console.log(
+          `[GENERATED-AUTO-EXEC] ` +
+          `生成ID=${item.id} → error`
+        );
+      }
+
+    } catch (err) {
+      console.error(
+        `[GENERATED-AUTO-EXEC] ` +
+        `生成ID=${item.id} 実行エラー:`,
+        err.message
+      );
+
+      generatedQueue.markGeneratedItemError(
+        item.id,
+        err.message
+      );
+    }
+  }
+}
+
 function loadReplyAutoConfig() {
   const defaultConfig = {
     enabled: false,
+    generatedAutoExecute: false,
     intervalMinutes: 20,
     targetKids: [],
     maxSendPerRun: 50,
@@ -243,12 +340,23 @@ function scheduleNextReplyAutoRun() {
       ].join('\n')
     );
 
+    const generatedBeforeRun =
+  generatedQueue
+    .listGeneratedItems({
+      status: 'pending'
+    })
+    .map(item => item.id);
+
     await checkReplies({
       autoMode: true,
       targetKids: latestConfig.targetKids,
       maxSendPerRun: latestConfig.maxSendPerRun,
       retry: latestConfig.retry
     });
+
+    await executeNewGeneratedItems(
+      generatedBeforeRun
+    );
 
     console.log('[COUNT-CHECK][AUTO] 件数確認開始');
 
@@ -1289,6 +1397,7 @@ if (generatedSkipMatch) {
         '【自動返信状況】',
         '',
         `稼働設定：${config.enabled ? 'ON' : 'OFF'}`,
+        `生成返信自動実行：${config.generatedAutoExecute ? 'ON' : 'OFF'}`,
         `対象kid：${targetText}`,
         `巡回間隔：${config.intervalMinutes}分`,
         `最大送信件数：${config.maxSendPerRun}件`,
