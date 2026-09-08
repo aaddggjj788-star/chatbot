@@ -893,6 +893,8 @@ if (text === '生成リスト') {
       `受信日時：${item.receivedAt || '不明'}`,
       ''
     );
+
+    return reply(lines.join('\n'));
   }
 
   lines.push(
