@@ -5191,35 +5191,26 @@ async function generateAiReplyForSkippedTarget(
   );
 }
 
+async function withTargetConversationByUidKid(uid, kid, sendLine, fn, label = '対象外返信') {
+  uid = String(uid || '');
+  kid = String(kid || '');
 
-async function withSkippedTargetConversation(index, sendLine, fn) {
-  if (!index) {
-    await sendLine('【エラー】対象外返信: 番号が指定されていません');
-    return;
-  }
-
-  // 対象外一覧ファイル（番号付き）から番号→uid/kidを解決する
-  let entry = null;
-  try {
-    const list = JSON.parse(fs.readFileSync(SKIPPED_LIST_FILE, 'utf8'));
-    if (Array.isArray(list)) entry = list.find(e => String(e.index) === String(index));
-  } catch (e) {
-    console.log(`[MANUAL-REPLY] 対象外一覧ファイルの読み込みに失敗: ${e.message}`);
-  }
-  if (!entry) {
+  if (!uid || !kid) {
     await sendLine(
-      `【エラー】対象外返信\n対象外ID：${index} が一覧に見つかりませんでした\n` +
-      '（返信チェック未実施か、番号が範囲外の可能性があります）'
+      `【エラー】${label}\nuidまたはkidが指定されていません`
     );
     return;
   }
-  const uid = String(entry.uid);
-  const kid = String(entry.kid);
-  console.log(`[MANUAL-REPLY] 対象外ID=${index} → uid=${uid} kid=${kid} userName=${entry.userName}`);
-  console.log('[AI-REPLY-DEBUG] browser起動開始');
 
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  console.log('[AI-REPLY-DEBUG] browser起動完了');
+  console.log(
+    `[TARGET-CONVERSATION] uid=${uid} kid=${kid} 処理開始`
+  );
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox']
+  });
+
   const context = await browser.newContext({
     httpCredentials: {
       username: process.env.BASIC_AUTH_ID,
@@ -5230,76 +5221,199 @@ async function withSkippedTargetConversation(index, sendLine, fn) {
   try {
     const page = await context.newPage();
 
-    console.log('[AI-REPLY-DEBUG] page作成完了');
-
-    console.log('[AI-REPLY-DEBUG] login開始');
     await login(page);
-    console.log('[AI-REPLY-DEBUG] login完了');
 
-    console.log('[AI-REPLY-DEBUG] openSupportPage開始');
-    const supportPage = await openSupportPage(page);
-    console.log('[AI-REPLY-DEBUG] openSupportPage完了');
+    const supportPage =
+      await openSupportPage(page);
 
-    // 対象ユーザー一覧から uid・kid の両方が一致する行を特定する
-    console.log('[AI-REPLY-DEBUG] getTargetUsers開始');
+    const targets =
+      await getTargetUsers(supportPage);
 
-    const targets = await getTargetUsers(supportPage);
+    const target = targets.find(
+      t =>
+        String(t.uid) === uid &&
+        String(t.kid) === kid
+    );
 
-    console.log(`[AI-REPLY-DEBUG] getTargetUsers完了 ${targets.length}件`);
-    const target = targets.find(t => String(t.uid) === uid && String(t.kid) === kid);
     if (!target) {
-      console.log(`[MANUAL-REPLY] 対象外ID=${index}: uid=${uid} kid=${kid} が対象ユーザー一覧に見つかりません`);
-      await sendLine(
-        `【エラー】対象外返信\n対象外ID：${index}（u_id: ${uid}, k_id: ${kid}）が対象ユーザー一覧に見つかりませんでした\n` +
-        '（既に対応済みか、一覧から外れた可能性があります）'
+      console.log(
+        `[TARGET-CONVERSATION] uid=${uid} kid=${kid} が対象一覧に見つかりません`
       );
+
+      await sendLine(
+        `【エラー】${label}\n` +
+        `会員ID：${uid}\n` +
+        `k_id：${kid}\n` +
+        `対象ユーザー一覧に見つかりませんでした\n` +
+        `（既に対応済みか、一覧から外れた可能性があります）`
+      );
+
       return;
     }
-    const { userName, stringID } = target;
-    console.log(`[MANUAL-REPLY] 対象特定: ${userName} (k_id=${kid}, u_id=${uid}, stringID=${stringID})`);
 
-    const menuFrame = supportPage.frame({ name: 'ope_menu' });
-    const mainFrame = supportPage.frame({ name: 'ope_main' });
+    const {
+      userName,
+      stringID
+    } = target;
+
+    console.log(
+      `[TARGET-CONVERSATION] 対象特定: ` +
+      `${userName} uid=${uid} kid=${kid} stringID=${stringID}`
+    );
+
+    const menuFrame =
+      supportPage.frame({ name: 'ope_menu' });
+
+    const mainFrame =
+      supportPage.frame({ name: 'ope_main' });
+
     if (!menuFrame || !mainFrame) {
-      await sendLine(`【エラー】対象外返信\n会員ID：${uid} のフレーム取得に失敗しました`);
+      await sendLine(
+        `【エラー】${label}\n` +
+        `会員ID：${uid} のフレーム取得に失敗しました`
+      );
+
       return;
     }
 
-    // submit前に#bodyKakuninを空にして前候補の内容の誤検知を防ぐ
+    // 前候補の内容を残さない
     await mainFrame.evaluate(() => {
-      const el = document.querySelector('#bodyKakunin');
-      if (el) el.innerHTML = '';
+      const el =
+        document.querySelector('#bodyKakunin');
+
+      if (el) {
+        el.innerHTML = '';
+      }
     });
 
-    // ope_menuフレームでformをsubmit → Ajaxでope_mainに会話を表示
+    // 対象ユーザーを表示
     await menuFrame.evaluate((sid) => {
-      const form = document.getElementById(sid);
-      if (!form) throw new Error(`id="${sid}" のformが見つかりません`);
+      const form =
+        document.getElementById(sid);
+
+      if (!form) {
+        throw new Error(
+          `id="${sid}" のformが見つかりません`
+        );
+      }
+
       form.submit();
     }, stringID);
 
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(
+      r => setTimeout(r, 500)
+    );
+
     try {
       await mainFrame.waitForFunction(() => {
-        const el = document.querySelector('#bodyKakunin');
-        const trCount = document.querySelectorAll('tr').length;
-        return el !== null && el.innerHTML.length > 0 && trCount >= 20;
-      }, { timeout: 15000 });
+        const el =
+          document.querySelector('#bodyKakunin');
+
+        const trCount =
+          document.querySelectorAll('tr').length;
+
+        return (
+          el !== null &&
+          el.innerHTML.length > 0 &&
+          trCount >= 20
+        );
+      }, {
+        timeout: 15000
+      });
     } catch (_) {
-      console.log(`[MANUAL-REPLY] ${userName}: #bodyKakunin のタイムアウト（続行）`);
+      console.log(
+        `[TARGET-CONVERSATION] ${userName}: ` +
+        '#bodyKakunin のタイムアウト（続行）'
+      );
     }
 
-    console.log('[AI-REPLY-DEBUG] fn呼び出し開始');
+    await fn({
+      supportPage,
+      target,
+      uid,
+      kid,
+      userName
+    });
 
-    await fn({ supportPage, target, uid, kid, userName });
-
-    console.log('[AI-REPLY-DEBUG] fn呼び出し完了');
   } catch (err) {
-    console.error(`[MANUAL-REPLY] 対象外ID=${index}: 処理に失敗: ${err.message}`, err.stack);
-    await sendLine(`【エラー】対象外返信に失敗しました\n対象外ID：${index}\nエラー：${err.message}`);
+    console.error(
+      `[TARGET-CONVERSATION] uid=${uid} kid=${kid}:`,
+      err.message,
+      err.stack
+    );
+
+    await sendLine(
+      `【エラー】${label}に失敗しました\n` +
+      `会員ID：${uid}\n` +
+      `エラー：${err.message}`
+    );
+
   } finally {
     await browser.close().catch(() => {});
   }
+}
+
+async function withSkippedTargetConversation(index, sendLine, fn) {
+  if (!index) {
+    await sendLine(
+      '【エラー】対象外返信: 番号が指定されていません'
+    );
+    return;
+  }
+
+  let entry = null;
+
+  try {
+    const list = JSON.parse(
+      fs.readFileSync(
+        SKIPPED_LIST_FILE,
+        'utf8'
+      )
+    );
+
+    if (Array.isArray(list)) {
+      entry = list.find(
+        e =>
+          String(e.index) ===
+          String(index)
+      );
+    }
+
+  } catch (e) {
+    console.log(
+      `[MANUAL-REPLY] 対象外一覧ファイルの読み込みに失敗: ${e.message}`
+    );
+  }
+
+  if (!entry) {
+    await sendLine(
+      `【エラー】対象外返信\n` +
+      `対象外ID：${index} が一覧に見つかりませんでした\n` +
+      `（返信チェック未実施か、番号が範囲外の可能性があります）`
+    );
+
+    return;
+  }
+
+  const uid =
+    String(entry.uid);
+
+  const kid =
+    String(entry.kid);
+
+  console.log(
+    `[MANUAL-REPLY] 対象外ID=${index} ` +
+    `→ uid=${uid} kid=${kid} ` +
+    `userName=${entry.userName}`
+  );
+
+  await withTargetConversationByUidKid(
+    uid,
+    kid,
+    sendLine,
+    fn,
+    `対象外ID:${index}`
+  );
 }
 
 
