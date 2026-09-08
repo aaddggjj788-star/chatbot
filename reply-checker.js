@@ -138,7 +138,13 @@ function getSkippedAutoGenerateCandidates(list) {
       reason.includes(
         '自動返信対象外: 1通のユーザーメッセージが20文字以上'
       ) ||
-      reason.startsWith('span不足:')
+      (
+        reason.includes('ユーザーメッセージ通数(') &&
+        reason.includes('< span個数(')
+      )||
+      reason.includes(
+        '自動返信対象外: 送り返す言葉が一部不一致'
+      )
     );
   });
 }
@@ -3692,12 +3698,12 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
 
         console.log(
           `[SKIP] ${userName}: ` +
-          `span不足=${spanShortage} ` +
+          `span個数=${spanShortage} ` +
           `(span=${spanCount}, required=${requiredSpanCount})`
         );
 
         recordSkip(
-          `span不足: ${spanShortage}個 ` +
+          `span個数: ${spanShortage}個 ` +
           `(span=${spanCount}, required=${requiredSpanCount})`,
           {
             receivedAt:
@@ -3719,8 +3725,50 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         continue;
       }
       } else if (userMsgCount < spanCount) {
-        console.log(`[SKIP] ${userName}: ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount})`);
-        recordSkip(`ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount})`);
+        const spanShortage =
+          spanCount - userMsgCount;
+
+        const latestComment =
+          getLatestSinkoComment(allComments) ||
+          allComments[0] ||
+          '';
+
+        const userTextsForSpan =
+          bodyNaibuTexts.length > 0
+            ? bodyNaibuTexts
+            : (analysis.latestUserTexts || []);
+
+        const combinedUserTextForSpan =
+          userTextsForSpan
+            .map(text => String(text || '').trim())
+            .filter(Boolean)
+            .join('\n\n');
+
+        console.log(
+          `[SKIP] ${userName}: ` +
+          `ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount}) ` +
+          `不足=${spanShortage}`
+        );
+
+        recordSkip(
+          `ユーザーメッセージ通数(${userMsgCount}) < span個数(${spanCount})`,
+          {
+            receivedAt:
+              analysis.latestUserTime || '',
+
+            userText:
+              combinedUserTextForSpan,
+
+            latestComment,
+
+            spanCount,
+
+            userMsgCount,
+
+            spanShortage
+          }
+        );
+
         continue;
       }
     }
@@ -3790,21 +3838,6 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
 
       if (
         hasUserQuestion &&
-        !isQuestionComment
-      ) {
-        console.log(
-          `[AUTO-CHECK] ${userName}: ユーザー質問（？/?）を検出 → 対象外`
-        );
-
-        recordSkip(
-          '自動返信対象外: ユーザーメッセージに質問（？/?）あり'
-        );
-
-        continue;
-      }
-
-      if (
-        hasUserQuestion &&
         isQuestionComment
       ) {
         console.log(
@@ -3829,13 +3862,34 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
 
         if (unmatchedWords.length > 0) {
+          const latestComment =
+            getLatestSinkoComment(allComments) ||
+            allComments[0] ||
+            '';
+
           console.log(
             `[AUTO-CHECK] ${userName}: 送り返す言葉不一致 ` +
             `unmatched=${JSON.stringify(unmatchedWords)}`
           );
 
           recordSkip(
-            `自動返信対象外: 送り返す言葉が一部不一致 (${unmatchedWords.join(', ')})`
+            `自動返信対象外: 送り返す言葉が一部不一致 (${unmatchedWords.join(', ')})`,
+            {
+              receivedAt:
+                analysis.latestUserTime || '',
+
+              userText:
+                combinedUserText,
+
+              latestComment,
+
+              expectedReplyWords:
+                nengenWords,
+
+              unmatchedWords,
+
+              hasUserQuestion
+            }
           );
 
           continue;
@@ -3845,6 +3899,21 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           `[AUTO-CHECK] ${userName}: 送り返す言葉を全て確認`
         );
       }
+
+      if (
+        hasUserQuestion &&
+        !isQuestionComment
+      ) {
+        console.log(
+          `[AUTO-CHECK] ${userName}: ユーザー質問（？/?）を検出 → 対象外`
+        );
+
+        recordSkip(
+          '自動返信対象外: ユーザーメッセージに質問（？/?）あり'
+        );
+
+        continue;
+      }      
 
       if (
         nengenWords.length > 0 &&
@@ -6004,6 +6073,165 @@ async function classifyLongSkippedWithAI(item) {
 
   return result;
 }
+
+async function classifyReturnWordMismatchWithAI(item) {
+  const expectedReplyWords =
+    Array.isArray(item.expectedReplyWords)
+      ? item.expectedReplyWords
+      : [];
+
+  const unmatchedWords =
+    Array.isArray(item.unmatchedWords)
+      ? item.unmatchedWords
+      : [];
+
+  const response =
+    await openai.responses.create({
+      model: 'gpt-5-mini',
+
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                'あなたは鑑定返信の安全判定を行うAIです。',
+                '',
+                '送り返す言葉が期待値と一致しなかったユーザー返信について、',
+                'ユーザーが正しい言葉を送ろうとした可能性と、',
+                '質問・疑念が含まれているかを判定してください。',
+                '',
+                '【分類】',
+                'typo:',
+                '・誤字、脱字、表記ゆれなど',
+                '・期待された送り返す言葉を入力しようとした意図が明確',
+                '',
+                'question:',
+                '・質問、疑問、不安、反論、確認などが含まれる',
+                '・送り返す言葉の誤りだけでは処理できない',
+                '',
+                'unrelated:',
+                '・期待された送り返す言葉とは明らかに無関係',
+                '・質問や疑念への回答も必要ない',
+                '',
+                '【重要】',
+                '・似ているという理由だけでtypoにしない',
+                '・ユーザーが期待語を送ろうとした意図が読み取れる場合のみtypo',
+                '・質問や疑念が含まれる場合はquestionを優先する',
+                '・文章生成は行わない'
+              ].join('\n')
+            }
+          ]
+        },
+
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                '【期待返信ワード】',
+                expectedReplyWords.join(' / ') || 'なし',
+                '',
+                '【不一致ワード】',
+                unmatchedWords.join(' / ') || 'なし',
+                '',
+                '【ユーザー本文】',
+                String(item.userText || '')
+              ].join('\n')
+            }
+          ]
+        }
+      ],
+
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'return_word_mismatch',
+          strict: true,
+
+          schema: {
+            type: 'object',
+
+            properties: {
+              mismatchType: {
+                type: 'string',
+                enum: [
+                  'typo',
+                  'question',
+                  'unrelated'
+                ]
+              },
+
+              reason: {
+                type: 'string'
+              }
+            },
+
+            required: [
+              'mismatchType',
+              'reason'
+            ],
+
+            additionalProperties: false
+          }
+        }
+      }
+    });
+
+  const result =
+    JSON.parse(
+      response.output_text
+    );
+
+  if (result.mismatchType === 'typo') {
+    return {
+      questionType:
+        'return_word_typo',
+
+      hasReplyWord:
+        false,
+
+      action:
+        'insert_next',
+
+      reason:
+        result.reason
+    };
+  }
+
+  if (result.mismatchType === 'question') {
+    return {
+      questionType:
+        'return_word_question',
+
+      hasReplyWord:
+        false,
+
+      action:
+        'reply_and_resume',
+
+      reason:
+        result.reason
+    };
+  }
+
+  return {
+    questionType:
+      'return_word_unrelated',
+
+    hasReplyWord:
+      false,
+
+    action:
+      'skip',
+
+    reason:
+      result.reason
+  };
+}
+
 function classifySpanShortage(item) {
   const shortage =
     Number(item.spanShortage || 0);
@@ -6098,13 +6326,27 @@ async function processLongSkippedAutoCandidates() {
 
       let ai;
 
+      const itemReason =
+        String(item.reason || '');
+
       if (
-        String(item.reason || '').startsWith(
-          'span不足:'
+        (
+          itemReason.includes('ユーザーメッセージ通数(') &&
+          itemReason.includes('< span個数(')
         )
       ) {
         ai =
           classifySpanShortage(item);
+
+      } else if (
+        itemReason.includes(
+          '自動返信対象外: 送り返す言葉が一部不一致'
+        )
+      ) {
+        ai =
+          await classifyReturnWordMismatchWithAI(
+            item
+          );
 
       } else {
         ai =
@@ -6182,8 +6424,56 @@ async function processLongSkippedAutoCandidates() {
 
       let generationInstruction = '';
 
-      if (ai.action === 'insert_next') {
+      if (
+        itemReason.startsWith('span個数:') &&
+        Number(item.spanShortage) === 1
+      ) {
         generationInstruction = [
+          '必要な工程が1つだけ不足していました。',
+          '今回はその不足を鑑定士側で補ったことを自然に伝えてください。',
+          'ただし今後は一つ一つの工程を丁寧に行う必要があることも短く伝えてください。',
+          'この返信の後に本来の次の鑑定文章が続きます。',
+          '新しい質問や新しい工程は作らないでください。'
+        ].join('\n');
+
+      } else if (
+        itemReason.startsWith('span個数:')
+      ) {
+        generationInstruction = [
+          `必要な工程が${Number(item.spanShortage || 0)}個不足しています。`,
+          '今回は鑑定を先へ進めてはいけません。',
+          '先ほど伝えた工程が十分に完了していないことを自然に説明してください。',
+          '不足している工程を丁寧に行ったうえで、改めて連絡するよう促してください。',
+          '具体的な工程内容は直前の鑑定士本文に存在する内容だけを使用してください。',
+          '存在しない工程や返信ワードを作らないでください。'
+        ].join('\n');
+
+      } else if (
+        ai.questionType === 'return_word_typo'
+      ) {
+        generationInstruction = [
+          '送り返す言葉に誤字または入力ミスがある可能性が高いケースです。',
+          '今回は鑑定士側で意図を汲んで先へ進めます。',
+          'ただし送り返す言葉は正確に入力する必要があり、',
+          '誤りがあると正しく作用しない可能性があるため注意するよう短く伝えてください。',
+          'この後に本来の次の鑑定文章が続きます。',
+          '新しい工程や質問は作らないでください。'
+        ].join('\n');
+
+      } else if (
+        ai.questionType === 'return_word_question'
+      ) {
+        generationInstruction = [
+          '送り返す言葉が正しく確認できず、さらにユーザーから質問・疑念・確認があります。',
+          'まずその内容へ鑑定士本人として自然に答えてください。',
+          '今回は鑑定を先へ進めてはいけません。',
+          '最後は、直前に伝えている送り返す言葉や工程を改めて正しく行うよう自然に促してください。',
+          '新しい質問や新しい工程は作らないでください。',
+          '直前の会話に存在しない設定や返信ワードを作らないでください。'
+        ].join('\n');
+
+      } else if (ai.action === 'insert_next') {
+      generationInstruction = [
           '今回は「insert_next」用の短い補助返信を作成してください。',
           'ユーザーの発言へ必要な範囲だけ自然に返答してください。',
           'この返信の後に、本来予定されている次の鑑定文章が続きます。',
