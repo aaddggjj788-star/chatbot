@@ -3,3 +3,4 @@
 
 # 依存パッケージ（npm installで再生成できる）
 node_modules/
+reply-auto-config.json
