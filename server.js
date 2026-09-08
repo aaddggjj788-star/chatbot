@@ -375,21 +375,53 @@ function scheduleNextReplyAutoRun() {
         })
         .map(item => item.id);
     
-    await checkReplies({
-      autoMode: true,
-      targetKids: latestConfig.targetKids,
-      maxSendPerRun: latestConfig.maxSendPerRun,
-      retry: latestConfig.retry
-    });
+      await checkReplies({
+        autoMode: true,
+        targetKids: latestConfig.targetKids,
+        maxSendPerRun: latestConfig.maxSendPerRun,
+        retry: latestConfig.retry
+      });
 
-    await executeNewGeneratedItems(
-      generatedBeforeRun
-    );
 
-    console.log('[COUNT-CHECK][AUTO] 件数確認開始');
+      // ======================================================
+      // support 自動巡回
+      // 対象問い合わせを確認し、返信案を生成キューへ保存
+      // ======================================================
+      console.log(
+        '[AUTO-REPLY] support-checker 自動生成を開始します'
+      );
 
-    const supportCount = await countSupportTargets();
-    const contactCount = await countContactTargets();
+      await checkSupport({
+        autoGenerate: true
+      });
+
+
+      // ======================================================
+      // contact 自動巡回
+      // 対象問い合わせを確認し、返信案を生成キューへ保存
+      // ======================================================
+      console.log(
+        '[AUTO-REPLY] contact-checker 自動生成を開始します'
+      );
+
+      await checkContacts({
+        autoGenerate: true
+      });
+
+
+      // ======================================================
+      // 今回の巡回で新しく生成されたものだけ実行
+      // generatedAutoExecute=false の場合は送信しない
+      // ======================================================
+      await executeNewGeneratedItems(
+        generatedBeforeRun
+      );
+
+
+      console.log('[COUNT-CHECK][AUTO] 件数確認開始');
+
+      const supportCount = await countSupportTargets();
+      const contactCount = await countContactTargets();
 
     console.log(
       `[COUNT-CHECK][AUTO] support=${supportCount} contact=${contactCount}`
