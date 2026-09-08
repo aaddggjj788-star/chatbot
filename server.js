@@ -341,12 +341,12 @@ function scheduleNextReplyAutoRun() {
     );
 
     const generatedBeforeRun =
-  generatedQueue
-    .listGeneratedItems({
-      status: 'pending'
-    })
-    .map(item => item.id);
-
+      generatedQueue
+        .listGeneratedItems({
+          status: 'pending'
+        })
+        .map(item => item.id);
+    
     await checkReplies({
       autoMode: true,
       targetKids: latestConfig.targetKids,
@@ -357,6 +357,8 @@ function scheduleNextReplyAutoRun() {
     await executeNewGeneratedItems(
       generatedBeforeRun
     );
+
+    await executeNewGeneratedItems();
 
     console.log('[COUNT-CHECK][AUTO] 件数確認開始');
 
