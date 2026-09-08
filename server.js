@@ -947,14 +947,12 @@ if (generatedSendMatch) {
   );
 
   try {
-    const sent =
-      await rc.sendGeneratedSkippedReply(
-        item.uid,
-        item.kid,
-        item.finalText,
-        rcSendLine,
-        process.env.DRY_RUN === 'true'
-      );
+  const sent =
+    await rc.executeGeneratedSkippedPlan(
+      item,
+      rcSendLine,
+      process.env.DRY_RUN === 'true'
+    );
 
     if (sent) {
       generatedQueue.markGeneratedItemSent(id);
