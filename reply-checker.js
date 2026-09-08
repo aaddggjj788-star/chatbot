@@ -5284,6 +5284,9 @@ async function generateProfiledReply({
               '・プロフィールや現在フェーズに存在しない工程を追加しない',
               '・現在フェーズより先へ勝手に進めない',
               '・新しい質問や追加ヒアリングを勝手に作らない',
+              '・ユーザーへ送信を求めている返信ワード、送り返す言葉、奉言、念言などの具体的な語句を返信本文内にそのまま記載しない',
+              '・ユーザーが実際に送ってきた返信ワードについても、返信本文内で復唱・引用・再掲しない',
+              '・誤字や不足を伝える場合も、具体的な語句や漢字を挙げず、「お送り頂いた言葉の中に間違いがありました」「一つ足りない言葉がありました」など自然な表現にする',
               '・AI、システム、内部処理について言及しない',
               '・管理用コメントアウトは出力しない',
               '・返信本文だけを出力する',
@@ -5721,6 +5724,198 @@ async function sendGeneratedSkippedReply(uid, kid, finalText, sendLine, DRY_RUN 
   );
 
   return sent;
+}
+
+
+
+function resolveCurrentSkippedIndex(uid, kid) {
+  try {
+    const list = JSON.parse(
+      fs.readFileSync(
+        SKIPPED_LIST_FILE,
+        'utf8'
+      )
+    );
+
+    if (!Array.isArray(list)) {
+      return null;
+    }
+
+    const found = list.find(item =>
+      String(item.uid) === String(uid) &&
+      String(item.kid) === String(kid)
+    );
+
+    return found
+      ? Number(found.index)
+      : null;
+
+  } catch (err) {
+    console.error(
+      '[GENERATED-EXEC] 対象外リスト読込失敗:',
+      err.message
+    );
+
+    return null;
+  }
+}
+
+async function executeGeneratedSkippedPlan(
+  item,
+  sendLine,
+  DRY_RUN = false
+) {
+  if (!item) {
+    throw new Error(
+      '生成データがありません'
+    );
+  }
+
+  if (!item.uid || !item.kid) {
+    throw new Error(
+      '生成データにuidまたはkidがありません'
+    );
+  }
+
+  if (
+    !Array.isArray(item.commands) ||
+    item.commands.length === 0
+  ) {
+    throw new Error(
+      '実行予定コマンドがありません'
+    );
+  }
+
+
+  // ======================================================
+  // 現在の対象外IDをUID/KIDから再解決
+  // ======================================================
+  const currentIndex =
+    resolveCurrentSkippedIndex(
+      item.uid,
+      item.kid
+    );
+
+  if (!currentIndex) {
+    throw new Error(
+      `現在の対象外リストに対象ユーザーが見つかりません ` +
+      `(uid=${item.uid}, kid=${item.kid})`
+    );
+  }
+
+
+  console.log(
+    `[GENERATED-EXEC] ` +
+    `uid=${item.uid} kid=${item.kid} ` +
+    `currentIndex=${currentIndex} ` +
+    `action=${item.action}`
+  );
+
+
+  // ======================================================
+  // 1つ目のコマンドを現在IDに置換
+  // ======================================================
+  const firstCommand =
+    String(item.commands[0] || '')
+      .replace(
+        /^対象外ID[:：]\s*\d+/,
+        `対象外ID:${currentIndex}`
+      );
+
+
+  // ======================================================
+  // 次行照会 → 2つ目のコマンドを自動回答として返す
+  // ======================================================
+  if (
+    /次行照会$/.test(firstCommand)
+  ) {
+    const followCommand =
+      String(item.commands[1] || '').trim();
+
+    if (!followCommand) {
+      throw new Error(
+        '次行照会後の実行コマンドがありません'
+      );
+    }
+
+    console.log(
+      `[GENERATED-EXEC] 次行照会 → ${followCommand.slice(0, 60)}`
+    );
+
+    const autoWaitForReply =
+      async () => {
+        console.log(
+          `[GENERATED-EXEC] 自動確認応答: ` +
+          `${followCommand.slice(0, 80)}`
+        );
+
+        return followCommand;
+      };
+
+
+    await inquireNextLine(
+      currentIndex,
+      sendLine,
+      autoWaitForReply,
+      DRY_RUN
+    );
+
+    return true;
+  }
+
+
+  // ======================================================
+  // 対象外ID:N 文章
+  // reply_and_resume 等の直接返信
+  // ======================================================
+  const normalMatch =
+    firstCommand.match(
+      /^対象外ID[:：]\s*\d+\s+([\s\S]+)$/
+    );
+
+  if (normalMatch) {
+    const replyText =
+      normalMatch[1].trim();
+
+    if (!replyText) {
+      throw new Error(
+        '直接返信文章が空です'
+      );
+    }
+
+    console.log(
+      `[GENERATED-EXEC] 直接返信 ` +
+      `text="${replyText.slice(0, 60)}"`
+    );
+
+
+    // sendManualReply内の確認に対して自動で「送信」
+    const autoWaitForReply =
+      async () => {
+        console.log(
+          '[GENERATED-EXEC] 自動確認応答: 送信'
+        );
+
+        return '送信';
+      };
+
+
+    await sendManualReply(
+      currentIndex,
+      replyText,
+      sendLine,
+      autoWaitForReply,
+      DRY_RUN,
+      false
+    );
+
+    return true;
+  }
+
+
+  throw new Error(
+    `未対応の生成コマンドです: ${firstCommand}`
+  );
 }
 
 async function withSkippedTargetConversation(index, sendLine, fn) {
@@ -7734,5 +7929,7 @@ module.exports = {
   batchSearchAndReply,
   generateAiReplyForSkippedTarget,
   sendLine,
+  executeGeneratedSkippedPlan,
+  resolveCurrentSkippedIndex,
   waitForLineReply
 };
