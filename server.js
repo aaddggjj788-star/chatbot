@@ -5,6 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
 const rc = require('./reply-checker');
+const generatedQueue = require('./generated-queue');
 const REPLY_AUTO_CONFIG_FILE = path.join(
   __dirname,
   'reply-auto-config.json'
@@ -864,6 +865,126 @@ async function processCommand(text, reply, source = 'LINE') {
     stopContacts();
     return reply('コンタクトチェックを停止しました');
   }
+
+
+  // ─── 生成リスト確認 ───────────────────────────────────────────────
+if (text === '生成リスト') {
+  const items = generatedQueue.listGeneratedItems({
+    status: 'pending'
+  });
+
+  if (items.length === 0) {
+    return reply('【生成リスト】\n現在、確認待ちの生成文章はありません');
+  }
+
+  const lines = [
+    '【生成リスト】',
+    ''
+  ];
+
+  for (const item of items) {
+    lines.push(
+      `生成ID:${item.id}`,
+      `種別：${item.source || '不明'}`,
+      `UID：${item.uid || '不明'}`,
+      `KID：${item.kid || '不明'}`,
+      `ユーザー：${item.userName || '不明'}`,
+      `理由：${item.reason || '不明'}`,
+      `受信日時：${item.receivedAt || '不明'}`,
+      ''
+    );
+  }
+
+  lines.push(
+    '内容確認：生成ID:{番号} 確認',
+    'スキップ：生成ID:{番号} スキップ'
+  );
+
+  return reply(lines.join('\n'));
+}
+
+
+// ─── 生成ID:{番号} 確認 ───────────────────────────────────────────
+const generatedCheckMatch =
+  text.match(/^生成ID:(\d+)\s+確認$/);
+
+if (generatedCheckMatch) {
+  const id =
+    parseInt(generatedCheckMatch[1], 10);
+
+  const item =
+    generatedQueue.getGeneratedItem(id);
+
+  if (!item) {
+    return reply(
+      `【エラー】生成ID:${id} は存在しません`
+    );
+  }
+
+  return reply([
+    `【生成内容確認】`,
+    `生成ID:${item.id}`,
+    `状態：${item.status}`,
+    `種別：${item.source || '不明'}`,
+    `UID：${item.uid || '不明'}`,
+    `KID：${item.kid || '不明'}`,
+    `ユーザー：${item.userName || '不明'}`,
+    `理由：${item.reason || '不明'}`,
+    `受信日時：${item.receivedAt || '不明'}`,
+    '',
+    '【ユーザー本文】',
+    item.userText || '（なし）',
+    '',
+    '【予定処理】',
+    item.action || '（なし）',
+    '',
+    '【生成文章】',
+    item.generatedText || '（なし）',
+    '',
+    '【コメントアウト】',
+    item.comment || '（なし）',
+    '',
+    '【最終送信文章】',
+    item.finalText || '（なし）'
+  ].join('\n'));
+}
+
+
+// ─── 生成ID:{番号} スキップ ───────────────────────────────────────
+const generatedSkipMatch =
+  text.match(/^生成ID:(\d+)\s+スキップ$/);
+
+if (generatedSkipMatch) {
+  const id =
+    parseInt(generatedSkipMatch[1], 10);
+
+  const item =
+    generatedQueue.getGeneratedItem(id);
+
+  if (!item) {
+    return reply(
+      `【エラー】生成ID:${id} は存在しません`
+    );
+  }
+
+  if (item.status === 'sent') {
+    return reply(
+      `【生成ID:${id}】既に送信済みです`
+    );
+  }
+
+  if (item.status === 'skipped') {
+    return reply(
+      `【生成ID:${id}】既にスキップ済みです`
+    );
+  }
+
+  generatedQueue.markGeneratedItemSkipped(id);
+
+  return reply(
+    `【生成ID:${id}】スキップ済みに変更しました`
+  );
+}
 
   // reply-checker.js/support-checker.js/contact-checker.js が返信待ち中なら
   // 受信テキストをそのままstate fileに書き込んで終了する。
