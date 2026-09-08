@@ -205,6 +205,17 @@ function addGeneratedItem(data) {
 
     reason: data.reason || '',
 
+    decision:
+      data.decision || null,
+
+    replyDraft:
+      data.replyDraft || data.generatedText || '',
+
+    commands:
+      Array.isArray(data.commands)
+        ? data.commands
+        : [],
+
     userText: data.userText || '',
 
     action: data.action || '',
@@ -245,16 +256,7 @@ function addGeneratedItem(data) {
     `reason=${item.reason}`
   );
 
-  decision:
-    data.decision || null,
-
-  replyDraft:
-    data.replyDraft || data.generatedText || '',
-
-  commands:
-    Array.isArray(data.commands)
-      ? data.commands
-      : [],
+  
 
   return {
     created: true,
