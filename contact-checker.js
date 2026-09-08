@@ -1008,7 +1008,12 @@ async function submitContactReply(threadPage, bodyText, uid, label) {
 
 // ─── コンタクト処理メインループ ───────────────────────────────────
 
-async function processContacts(page) {
+async function processContacts(
+  page,
+  {
+    autoGenerate = false
+  } = {}
+) {
   const contactPage = await openContactMailPage(page);
   await runContactSearch(contactPage);
   const contacts = await getUnprocessedContacts(contactPage);
@@ -1048,59 +1053,130 @@ async function processContacts(page) {
 
       let cmd = null;
       let timedOut = false;
-      let firstPrompt = true;
-      while (true) {
-        await sendLine(firstPrompt
-          ? [
-              '【問い合わせ受信】',
-              `会員ID：${contact.uid}`,
-              `ユーザー：${contact.username}`,
-              `受信日時：${contact.datetime}`,
-              '---',
-              content,
-              '---',
-              ...(basicInfoLines.length > 0 ? [...basicInfoLines, ''] : []),
-              ...(memberInfoLines.length > 0 ? [...memberInfoLines, ''] : []),
-              ...buildTemplateListLines(),
-              '',
-              '処理コマンドを入力してください：',
-              ...COMMAND_HELP_LINES,
-            ].join('\n')
-          : [
-              '【コマンド待ち】',
-              `ユーザー：${contact.username}`,
-              '続けて処理コマンドを入力してください：',
-              ...COMMAND_HELP_LINES,
-            ].join('\n'));
-        firstPrompt = false;
 
-        let reply;
-        try {
-          reply = await waitForLineReply();
-        } catch (e) {
-          console.log(`[TIMEOUT] uid=${contact.uid}: 処理コマンド待ち タイムアウト → スキップ`);
-          timedOut = true;
+
+      // ======================================================
+      // 自動生成モード
+      // ======================================================
+      if (autoGenerate) {
+        console.log(
+          `[CONTACT-AUTO] uid=${contact.uid}: ` +
+          `コマンド待ちを省略してAI返信生成へ進みます`
+        );
+
+        cmd = {
+          start: true,
+          supplement: null,
+          manual: false,
+          template: null,
+          skip: false,
+          mail: false,
+          bank: false,
+          payment: false,
+          reply: 'AUTO_GENERATE'
+        };
+
+
+      // ======================================================
+      // 従来の手動モード
+      // ======================================================
+      } else {
+        let firstPrompt = true;
+
+        while (true) {
+          await sendLine(
+            firstPrompt
+              ? [
+                  '【問い合わせ受信】',
+                  `会員ID：${contact.uid}`,
+                  `ユーザー：${contact.username}`,
+                  `受信日時：${contact.datetime}`,
+                  '---',
+                  content,
+                  '---',
+                  ...(basicInfoLines.length > 0
+                    ? [...basicInfoLines, '']
+                    : []),
+                  ...(memberInfoLines.length > 0
+                    ? [...memberInfoLines, '']
+                    : []),
+                  ...buildTemplateListLines(),
+                  '',
+                  '処理コマンドを入力してください：',
+                  ...COMMAND_HELP_LINES,
+                ].join('\n')
+
+              : [
+                  '【コマンド待ち】',
+                  `ユーザー：${contact.username}`,
+                  '続けて処理コマンドを入力してください：',
+                  ...COMMAND_HELP_LINES,
+                ].join('\n')
+          );
+
+          firstPrompt = false;
+
+          let reply;
+
+          try {
+            reply =
+              await waitForLineReply();
+
+          } catch (e) {
+            console.log(
+              `[TIMEOUT] uid=${contact.uid}: ` +
+              `処理コマンド待ち タイムアウト → スキップ`
+            );
+
+            timedOut = true;
+            break;
+          }
+
+          console.log(
+            `[LINE] 処理コマンド返信: ${reply}`
+          );
+
+          const parsed =
+            parseCommand(reply);
+
+          // 照会・更新系コマンド
+          await runSubCommands(
+            page,
+            contact.uid,
+            parsed
+          );
+
+          // 照会系だけの場合は再度コマンド待ち
+          if (
+            (
+              parsed.mail ||
+              parsed.bank ||
+              parsed.payment
+            ) &&
+            !parsed.start &&
+            !parsed.template &&
+            !parsed.skip
+          ) {
+            console.log(
+              `[CMD] uid=${contact.uid}: ` +
+              `照会/入金コマンドのみ → 再度コマンド待ちへ`
+            );
+
+            continue;
+          }
+
+          cmd = {
+            ...parsed,
+            reply
+          };
+
           break;
         }
-        console.log(`[LINE] 処理コマンド返信: ${reply}`);
-
-        const parsed = parseCommand(reply);
-
-        // 照会・更新系コマンド（メール確認/決済確認/絆変更/ポイント/レベル）を実行
-        await runSubCommands(page, contact.uid, parsed);
-
-        // 照会・入金コマンドが含まれ、かつ「開始」「テンプレート」「スキップ」の
-        // 指示がなければ、結果を確認したうえで次のコマンドを入力できるよう
-        // コマンド待ちに戻る
-        if ((parsed.mail || parsed.bank || parsed.payment) && !parsed.start && !parsed.template && !parsed.skip) {
-          console.log(`[CMD] uid=${contact.uid}: 照会/入金コマンドのみ → 再度コマンド待ちへ`);
-          continue;
-        }
-
-        cmd = { ...parsed, reply };
-        break;
       }
-      if (timedOut) continue;
+
+      if (timedOut) {
+        continue;
+      }
 
       const { start: startMatch, supplement, template: templateNum } = cmd;
       const startReply = cmd.reply;
@@ -1408,7 +1484,11 @@ function stopContacts() {
   console.log('=== contact-checker 停止要求 ===');
 }
 
-async function checkContacts() {
+async function checkContacts(
+  {
+    autoGenerate = false
+  } = {}
+) {
   _shouldStop = false;
   console.log('=== contact-checker 起動 ===');
 
@@ -1426,7 +1506,12 @@ async function checkContacts() {
   try {
     const page = await context.newPage();
     await login(page);
-    await processContacts(page);
+    await processContacts(
+      page,
+      {
+        autoGenerate
+      }
+    );
     console.log('=== contact-checker 完了 ===');
   } catch (err) {
     console.error('[FATAL]', err.message, err.stack);

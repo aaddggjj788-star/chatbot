@@ -1736,7 +1736,11 @@ function buildResultMessage(userName, mails) {
 
 // ─── エントリポイント ─────────────────────────────────────────────
 
-async function checkSupport() {
+async function checkSupport(
+  {
+    autoGenerate = false
+  } = {}
+) {
   _shouldStop = false;
   console.log('=== support-checker 起動 ===');
 
@@ -1794,17 +1798,44 @@ async function checkSupport() {
         } else {
           console.log(`[MEMBER-INFO] ${candidate.userName}: ポイント関連キーワードなし → ポイント照合の取得をスキップ`);
         }
-        const cmd = await waitForCommand(page, candidate, [
-          '【問い合わせ受信】',
-          `会員ID：${candidate.uid}`,
-          `ユーザー：${candidate.userName}`,
-          `受信日時：${latestDatetime || '（不明）'}`,
-          '---',
-          latestMessage,
-          '---',
-          ...basicInfoLines,
-          ...(memberInfoLines.length > 0 ? ['', ...memberInfoLines] : []),
-        ], '返答生成へ');
+        let cmd;
+
+        if (autoGenerate) {
+          console.log(
+            `[SUPPORT-AUTO] ${candidate.userName}: ` +
+            `非ポイント問い合わせ → コマンド待ちを省略してAI生成`
+          );
+
+          cmd = {
+            start: true,
+            supplement: null,
+            manual: false,
+            template: null,
+            skip: false,
+            reply: 'AUTO_GENERATE'
+          };
+
+        } else {
+          cmd = await waitForCommand(
+            page,
+            candidate,
+            [
+              '【問い合わせ受信】',
+              `会員ID：${candidate.uid}`,
+              `ユーザー：${candidate.userName}`,
+              `受信日時：${latestDatetime || '（不明）'}`,
+              '---',
+              latestMessage,
+              '---',
+              ...basicInfoLines,
+              ...(memberInfoLines.length > 0
+                ? ['', ...memberInfoLines]
+                : []),
+            ],
+            '返答生成へ'
+          );
+        }
+
         if (!cmd) continue;
 
         const {
@@ -2015,17 +2046,44 @@ async function checkSupport() {
       } else {
         console.log(`[MEMBER-INFO] ${candidate.userName}: ポイント関連キーワードなし → ポイント照合の取得をスキップ`);
       }
-      const cmd = await waitForCommand(page, candidate, [
-        '【問い合わせ受信】',
-        `会員ID：${candidate.uid}`,
-        `ユーザー：${candidate.userName}`,
-        `受信日時：${latestDatetime || '（不明）'}`,
-        '---',
-        latestMessage,
-        '---',
-        ...basicInfoLines,
-        ...(memberInfoLines.length > 0 ? ['', ...memberInfoLines] : []),
-      ], 'キャンペーン・ポイントチェックを実行');
+      let cmd;
+
+      if (autoGenerate) {
+        console.log(
+          `[SUPPORT-AUTO] ${candidate.userName}: ` +
+          `ポイント関連問い合わせ → コマンド待ちを省略して照合処理へ`
+        );
+
+        cmd = {
+          start: true,
+          supplement: null,
+          manual: false,
+          template: null,
+          skip: false,
+          reply: 'AUTO_GENERATE'
+        };
+
+      } else {
+        cmd = await waitForCommand(
+          page,
+          candidate,
+          [
+            '【問い合わせ受信】',
+            `会員ID：${candidate.uid}`,
+            `ユーザー：${candidate.userName}`,
+            `受信日時：${latestDatetime || '（不明）'}`,
+            '---',
+            latestMessage,
+            '---',
+            ...basicInfoLines,
+            ...(memberInfoLines.length > 0
+              ? ['', ...memberInfoLines]
+              : []),
+          ],
+          'キャンペーン・ポイントチェックを実行'
+        );
+      }
+
       if (!cmd) continue;
 
       const {
