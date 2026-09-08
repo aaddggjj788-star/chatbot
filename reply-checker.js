@@ -30,6 +30,7 @@ const path = require('path');
 const { parse: parseCSVSync } = require('csv-parse/sync');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
 const { checkReplySafety } = require('./reply-safety');
+const generatedQueue = require('./generated-queue');
 const OpenAI = require('openai');
 const REPLY_SAFETY_IGNORE_FILE = path.join(
   __dirname,
@@ -5590,7 +5591,314 @@ async function withSkippedTargetConversation(index, sendLine, fn) {
   );
 }
 
+async function classifyLongSkippedWithAI(item) {
+  const userText =
+    String(item.userText || '').trim();
 
+  const expectedReplyWords =
+    Array.isArray(item.expectedReplyWords)
+      ? item.expectedReplyWords
+      : [];
+
+  const normalizedUserText =
+    normalizeMatchText(userText);
+
+  const matchedReplyWords =
+    expectedReplyWords.filter(word =>
+      matchesReturnWord(
+        normalizedUserText,
+        word
+      )
+    );
+
+  const hasReplyWord =
+    expectedReplyWords.length > 0 &&
+    matchedReplyWords.length > 0;
+
+  const response =
+    await openai.responses.create({
+      model: 'gpt-5-mini',
+
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                'あなたはRUNEの鑑定返信補助システムです。',
+                '自動返信対象外になったユーザー文章を分類してください。',
+                '',
+                '【目的】',
+                '文章の長さだけで対象外になったユーザーについて、',
+                '返信を進めてもよい内容か、どの返信処理が適切かを判断します。',
+                '',
+                '【質問分類】',
+                'simple:',
+                '・確認、軽い質問、事情説明、感謝、お願いなど',
+                '・鑑定そのものへの強い不信や反論を含まない',
+                '',
+                'doubt:',
+                '・本当に意味があるのか',
+                '・効果がないのではないか',
+                '・なぜ必要なのか',
+                '・騙されているのではないか',
+                '・続けることへの不安、疑念、反論、不満など',
+                '',
+                'none:',
+                '・質問や疑念への回答を必要としない文章',
+                '',
+                '【重要】',
+                '・返信ワードを送信しているかどうかは、こちらで機械判定した値を使用してください。',
+                '・質問記号の有無だけで分類しないでください。',
+                '・事情説明や感謝だけならsimpleまたはnoneを適切に選んでください。',
+                '・強い疑念や反論が無ければdoubtにしないでください。',
+                '・返信文章は鑑定士本人の立場で自然に作成してください。',
+                '・ユーザーの質問や内容に必要な範囲だけ簡潔に答えてください。',
+                '・新しい鑑定設定、効果、固有語、工程を勝手に作らないでください。',
+                '',
+                '【actionルール】',
+                'simple + 返信ワードあり → insert_next',
+                'simple + 返信ワードなし → reply_and_resume',
+                'doubt + 返信ワードあり → replace_previous',
+                'doubt + 返信ワードなし → reply_and_resume',
+                'none + 返信ワードあり → insert_next',
+                'none + 返信ワードなし → skip',
+                '',
+                'actionは必ず上記ルールに従ってください。'
+              ].join('\n')
+            }
+          ]
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                `【対象外理由】`,
+                String(item.reason || ''),
+                '',
+                `【最新コメントアウト】`,
+                String(item.latestComment || ''),
+                '',
+                `【期待返信ワード】`,
+                expectedReplyWords.length > 0
+                  ? expectedReplyWords.join(' / ')
+                  : 'なし',
+                '',
+                `【返信ワード機械判定】`,
+                hasReplyWord
+                  ? '送信あり'
+                  : '送信なし',
+                '',
+                `【ユーザー本文】`,
+                userText
+              ].join('\n')
+            }
+          ]
+        }
+      ],
+
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'long_skipped_classification',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              questionType: {
+                type: 'string',
+                enum: [
+                  'simple',
+                  'doubt',
+                  'none'
+                ]
+              },
+
+              hasReplyWord: {
+                type: 'boolean'
+              },
+
+              action: {
+                type: 'string',
+                enum: [
+                  'insert_next',
+                  'replace_previous',
+                  'reply_and_resume',
+                  'skip'
+                ]
+              },
+
+              replyText: {
+                type: 'string'
+              },
+
+              reason: {
+                type: 'string'
+              }
+            },
+
+            required: [
+              'questionType',
+              'hasReplyWord',
+              'action',
+              'replyText',
+              'reason'
+            ],
+
+            additionalProperties: false
+          }
+        }
+      }
+    });
+
+  const result =
+    JSON.parse(response.output_text);
+
+  // hasReplyWordはAIに再判定させず、
+  // 必ず機械判定結果で上書きする。
+  result.hasReplyWord =
+    hasReplyWord;
+
+  // actionも最終的にはコード側で固定する。
+  if (result.questionType === 'simple') {
+    result.action =
+      hasReplyWord
+        ? 'insert_next'
+        : 'reply_and_resume';
+
+  } else if (
+    result.questionType === 'doubt'
+  ) {
+    result.action =
+      hasReplyWord
+        ? 'replace_previous'
+        : 'reply_and_resume';
+
+  } else {
+    result.action =
+      hasReplyWord
+        ? 'insert_next'
+        : 'skip';
+  }
+
+  return result;
+}
+
+async function processLongSkippedAutoCandidates() {
+  if (
+    !fs.existsSync(
+      SKIPPED_AUTO_CANDIDATES_FILE
+    )
+  ) {
+    console.log(
+      '[SKIPPED-AUTO] 候補ファイルなし'
+    );
+    return;
+  }
+
+  let candidates = [];
+
+  try {
+    candidates = JSON.parse(
+      fs.readFileSync(
+        SKIPPED_AUTO_CANDIDATES_FILE,
+        'utf8'
+      )
+    );
+  } catch (e) {
+    console.log(
+      `[SKIPPED-AUTO] 候補ファイル読込失敗: ${e.message}`
+    );
+    return;
+  }
+
+  if (!Array.isArray(candidates)) {
+    return;
+  }
+
+  console.log(
+    `[SKIPPED-AUTO] OpenAI判定開始 ${candidates.length}件`
+  );
+
+  for (const item of candidates) {
+    try {
+      // 既に当日生成済みならAIにも投げない
+      const sourceData = {
+        source: 'reply-skipped',
+        uid: item.uid,
+        kid: item.kid,
+        receivedAt: item.receivedAt,
+        userText: item.userText
+      };
+
+      if (
+        generatedQueue.isAlreadyGenerated(
+          sourceData
+        )
+      ) {
+        console.log(
+          `[SKIPPED-AUTO] uid=${item.uid}: 生成済み → スキップ`
+        );
+        continue;
+      }
+
+      const ai =
+        await classifyLongSkippedWithAI(
+          item
+        );
+
+      console.log(
+        `[SKIPPED-AUTO-AI] ` +
+        `uid=${item.uid} ` +
+        `type=${ai.questionType} ` +
+        `replyWord=${ai.hasReplyWord} ` +
+        `action=${ai.action} ` +
+        `reason="${ai.reason}"`
+      );
+
+      // 完全スキップ判定なら生成リストに入れない
+      if (ai.action === 'skip') {
+        console.log(
+          `[SKIPPED-AUTO] uid=${item.uid}: AI判定skip`
+        );
+        continue;
+      }
+
+      generatedQueue.addGeneratedItem({
+        ...sourceData,
+
+        userName:
+          item.userName || '',
+
+        reason:
+          item.reason || '',
+
+        action:
+          ai.action,
+
+        generatedText:
+          ai.replyText || '',
+
+        // コメントアウトは次段階で
+        // action別に確定するため今は元コメントを保持
+        comment:
+          item.latestComment || '',
+
+        finalText:
+          ''
+      });
+
+    } catch (err) {
+      console.error(
+        `[SKIPPED-AUTO] uid=${item.uid} 判定エラー:`,
+        err.message
+      );
+    }
+  }
+}
 
 async function checkQuestionAnswerWithAI(kanteishiText, userText) {
   try {
@@ -6549,6 +6857,10 @@ async function checkReplies(options = {}) {
 
     // 対象外一覧を番号付きでファイルに保存
     saveSkippedList();
+
+    if (autoMode) {
+      await processLongSkippedAutoCandidates();
+    }    
 
     // 自動巡回時は集計通知を先に出す
     if (autoMode) {
