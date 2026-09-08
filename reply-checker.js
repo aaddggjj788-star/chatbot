@@ -5849,6 +5849,30 @@ async function processLongSkippedAutoCandidates() {
         await classifyLongSkippedWithAI(
           item
         );
+        let commands = [];
+
+        if (ai.action === 'insert_next') {
+          commands = [
+            `対象外ID:${item.index} 次行照会`,
+            `差し込み#${ai.replyText}`
+          ];
+
+        } else if (ai.action === 'replace_previous') {
+          commands = [
+            `対象外ID:${item.index} 次行照会`,
+            `差し替え前文#${ai.replyText}`
+          ];
+
+        } else if (ai.action === 'reply_and_resume') {
+          commands = [
+            `対象外ID:${item.index} ${ai.replyText}`
+          ];
+
+        } else if (ai.action === 'skip') {
+          commands = [
+            'スキップ'
+          ];
+        }
 
       console.log(
         `[SKIPPED-AUTO-AI] ` +
@@ -5876,14 +5900,31 @@ async function processLongSkippedAutoCandidates() {
         reason:
           item.reason || '',
 
+        decision: {
+          questionType:
+            ai.questionType,
+
+          hasReplyWord:
+            ai.hasReplyWord,
+
+          action:
+            ai.action,
+
+          reason:
+            ai.reason
+        },
+
+        replyDraft:
+          ai.replyText || '',
+
+        commands,
+
         action:
           ai.action,
 
         generatedText:
           ai.replyText || '',
 
-        // コメントアウトは次段階で
-        // action別に確定するため今は元コメントを保持
         comment:
           item.latestComment || '',
 

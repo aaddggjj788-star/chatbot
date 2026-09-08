@@ -245,6 +245,17 @@ function addGeneratedItem(data) {
     `reason=${item.reason}`
   );
 
+  decision:
+    data.decision || null,
+
+  replyDraft:
+    data.replyDraft || data.generatedText || '',
+
+  commands:
+    Array.isArray(data.commands)
+      ? data.commands
+      : [],
+
   return {
     created: true,
     item

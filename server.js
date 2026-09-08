@@ -1016,6 +1016,26 @@ if (generatedCheckMatch) {
     '【ユーザー本文】',
     item.userText || '（なし）',
     '',
+    '【OpenAI判定】',
+    item.decision
+      ? [
+          `分類：${item.decision.questionType || '不明'}`,
+          `返信ワード：${item.decision.hasReplyWord ? 'あり' : 'なし'}`,
+          `action：${item.decision.action || '不明'}`,
+          `理由：${item.decision.reason || '不明'}`
+        ].join('\n')
+      : '（なし）',
+    '',
+    '【返信案】',
+    item.replyDraft || '（なし）',
+    '',
+    '【実行予定コマンド】',
+    Array.isArray(item.commands) && item.commands.length > 0
+      ? item.commands
+          .map((cmd, i) => `${i + 1}. ${cmd}`)
+          .join('\n')
+      : '（なし）',
+    '',
     '【予定処理】',
     item.action || '（なし）',
     '',
