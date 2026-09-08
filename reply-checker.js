@@ -81,6 +81,8 @@ const STATE_FILE = '/tmp/rune-reply-state.json';
 // 返信チェック完了時の対象外ユーザー一覧（番号付き）を保存するファイル。
 // 「対象外ID:{番号} {返信文章}」コマンドで番号→uid/kidを解決するために使う。
 const SKIPPED_LIST_FILE = '/tmp/rune-skipped-list.json';
+const SKIPPED_AUTO_CANDIDATES_FILE =
+  '/tmp/rune-skipped-auto-candidates.json';
 const POLL_INTERVAL_MS = 2000;
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
@@ -124,6 +126,18 @@ function buildSkippedMessage() {
     shown.join('\n\n'),
     ...(rest > 0 ? [`（ほか${rest}件は文字数上限のため省略）`] : []),
   ].join('\n');
+}
+
+function getSkippedAutoGenerateCandidates(list) {
+  return (list || []).filter(item => {
+    const reason =
+      String(item.reason || '');
+
+    // 第1段階では「20文字以上」だけ対象
+    return reason.includes(
+      '自動返信対象外: 1通のユーザーメッセージが20文字以上'
+    );
+  });
 }
 
 // 対象外ユーザー一覧を番号付きで SKIPPED_LIST_FILE に保存する。
@@ -177,7 +191,29 @@ function saveSkippedList() {
     console.log(
       `[SKIPPED-LIST] ${list.length}件を ${SKIPPED_LIST_FILE} に保存`
     );
+  const autoCandidates =
+    getSkippedAutoGenerateCandidates(list);
 
+  fs.writeFileSync(
+    SKIPPED_AUTO_CANDIDATES_FILE,
+    JSON.stringify(autoCandidates, null, 2),
+    'utf8'
+  );
+
+  console.log(
+    `[SKIPPED-AUTO] 自動生成候補 ` +
+    `${autoCandidates.length}件を保存`
+  );
+
+  for (const item of autoCandidates) {
+    console.log(
+      `[SKIPPED-AUTO] ` +
+      `対象外ID=${item.index} ` +
+      `uid=${item.uid} ` +
+      `kid=${item.kid} ` +
+      `reason="${item.reason}"`
+    );
+  }
   } catch (e) {
     console.error(
       `[SKIPPED-LIST] 保存に失敗: ${e.message}`
