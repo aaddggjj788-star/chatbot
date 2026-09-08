@@ -132,15 +132,56 @@ function buildSkippedMessage() {
 function saveSkippedList() {
   const list = skippedUsers.map((u, i) => ({
     index: i + 1,
+
     uid: u.uid || '',
     kid: u.kid || '',
     userName: u.userName || '',
+    reason: u.reason || '',
+
+    receivedAt: u.receivedAt || '',
+    userText: u.userText || '',
+    latestComment: u.latestComment || '',
+
+    spanCount:
+      u.spanCount != null
+        ? u.spanCount
+        : null,
+
+    requiredSpanCount:
+      u.requiredSpanCount != null
+        ? u.requiredSpanCount
+        : null,
+
+    spanShortage:
+      u.spanShortage != null
+        ? u.spanShortage
+        : null,
+
+    expectedReplyWords:
+      Array.isArray(u.expectedReplyWords)
+        ? u.expectedReplyWords
+        : [],
+
+    unmatchedWords:
+      Array.isArray(u.unmatchedWords)
+        ? u.unmatchedWords
+        : [],
   }));
+
   try {
-    fs.writeFileSync(SKIPPED_LIST_FILE, JSON.stringify(list, null, 2));
-    console.log(`[SKIPPED-LIST] ${list.length}件を ${SKIPPED_LIST_FILE} に保存`);
+    fs.writeFileSync(
+      SKIPPED_LIST_FILE,
+      JSON.stringify(list, null, 2)
+    );
+
+    console.log(
+      `[SKIPPED-LIST] ${list.length}件を ${SKIPPED_LIST_FILE} に保存`
+    );
+
   } catch (e) {
-    console.error(`[SKIPPED-LIST] 保存に失敗: ${e.message}`);
+    console.error(
+      `[SKIPPED-LIST] 保存に失敗: ${e.message}`
+    );
   }
 }
 
@@ -3264,7 +3305,18 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     }
 
     // 返信対象外となった理由を記録する（ログ出力は各判定箇所の[SKIP]をそのまま使う）
-    const recordSkip = (reason) => skippedUsers.push({ userName, uid, kid, reason });
+    const recordSkip = (
+      reason,
+      extra = {}
+    ) => {
+      skippedUsers.push({
+        userName,
+        uid,
+        kid,
+        reason,
+        ...extra
+      });
+    };
 
     // 1ユーザーの処理中に想定外エラーが発生しても返信チェック全体を止めず、
     // エラーになったユーザーも対象外として記録して次のユーザーへ進む
@@ -3589,9 +3641,24 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           `[AUTO-CHECK] ${userName}: 20文字以上のユーザーメッセージあり → 対象外 (${detail})`
         );
 
-        recordSkip(
-          `自動返信対象外: 1通のユーザーメッセージが20文字以上 (${detail})`
-        );
+      recordSkip(
+        `自動返信対象外: 1通のユーザーメッセージが20文字以上 (${detail})`,
+        {
+          receivedAt:
+            analysis.latestUserTime || '',
+
+          userText:
+            combinedUserText,
+
+          latestComment:
+            getLatestSinkoComment(allComments) ||
+            allComments[0] ||
+            '',
+
+          expectedReplyWords:
+            nengenWords
+        }
+      );
 
         continue;
       }
