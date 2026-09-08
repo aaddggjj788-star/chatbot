@@ -900,6 +900,84 @@ if (text === '生成リスト') {
     'スキップ：生成ID:{番号} スキップ'
   );
 
+  // ─── 生成ID:{番号} 送信 ───────────────────────────────────────────
+  const generatedSendMatch =
+    text.match(/^生成ID:(\d+)\s+送信$/);
+
+  if (generatedSendMatch) {
+    const id =
+      parseInt(generatedSendMatch[1], 10);
+
+    const item =
+      generatedQueue.getGeneratedItem(id);
+
+    if (!item) {
+      return reply(
+        `【エラー】生成ID:${id} は存在しません`
+      );
+    }
+
+    if (item.status === 'sent') {
+      return reply(
+        `【生成ID:${id}】既に送信済みです`
+      );
+    }
+
+    if (item.status === 'skipped') {
+      return reply(
+        `【生成ID:${id}】既にスキップ済みです`
+      );
+    }
+
+    if (item.source !== 'reply-skipped') {
+      return reply(
+        `【生成ID:${id}】現在この送信処理は reply-skipped のみ対応しています`
+      );
+    }
+
+    // 即時応答だけ先に返す
+    await reply(
+      `【生成ID:${id}】送信処理を開始しました`
+    );
+
+    try {
+      const sent =
+        await rc.sendGeneratedSkippedReply(
+          item.uid,
+          item.kid,
+          item.finalText,
+          rcSendLine,
+          process.env.DRY_RUN === 'true'
+        );
+
+      if (sent) {
+        generatedQueue.markGeneratedItemSent(id);
+      } else {
+        generatedQueue.markGeneratedItemError(
+          id,
+          '送信処理が完了しませんでした'
+        );
+      }
+
+    } catch (err) {
+      console.error(
+        `[GENERATED-SEND] id=${id} 送信エラー:`,
+        err.message
+      );
+
+      generatedQueue.markGeneratedItemError(
+        id,
+        err.message
+      );
+
+      await rcSendLine(
+        `【生成ID:${id} 送信エラー】\n${err.message}`
+      );
+    }
+
+    return;
+  }
+
   return reply(lines.join('\n'));
 }
 
