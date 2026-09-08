@@ -6158,7 +6158,54 @@ async function processLongSkippedAutoCandidates() {
           'プロフィールや直前会話に存在しない返信ワード・工程・設定は作らないでください。'
         ].join('\n');
       }      
+        const replyDraft =
+          await generateProfiledReply({
+            aiContext,
+            kanteishiText,
+            userText:
+              item.userText || '',
+            instruction:
+              generationInstruction
+          });
 
+        if (!replyDraft) {
+          throw new Error(
+            'OpenAIから返信案を取得できませんでした'
+          );
+        }
+
+
+        let commands = [];
+
+        if (ai.action === 'insert_next') {
+          commands = [
+            `対象外ID:${item.index} 次行照会`,
+            `差し込み#${replyDraft}`
+          ];
+
+        } else if (
+          ai.action === 'replace_previous'
+        ) {
+          commands = [
+            `対象外ID:${item.index} 次行照会`,
+            `差し替え前文#${replyDraft}`
+          ];
+
+        } else if (
+          ai.action === 'reply_and_resume'
+        ) {
+          commands = [
+            `対象外ID:${item.index} ${replyDraft}`
+          ];
+        }
+
+
+        console.log(
+          `[SKIPPED-AUTO-REPLY] ` +
+          `uid=${item.uid} ` +
+          `action=${ai.action} ` +
+          `文字数=${replyDraft.length}`
+        );
       generatedQueue.addGeneratedItem({
         ...sourceData,
 
