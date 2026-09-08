@@ -5149,6 +5149,45 @@ async function generateProfiledReply({
     2
   );
 
+  const replyDraft =
+    await generateProfiledReply({
+      aiContext,
+      kanteishiText,
+      userText:
+        item.userText || '',
+      instruction:
+        generationInstruction
+    });
+    if (!replyDraft) {
+      throw new Error(
+        'OpenAIから返信案を取得できませんでした'
+      );
+    }
+
+  let commands = [];
+
+  if (ai.action === 'insert_next') {
+    commands = [
+      `対象外ID:${item.index} 次行照会`,
+      `差し込み#${replyDraft}`
+    ];
+
+  } else if (
+    ai.action === 'replace_previous'
+  ) {
+    commands = [
+      `対象外ID:${item.index} 次行照会`,
+      `差し替え前文#${replyDraft}`
+    ];
+
+  } else if (
+    ai.action === 'reply_and_resume'
+  ) {
+    commands = [
+      `対象外ID:${item.index} ${replyDraft}`
+    ];
+  }
+
   const response = await openai.responses.create({
     model: 'gpt-5-mini',
 
@@ -5824,34 +5863,8 @@ async function classifyLongSkippedWithAI(item) {
                 'none + 返信ワードあり → insert_next',
                 'none + 返信ワードなし → skip',
                 '',
-                '【action別の返信文ルール】',
-                '',
-                'insert_next:',
-                '・ユーザーの発言に対して必要な範囲だけ短く返答してください。',
-                '・その後に本来の次の鑑定文章が続いても不自然にならない文章にしてください。',
-                '・新しい工程や質問を作らないでください。',
-                '',
-                'replace_previous:',
-                '・ユーザーの疑念、不安、反論へ鑑定士本人としてしっかり答えてください。',
-                '・そのうえで、本来予定されている次の鑑定文章へ自然につながるようにしてください。',
-                '・新しい工程を追加してはいけません。',
-                '',
-                'reply_and_resume:',
-                '・ユーザーの質問や不安へ回答してください。',
-                '・返信ワードが不足しているため、この返信だけで鑑定を先へ進めてはいけません。',
-                '・新しい質問を返してはいけません。',
-                '・最後は、先ほど鑑定士から伝えている内容や工程へ戻るよう自然に促してください。',
-                '・具体的な返信ワードや工程内容がプロフィールや会話情報に存在しない場合は勝手に作らないでください。',
-                '',
-                'skip:',
-                '・返信文は空文字にしてください。',
-                '',
-                '【文章表現】',
-                '・一般的なカウンセラーやサポート担当者のような文章にしないでください。',
-                '・鑑定士本人として返信してください。',
-                '・プロフィールに記載された口調を優先してください。',
-                '・過度に長くしないでください。',
-                '・ユーザーの発言を言い換えて長々と繰り返さないでください。',
+                'actionは必ず上記ルールに従ってください。',
+                '文章生成は行わず、分類結果だけを返してください。',
                 '',
                 '【鑑定士プロフィール】',
                 profileText
@@ -5925,10 +5938,6 @@ async function classifyLongSkippedWithAI(item) {
                 ]
               },
 
-              replyText: {
-                type: 'string'
-              },
-
               reason: {
                 type: 'string'
               }
@@ -5938,7 +5947,6 @@ async function classifyLongSkippedWithAI(item) {
               'questionType',
               'hasReplyWord',
               'action',
-              'replyText',
               'reason'
             ],
 
@@ -5988,15 +5996,6 @@ async function classifyLongSkippedWithAI(item) {
         : 'skip';
   }
 
-
-  // skipなら返信文を空に固定
-  if (
-    result.action === 'skip'
-  ) {
-    result.replyText = '';
-  }
-
-
   return result;
 }
 
@@ -6014,6 +6013,30 @@ async function processLongSkippedAutoCandidates() {
 
   let candidates = [];
 
+  let kanteishiText = '';
+
+  await withTargetConversationByUidKid(
+    item.uid,
+    item.kid,
+    sendLine,
+    async ({ supportPage }) => {
+      const conversation =
+        await getAiConversationTexts(
+          supportPage
+        );
+
+      kanteishiText =
+        cleanAiConversationText(
+          conversation.latestKanteishiText
+        );
+    },
+    '対象外AI生成'
+  );  
+  if (!kanteishiText) {
+    throw new Error(
+      '直前の鑑定士本文を取得できませんでした'
+    );
+  }
   try {
     candidates = JSON.parse(
       fs.readFileSync(
@@ -6062,30 +6085,7 @@ async function processLongSkippedAutoCandidates() {
         await classifyLongSkippedWithAI(
           item
         );
-        let commands = [];
 
-        if (ai.action === 'insert_next') {
-          commands = [
-            `対象外ID:${item.index} 次行照会`,
-            `差し込み#${ai.replyText}`
-          ];
-
-        } else if (ai.action === 'replace_previous') {
-          commands = [
-            `対象外ID:${item.index} 次行照会`,
-            `差し替え前文#${ai.replyText}`
-          ];
-
-        } else if (ai.action === 'reply_and_resume') {
-          commands = [
-            `対象外ID:${item.index} ${ai.replyText}`
-          ];
-
-        } else if (ai.action === 'skip') {
-          commands = [
-            'スキップ'
-          ];
-        }
 
       console.log(
         `[SKIPPED-AUTO-AI] ` +
@@ -6103,6 +6103,55 @@ async function processLongSkippedAutoCandidates() {
         );
         continue;
       }
+
+      const aiContext =
+        loadReplyAiContext(
+          item.kid,
+          item.latestComment
+        );
+
+      if (!aiContext.baseProfile) {
+        throw new Error(
+          `共通AIプロフィール reply-ai-profiles/${item.kid}.json が見つかりません`
+        );
+      }
+
+      if (!aiContext.phaseProfile) {
+        throw new Error(
+          `日程別AIプロフィールが見つかりません ` +
+          `(requested=${aiContext.requestedPhaseKey || '不明'})`
+        );
+      }
+
+      let generationInstruction = '';
+
+      if (ai.action === 'insert_next') {
+        generationInstruction = [
+          '今回は「insert_next」用の短い補助返信を作成してください。',
+          'ユーザーの発言へ必要な範囲だけ自然に返答してください。',
+          'この返信の後に、本来予定されている次の鑑定文章が続きます。',
+          'そのため、新しい工程、新しい質問、新しい課題、追加ヒアリングを作らないでください。',
+          '本来の次の文章へ自然につながる短い補助文にしてください。'
+        ].join('\n');
+
+      } else if (ai.action === 'replace_previous') {
+        generationInstruction = [
+          '今回は「replace_previous」用の返信を作成してください。',
+          'ユーザーの疑念、不安、反論へ鑑定士本人として自然に答えてください。',
+          'この後に本来予定されている鑑定文章が続くため、新しい工程を追加しないでください。',
+          '現在フェーズの設定と世界観を守り、鑑定の流れへ自然に戻してください。'
+        ].join('\n');
+
+      } else if (ai.action === 'reply_and_resume') {
+        generationInstruction = [
+          '今回は「reply_and_resume」用の返信を作成してください。',
+          'ユーザーの質問や不安へ鑑定士本人として自然に答えてください。',
+          '返信ワードや必要工程が不足しているため、この返信だけで鑑定を先へ進めてはいけません。',
+          '新しい質問、新しい課題、追加ヒアリングを作らないでください。',
+          '最後は、直前に鑑定士から伝えている内容や工程へ自然に戻るよう促してください。',
+          'プロフィールや直前会話に存在しない返信ワード・工程・設定は作らないでください。'
+        ].join('\n');
+      }      
 
       generatedQueue.addGeneratedItem({
         ...sourceData,
@@ -6127,8 +6176,7 @@ async function processLongSkippedAutoCandidates() {
             ai.reason
         },
 
-        replyDraft:
-          ai.replyText || '',
+        replyDraft,
 
         commands,
 
@@ -6136,7 +6184,7 @@ async function processLongSkippedAutoCandidates() {
           ai.action,
 
         generatedText:
-          ai.replyText || '',
+          replyDraft,
 
         comment:
           item.latestComment || '',
