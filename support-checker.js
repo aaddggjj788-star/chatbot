@@ -1849,7 +1849,6 @@ async function checkSupport() {
           continue;
         }
 
-        if (!templateId) {
           let aiReplyText = null;
           try {
             aiReplyText = await generateReplyWithOpenAI(
@@ -1894,7 +1893,7 @@ async function checkSupport() {
               console.log(`[AI-REPLY] ${candidate.userName}: AI生成返答をスキップ（通知なし）`);
             }
           }
-        }
+        
 
         console.log(`[STEP3] ${candidate.userName}: 返答生成フロー完了 → 次のユーザーへ`);
         continue;
