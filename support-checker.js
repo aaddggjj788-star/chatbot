@@ -724,6 +724,7 @@ function commandHelpLines(startLabel) {
   return [
     `「開始」：${startLabel}`,
     '「開始#補足」：補足を踏まえて実行',
+    '「テンプレート{番号}」：指定番号のテンプレートで返答',
     '「手動対応」：手動対応を通知して次のユーザーへ',
     '「スキップ」：通知なしで次のユーザーへ',
     '「{数値}pt追加」「{数値}pt減算」：ポイント増減のみ',
@@ -796,11 +797,19 @@ async function runSubCommands(page, uid, cmd) {
 // 戻り値: 解析済みコマンド（タイムアウト・停止要求時は null）
 async function waitForCommand(page, candidate, headerLines, startLabel) {
   const helpLines = commandHelpLines(startLabel);
+  const templateLines = buildTemplateListLines();
   let firstPrompt = true;
 
   while (true) {
     await sendLine(firstPrompt
-      ? [...headerLines, '', '処理コマンドを入力してください：', ...helpLines].join('\n')
+      ? [
+          ...headerLines,
+          '',
+          ...templateLines,
+          '',
+          '処理コマンドを入力してください：',
+          ...helpLines
+        ].join('\n')
       : [
           '【コマンド待ち】',
           `ユーザー：${candidate.userName}`,
@@ -1752,57 +1761,92 @@ async function checkSupport() {
           continue;
         }
 
+
+        // ─── 「テンプレート{番号}」指定時は共通テンプレートで返答 ─────────────
+        if (templateNum) {
+          const templates = JSON.parse(
+            fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')
+          ).templates;
+
+          const template = templates[templateNum - 1];
+
+          if (!template) {
+            console.log(
+              `[TEMPLATE] ${candidate.userName}: ` +
+              `テンプレート${templateNum}は存在しません`
+            );
+
+            await sendLine(
+              `【エラー】テンプレート${templateNum}は存在しません` +
+              `（1〜${templates.length}で指定してください）`
+            );
+
+            continue;
+          }
+
+          await sendLine([
+            '【テンプレート返答候補】',
+            `ユーザー：${candidate.userName}`,
+            `テンプレート${templateNum}：${template.id}`,
+            '---',
+            template.response,
+            '---',
+            '「送信」：そのまま送信',
+            '「手動対応」：手動対応へ',
+            '「スキップ」：次のユーザーへ',
+          ].join('\n'));
+
+          let tReply = null;
+
+          try {
+            tReply = await waitForLineReply();
+          } catch (e) {
+            console.log(
+              `[TIMEOUT] ${candidate.userName}: ` +
+              `テンプレート確認 5分タイムアウト → 手動対応へ`
+            );
+
+            await notifyManual(
+              candidate.userName,
+              candidate.uid
+            );
+
+            continue;
+          }
+
+          console.log(
+            `[LINE] テンプレート確認返信: ${tReply}`
+          );
+
+          if (tReply === '送信') {
+            await sendSupportReplyText(
+              page,
+              candidate.userName,
+              template.response
+            );
+          } else if (
+            tReply &&
+            tReply.includes('手動対応')
+          ) {
+            await notifyManual(
+              candidate.userName,
+              candidate.uid
+            );
+          } else {
+            console.log(
+              `[TEMPLATE] ${candidate.userName}: ` +
+              `テンプレート送信をスキップ`
+            );
+          }
+
+          continue;
+        }
+
+
         // 4. 「開始」がなければ（スキップ・ポイント/レベル操作のみ含む）通知なしで次のユーザーへ
         if (!startMatch) {
           console.log(`[SKIP] ${candidate.userName}: 開始コマンドなし（reply="${cmdReply}"）→ 次のユーザーへ`);
           continue;
-        }
-
-        // ─── 返答生成（テンプレート判定 → AI生成、supplementはAI生成に反映） ──
-        let templateId = null;
-        try {
-          templateId = await matchTemplate(latestMessage, candidate.kid);
-        } catch (e) {
-          console.log(`[TEMPLATE] ${candidate.userName}: テンプレート判定に失敗: ${e.message}`);
-        }
-        console.log(`[TEMPLATE] ${candidate.userName}: templateId=${templateId}`);
-
-        if (templateId) {
-          const templates = JSON.parse(fs.readFileSync(CONTACT_TEMPLATES_PATH, 'utf8')).templates;
-          const template = templates.find(t => t.id === templateId);
-          if (!template) {
-            console.log(`[TEMPLATE] ${candidate.userName}: templateId="${templateId}" に一致するテンプレートが見つかりません`);
-          } else {
-            await sendLine([
-              '【自動返答候補】',
-              `ユーザー：${candidate.userName}`,
-              `テンプレート：${template.id}`,
-              '---',
-              template.response,
-              '---',
-              '「送信」：そのまま送信',
-              '「手動対応」：手動対応を通知して次のユーザーへ',
-              '「スキップ」：通知なしで次のユーザーへ',
-            ].join('\n'));
-
-            let autoReply = null;
-            try {
-              autoReply = await waitForLineReply();
-            } catch (e) {
-              console.log(`[TIMEOUT] ${candidate.userName}: 自動返答確認 5分タイムアウト → 手動対応へ`);
-            }
-            console.log(`[LINE] 自動返答確認返信: ${autoReply}`);
-
-            // 未返信（タイムアウト）も手動対応として通知する
-            if (autoReply === '送信') {
-              await sendSupportReplyText(page, candidate.userName, template.response);
-            } else if (!autoReply || autoReply.includes('手動対応')) {
-              console.log(`[MANUAL] ${candidate.userName}: 自動返答を送信せず手動対応`);
-              await notifyManual(candidate.userName, candidate.uid);
-            } else {
-              console.log(`[TEMPLATE] ${candidate.userName}: 自動返答をスキップ（通知なし）`);
-            }
-          }
         }
 
         if (!templateId) {
