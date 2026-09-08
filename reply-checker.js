@@ -6013,30 +6013,6 @@ async function processLongSkippedAutoCandidates() {
 
   let candidates = [];
 
-  let kanteishiText = '';
-
-  await withTargetConversationByUidKid(
-    item.uid,
-    item.kid,
-    sendLine,
-    async ({ supportPage }) => {
-      const conversation =
-        await getAiConversationTexts(
-          supportPage
-        );
-
-      kanteishiText =
-        cleanAiConversationText(
-          conversation.latestKanteishiText
-        );
-    },
-    '対象外AI生成'
-  );  
-  if (!kanteishiText) {
-    throw new Error(
-      '直前の鑑定士本文を取得できませんでした'
-    );
-  }
   try {
     candidates = JSON.parse(
       fs.readFileSync(
@@ -6104,6 +6080,36 @@ async function processLongSkippedAutoCandidates() {
         continue;
       }
 
+
+      // 直前の鑑定士本文を取得
+      let kanteishiText = '';
+
+      await withTargetConversationByUidKid(
+        item.uid,
+        item.kid,
+        sendLine,
+        async ({ supportPage }) => {
+          const conversation =
+            await getAiConversationTexts(
+              supportPage
+            );
+
+          kanteishiText =
+            cleanAiConversationText(
+              conversation.latestKanteishiText
+            );
+        },
+        '対象外AI生成'
+      );
+
+      if (!kanteishiText) {
+        throw new Error(
+          '直前の鑑定士本文を取得できませんでした'
+        );
+      }
+
+
+      // AIプロフィール読込
       const aiContext =
         loadReplyAiContext(
           item.kid,
