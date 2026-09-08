@@ -5149,45 +5149,6 @@ async function generateProfiledReply({
     2
   );
 
-  const replyDraft =
-    await generateProfiledReply({
-      aiContext,
-      kanteishiText,
-      userText:
-        item.userText || '',
-      instruction:
-        generationInstruction
-    });
-    if (!replyDraft) {
-      throw new Error(
-        'OpenAIから返信案を取得できませんでした'
-      );
-    }
-
-  let commands = [];
-
-  if (ai.action === 'insert_next') {
-    commands = [
-      `対象外ID:${item.index} 次行照会`,
-      `差し込み#${replyDraft}`
-    ];
-
-  } else if (
-    ai.action === 'replace_previous'
-  ) {
-    commands = [
-      `対象外ID:${item.index} 次行照会`,
-      `差し替え前文#${replyDraft}`
-    ];
-
-  } else if (
-    ai.action === 'reply_and_resume'
-  ) {
-    commands = [
-      `対象外ID:${item.index} ${replyDraft}`
-    ];
-  }
-
   const response = await openai.responses.create({
     model: 'gpt-5-mini',
 
