@@ -5284,6 +5284,9 @@ async function generateProfiledReply({
               '・プロフィールや現在フェーズに存在しない工程を追加しない',
               '・現在フェーズより先へ勝手に進めない',
               '・新しい質問や追加ヒアリングを勝手に作らない',
+              '・返信本文の冒頭で鑑定士名を名乗らない',
+              '・「○○です」「○○と申します」などの自己紹介を入れない',
+              '・既に会話中の鑑定士本人として、そのまま自然に返答を始める',
               '・ユーザーへ送信を求めている返信ワード、送り返す言葉、奉言、念言などの具体的な語句を返信本文内にそのまま記載しない',
               '・ユーザーが実際に送ってきた返信ワードについても、返信本文内で復唱・引用・再掲しない',
               '・誤字や不足を伝える場合も、具体的な語句や漢字を挙げず、「お送り頂いた言葉の中に間違いがありました」「一つ足りない言葉がありました」など自然な表現にする',
@@ -5842,25 +5845,38 @@ async function executeGeneratedSkippedPlan(
       `[GENERATED-EXEC] 次行照会 → ${followCommand.slice(0, 60)}`
     );
 
+    let confirmStep = 0;
+
     const autoWaitForReply =
       async () => {
+        confirmStep++;
+
+        if (confirmStep === 1) {
+          console.log(
+            `[GENERATED-EXEC] 自動確認応答①: ` +
+            `${followCommand.slice(0, 80)}`
+          );
+
+          return followCommand;
+        }
+
         console.log(
-          `[GENERATED-EXEC] 自動確認応答: ` +
-          `${followCommand.slice(0, 80)}`
+          '[GENERATED-EXEC] 自動確認応答②: 送信'
         );
 
-        return followCommand;
+        return '送信';
       };
 
 
-    await inquireNextLine(
-      currentIndex,
-      sendLine,
-      autoWaitForReply,
-      DRY_RUN
-    );
+    const sent =
+      await inquireNextLine(
+        currentIndex,
+        sendLine,
+        autoWaitForReply,
+        DRY_RUN
+      );
 
-    return true;
+    return sent === true;
   }
 
 
@@ -7401,6 +7417,8 @@ async function resolveHoNextReplyForInquiry(page, hoComment) {
 async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = false) {
   console.log(`[MANUAL-REPLY] 次行照会 対象外ID=${index}`);
 
+  let sent = false;
+
   // 前回の停止要求が残っていると waitForLineReply が即座に停止扱いになるため、
   // 確認の返信待ちを行う前に停止フラグをリセットする（sendManualReplyと同じ）
   _shouldStop = false;
@@ -7532,9 +7550,18 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
     await sendFrame.fill('textarea#mess_body', decision.text);
     await sendFrame.click('#chara_mail_send');
     await sendFrame.waitForLoadState('networkidle').catch(() => {});
-    console.log(`[次行照会] uid=${uid} (${userName}) 送信完了`);
-    await sendLine(`【次行照会 送信完了】\n会員ID：${uid}`);
+
+    sent = true;
+
+    console.log(
+      `[次行照会] uid=${uid} (${userName}) 送信完了`
+    );
+
+    await sendLine(
+      `【次行照会 送信完了】\n会員ID：${uid}`
+    );
   });
+  return sent;  
 }
 
 // ─── 同一コメントアウトグループへの一括送信 ─────────────────────────
