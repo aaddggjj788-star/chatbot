@@ -5132,6 +5132,87 @@ async function getAiConversationTexts(page) {
   });
 }
 
+async function generateProfiledReply({
+  aiContext,
+  kanteishiText,
+  userText,
+  instruction = ''
+}) {
+  const profileText = JSON.stringify(
+    {
+      commonProfile: aiContext.baseProfile,
+      currentPhaseProfile: aiContext.phaseProfile,
+      requestedPhase: aiContext.requestedPhaseKey,
+      resolvedPhase: aiContext.phaseKey
+    },
+    null,
+    2
+  );
+
+  const response = await openai.responses.create({
+    model: 'gpt-5-mini',
+
+    input: [
+      {
+        role: 'system',
+        content: [
+          {
+            type: 'input_text',
+            text: [
+              'あなたは鑑定士の返信文を作成する補助AIです。',
+              '以下の鑑定士プロフィールと直前の会話内容を参考に、',
+              'この鑑定士本人が自然に返信したような文章を作成してください。',
+              '',
+              '【重要ルール】',
+              '・ユーザーの発言内容を無視しない',
+              '・質問がある場合は、その質問に自然に答える',
+              '・勝手に新しい設定や事実を作らない',
+              '・プロフィールや現在フェーズに存在しない工程を追加しない',
+              '・現在フェーズより先へ勝手に進めない',
+              '・新しい質問や追加ヒアリングを勝手に作らない',
+              '・AI、システム、内部処理について言及しない',
+              '・管理用コメントアウトは出力しない',
+              '・返信本文だけを出力する',
+              '',
+              '【鑑定士プロフィール】',
+              profileText
+            ].join('\n')
+          }
+        ]
+      },
+
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: [
+              '【直前の鑑定士メッセージ】',
+              kanteishiText || '（取得なし）',
+              '',
+              '【その後のユーザーメッセージ】',
+              userText || '（取得なし）',
+              '',
+              instruction
+                ? '【今回の追加指示】'
+                : '',
+              instruction || '',
+              '',
+              'この流れに対する自然な返信文を作成してください。'
+            ]
+              .filter(v => v !== '')
+              .join('\n')
+          }
+        ]
+      }
+    ]
+  });
+
+  return response.output_text
+    ? response.output_text.trim()
+    : '';
+}
+
 async function generateAiReplyForSkippedTarget(
   index,
   sendLine,
@@ -5258,71 +5339,12 @@ async function generateAiReplyForSkippedTarget(
         `[AI-REPLY] ユーザー本文:\n${combinedUserText}`
       );
 
-      
-
-    const profileText = JSON.stringify(
-      {
-        commonProfile: aiContext.baseProfile,
-        currentPhaseProfile: aiContext.phaseProfile,
-        requestedPhase: aiContext.requestedPhaseKey,
-        resolvedPhase: aiContext.phaseKey
-      },
-      null,
-      2
-    );
-
-    const response = await openai.responses.create({
-      model: 'gpt-5-mini',
-
-      input: [
-        {
-          role: 'system',
-          content: [
-            {
-              type: 'input_text',
-              text: [
-                'あなたは鑑定士の返信文を作成する補助AIです。',
-                '以下の鑑定士プロフィールと直前の会話内容を参考に、',
-                'この鑑定士本人が自然に返信したような文章を作成してください。',
-                '',
-                '【重要ルール】',
-                '・ユーザーの発言内容を無視しない',
-                '・質問がある場合は、その質問に自然に答える',
-                '・勝手に新しい設定や事実を作らない',
-                '・AI、システム、内部処理について言及しない',
-                '・管理用コメントアウトは出力しない',
-                '・返信本文だけを出力する',
-                '',
-                '【鑑定士プロフィール】',
-                profileText
-              ].join('\n')
-            }
-          ]
-        },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'input_text',
-              text: [
-                '【直前の鑑定士メッセージ】',
-                kanteishiText,
-                '',
-                '【その後のユーザーメッセージ】',
-                combinedUserText,
-                '',
-                'この流れに対する自然な返信文を作成してください。'
-              ].join('\n')
-            }
-          ]
-        }
-      ]
-    });
-
     const aiReply =
-      response.output_text
-        ? response.output_text.trim()
-        : '';
+      await generateProfiledReply({
+        aiContext,
+        kanteishiText,
+        userText: combinedUserText
+      });
 
     if (!aiReply) {
       await sendLine(
