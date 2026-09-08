@@ -1941,15 +1941,27 @@ async function checkSupport(
           continue;
         }
 
-          let aiReplyText = null;
-          try {
-            aiReplyText = await generateReplyWithOpenAI(
-              latestMessage,
-              supplement
-            );
-          } catch (e) {
-            console.log(`[AI-REPLY] ${candidate.userName}: 返答文生成に失敗: ${e.message}`);
-          }
+        const memberInfoText = [
+          ...basicInfoLines,
+          ...(memberInfoLines.length > 0
+            ? ['', ...memberInfoLines]
+            : [])
+        ].join('\n');
+
+        let aiReplyText = null;
+
+        try {
+          aiReplyText = await generateReplyWithOpenAI(
+            latestMessage,
+            supplement,
+            memberInfoText
+          );
+        } catch (e) {
+          console.log(
+            `[AI-REPLY] ${candidate.userName}: ` +
+            `返答文生成に失敗: ${e.message}`
+          );
+        }
 
         if (aiReplyText) {
           const queueSourceData = {
@@ -2085,6 +2097,115 @@ async function checkSupport(
       }
 
       if (!cmd) continue;
+
+      // ======================================================
+      // 自動巡回時のポイント関連問い合わせ
+      // 取得済み情報から返信案だけ生成し、
+      // ポイント調整などの従来処理には進まない
+      // ======================================================
+      if (autoGenerate) {
+        console.log(
+          `[SUPPORT-AUTO] ${candidate.userName}: ` +
+          `取得済み会員情報・ポイント照合結果からAI返信を生成`
+        );
+
+        const memberInfoText = [
+          ...basicInfoLines,
+          ...(memberInfoLines.length > 0
+            ? ['', ...memberInfoLines]
+            : [])
+        ].join('\n');
+
+        let aiReplyText = null;
+
+        try {
+          aiReplyText =
+            await generateReplyWithOpenAI(
+              latestMessage,
+              null,
+              memberInfoText
+            );
+
+        } catch (e) {
+          console.log(
+            `[AI-REPLY] ${candidate.userName}: ` +
+            `返答文生成に失敗: ${e.message}`
+          );
+        }
+
+        if (aiReplyText) {
+          generatedQueue.addGeneratedItem({
+            source: 'support',
+
+            uid:
+              candidate.uid,
+
+            kid:
+              candidate.kid ||
+              candidate.charaId ||
+              '',
+
+            userName:
+              candidate.userName ||
+              '',
+
+            receivedAt:
+              latestDatetime ||
+              candidate.receivedAt ||
+              '',
+
+            userText:
+              latestMessage ||
+              '',
+
+            reason:
+              'support-ai-reply',
+
+            decision: {
+              questionType:
+                'support',
+
+              hasReplyWord:
+                null,
+
+              action:
+                'support_reply',
+
+              reason:
+                'ポイント関連問い合わせに対して取得済み会員情報・ポイント照合結果を含めAI返信を生成'
+            },
+
+            replyDraft:
+              aiReplyText,
+
+            commands: [
+              'SUPPORT_SEND'
+            ],
+
+            action:
+              'support_reply',
+
+            generatedText:
+              aiReplyText,
+
+            comment:
+              '',
+
+            finalText:
+              ''
+          });
+
+          console.log(
+            `[GENERATED-QUEUE][SUPPORT] ` +
+            `uid=${candidate.uid} ` +
+            `ポイント関連AI返信を生成キューへ保存`
+          );
+        }
+
+        // 自動巡回時はここで次の候補へ
+        // target=candidate → ポイント調整フローには進ませない
+        continue;
+      }      
 
       const {
         start: startMatch,

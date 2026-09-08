@@ -921,8 +921,18 @@ async function checkCampaignAndPoints(page, contact) {
 // 生成失敗時はnullを返し、呼び出し側は既存の手動対応フローへ進む
 // adjustments: checkCampaignAndPoints()の戻り値。割引率・ポイント調整を
 // 実施済みの場合、その内容をプロンプトに含めて返答文に反映させる
-async function generateReplyWithClaude(inquiryText, adjustments, supplement = null) {
+async function generateReplyWithOpenAI(
+  inquiryText,
+  adjustments,
+  supplement = null,
+  memberInfoText = null
+) {
   const actionLines = [];
+  const contextText =
+  memberInfoText &&
+  String(memberInfoText).trim()
+    ? String(memberInfoText).trim()
+    : '取得済み会員情報なし';
   if (adjustments?.discountChanged) {
     actionLines.push(`・割引率を${adjustments.fromLevel}→${adjustments.toLevel}に変更しました`);
   }
@@ -941,33 +951,71 @@ ${actionLines.join('\n')}
 上記の対応を踏まえた上で、ユーザーへの返答文を生成してください。
 対応済みの内容を反映した文章にしてください。`
     : `以下のユーザーからの問い合わせに対して返答文を生成してください。\n問い合わせ内容：${inquiryText}`;
-
+  userPrompt +=
+    `\n\n取得済み会員情報・確認結果：\n${contextText}`;
   if (supplement) {
     userPrompt += `\n\nオペレーターからの補足指示：${supplement}\nこの補足も踏まえて返答文を生成してください。`;
   }
 
-  const response = await claudeClient.messages.create({
-    model: 'claude-sonnet-5',
-    max_tokens: 1024,
-    system: 'あなたはRUNEというサービスのサポートセンタースタッフです。\n' +
-      '以下のルールに従って返答文を生成してください。\n\n' +
-      '・問い合わせは全て会員IDに紐づいています\n' +
-      '・アカウント情報・ポイント数・注文番号・キャンペーン名などは\n' +
-      '  こちら側で確認済みの前提で対応してください\n' +
-      '・ユーザーに追加情報を聞き返すことは絶対にしないでください\n' +
-      '・対応済みの内容がある場合はその内容を踏まえた返答をしてください\n' +
-      '・丁寧な敬語で簡潔に返答してください\n' +
-      '・「会員様」という表記は使わず「お客様」に統一してください\n' +
-      '・対応内容の説明は簡潔にしてください\n' +
-      '  例：「〇ptを追加いたしました」「割引率を〇ptへ修正いたしました」程度で十分です\n' +
-      '  レベル番号・割引前後の詳細な数値・変更理由の説明は入れないでください\n' +
-      '  細かい説明はユーザーを混乱させる可能性があるため避けてください\n' +
-      '・最後にRUNEインフォメーションという署名を入れてください',
-    messages: [{ role: 'user', content: userPrompt }],
-  });
+    const response = await openai.responses.create({
+      model: 'gpt-5-mini',
 
-  const text = (response.content.find(b => b.type === 'text')?.text ?? '').trim();
-  return text || null;
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                'あなたはRUNEというサービスのサポートセンタースタッフです。',
+                'ユーザーへの実際の返信文だけを作成してください。',
+                '',
+                '【基本ルール】',
+                '・問い合わせはすべて会員IDに紐づいています。',
+                '・提供された会員情報、確認結果、ポイント情報を事実として最優先してください。',
+                '・取得済みの情報をユーザーへ再確認しないでください。',
+                '・存在しない事実を推測・創作しないでください。',
+                '・ユーザーに追加情報を聞き返す必要がない場合は質問を追加しないでください。',
+                '・問い合わせへの回答を先に書いてください。',
+                '・丁寧な敬語で、簡潔で自然なサポート文にしてください。',
+                '・「会員様」は使わず「お客様」を使用してください。',
+                '・最後に「RUNEインフォメーション」を署名として入れてください。',
+                '',
+                '【取得済み情報】',
+                '・会員情報、ポイント数、購入履歴、ポイント履歴、キャンペーン確認結果など、入力として与えられた内容を優先してください。',
+                '・取得できていない情報を勝手に補完しないでください。',
+                '・取得済みの情報を再度ユーザーへ尋ねてはいけません。',
+                '',
+                '【実施済み対応】',
+                '・ポイント追加や割引変更など、実施済み対応が入力に含まれる場合だけ、その事実を返信へ反映してください。',
+                '・実施していない対応を「対応しました」と書いてはいけません。',
+                '',
+                '【禁止】',
+                '・AI、プログラム、内部処理、管理画面などの内部事情をユーザーへ出すこと。',
+                '・確認していない事実を断定すること。',
+                '・実際には行わない確認や後日対応を約束すること。',
+                '・取得済みの情報を再質問すること。',
+                '・不要な本人確認情報を求めること。'
+              ].join('\n')
+            }
+          ]
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: userPrompt
+            }
+          ]
+        }
+      ]
+    });
+
+    const text =
+      String(response.output_text || '').trim();
+
+    return text || null;
 }
 
 // STEP8 / 自動返答で共通の送信処理（本文を入力してgotoHeavenをクリック）
@@ -1227,17 +1275,67 @@ async function processContacts(
       // ─── STEP4.5: キャンペーン・ポイント確認（割引率調整→ポイント調整） ──
       // 問い合わせ内容にポイント関連キーワードが含まれる場合のみ実行する
       let campaignResult = null;
-      const pointKeywords = ['ポイント', 'pt', 'PT', '割引', 'キャンペーン', '入金', '購入', '反映'];
-      const hasPointRelated = pointKeywords.some(k => content.includes(k));
+
+      const pointKeywords = [
+        'ポイント',
+        'pt',
+        'PT',
+        '割引',
+        'キャンペーン',
+        '入金',
+        '購入',
+        '反映'
+      ];
+
+      const hasPointRelated =
+        pointKeywords.some(
+          k => content.includes(k)
+        );
+
+
       if (hasPointRelated) {
-        console.log(`[CAMPAIGN] uid=${contact.uid}: ポイント関連キーワード検出 → STEP4.5を実行`);
-        try {
-          campaignResult = await checkCampaignAndPoints(page, contact);
-        } catch (e) {
-          console.log(`[CAMPAIGN] uid=${contact.uid}: STEP4.5に失敗: ${e.message}`);
+
+        // ======================================================
+        // 自動巡回
+        // 実データの変更処理は行わず、
+        // すでに取得済みの会員情報・ポイント照合結果だけを使用
+        // ======================================================
+        if (autoGenerate) {
+          console.log(
+            `[CONTACT-AUTO] uid=${contact.uid}: ` +
+            `ポイント関連問い合わせ → 調整処理を実行せずAI生成へ`
+          );
+
+        } else {
+
+          // ======================================================
+          // 従来の手動処理
+          // ======================================================
+          console.log(
+            `[CAMPAIGN] uid=${contact.uid}: ` +
+            `ポイント関連キーワード検出 → STEP4.5を実行`
+          );
+
+          try {
+            campaignResult =
+              await checkCampaignAndPoints(
+                page,
+                contact
+              );
+
+          } catch (e) {
+            console.log(
+              `[CAMPAIGN] uid=${contact.uid}: ` +
+              `STEP4.5に失敗: ${e.message}`
+            );
+          }
         }
+
       } else {
-        console.log(`[CAMPAIGN] uid=${contact.uid}: ポイント関連キーワードなし → STEP4.5をスキップ`);
+        console.log(
+          `[CAMPAIGN] uid=${contact.uid}: ` +
+          `ポイント関連キーワードなし → STEP4.5をスキップ`
+        );
       }
 
       // ─── STEP4.6b: 「開始」→ Claude APIで返答文を自動生成 ─────────
@@ -1246,7 +1344,19 @@ async function processContacts(
       {
         let aiReplyText = null;
         try {
-          aiReplyText = await generateReplyWithClaude(content, campaignResult, supplement);
+        const memberInfoText = [
+          ...basicInfoLines,
+          ...(memberInfoLines.length > 0
+            ? ['', ...memberInfoLines]
+            : [])
+        ].join('\n');
+
+        aiReplyText = await generateReplyWithOpenAI(
+          content,
+          campaignResult,
+          supplement,
+          memberInfoText
+        );
         } catch (e) {
           console.log(`[AI-REPLY] uid=${contact.uid}: 返答文生成に失敗: ${e.message}`);
         }

@@ -386,8 +386,6 @@ function scheduleNextReplyAutoRun() {
       generatedBeforeRun
     );
 
-    await executeNewGeneratedItems();
-
     console.log('[COUNT-CHECK][AUTO] 件数確認開始');
 
     const supportCount = await countSupportTargets();
