@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "intervalMinutes": 15,
+  "intervalMinutes": 2,
   "targetKids": [],
   "maxSendPerRun": 50,
   "activeTime": {
