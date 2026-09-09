@@ -1,0 +1,47 @@
+{
+  "kid": "12688",
+  "routingPolicy": {
+    "baseProfile": "12688.json",
+    "phaseProfileRule": "最新の確定済み進行キー（mu/yu + 日数）を優先して対応JSONを選択する。コメントだけで日程が確定しない場合は外部の現在phaseを優先する。",
+    "fallback": "該当phaseが不明な場合、同じmu/yu境界内で直前の確定phaseを使う。無料/有料境界を跨がない。",
+    "doNotCrossBoundary": true,
+    "calendarBinding": false
+  },
+  "commentPatterns": [
+    {
+      "pattern": "12688mu1/*",
+      "phase": "12688mu1"
+    },
+    {
+      "pattern": "12688mu2/*",
+      "phase": "12688mu2"
+    },
+    {
+      "pattern": "12688yu1/*",
+      "phase": "12688yu1"
+    },
+    {
+      "pattern": "12688yuN/ho",
+      "phaseRule": "Nに対応する12688yuN"
+    },
+    {
+      "pattern": "12688yuN/mtm",
+      "phaseRule": "Nに対応する12688yuN"
+    },
+    {
+      "pattern": "12688yuN/nores/mtm",
+      "phaseRule": "Nに対応する12688yuN"
+    },
+    {
+      "pattern": "12688yu2/sinko/N",
+      "phaseRule": "有料2日目以降の共通返信ログ。これだけでは実日程をyu2と確定しない。外部currentPhase・直近ho/mtmを優先する。"
+    }
+  ],
+  "specialMappings": {
+    "12688yu4mu": "12688yu4mu.json",
+    "12688yu11mu": "12688yu11mu.json",
+    "12688yu14mu": "12688yu14mu.json",
+    "12688yu21mu": "12688yu21mu.json",
+    "12688existing": "12688existing.json"
+  }
+}

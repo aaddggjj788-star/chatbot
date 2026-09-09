@@ -1,0 +1,28 @@
+{
+  "kid": "12673",
+  "characterName": "{getCharaData[12673](name)}",
+  "baseProfile": "12673.json",
+  "phaseProfiles": [
+    "12673mu1.json",
+    "12673mu2.json",
+    "12673yu1.json",
+    "12673yu2.json",
+    "12673yu3.json",
+    "12673yu4.json",
+    "12673yu5.json",
+    "12673yu6.json",
+    "12673yu7.json",
+    "12673yu8.json",
+    "12673yu9.json"
+  ],
+  "routingMap": "routing_map.json",
+  "createdScope": "無料1日目、無料2日目、有料1〜8日目、既存掘り起こし移行後まで。",
+  "uncreatedScope": [
+    "既存返信ログ全通分の個別詳細ルールは代表制御のみ。必要なら別途 12673existing_reply.json を追加可能。"
+  ],
+  "notes": [
+    "テンプレートZIPの構造を維持しつつ、12673用に項目を具体化。",
+    "チャット内で後から確定した背後霊・模写・有料8日目まとめ・既存掘り開始語差し替え方針を優先。",
+    "原文だけでは判断できない年齢・出身地・居住地域は要確認として残した。"
+  ]
+}
