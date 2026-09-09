@@ -3480,7 +3480,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
       const bypassWaitForAutoTest =
         autoMode &&
-        String(kid) === '12686';
+        String(kid) === '12603';
 
       if (elapsedMin < minElapsedMinutes && !bypassWaitForAutoTest) {
         console.log(
@@ -3493,7 +3493,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
 
       if (elapsedMin < minElapsedMinutes && bypassWaitForAutoTest) {
         console.log(
-          `[AUTO-TEST] ${userName}: kid=12686 のため${minElapsedMinutes}分待機をバイパス`
+          `[AUTO-TEST] ${userName}: kid=12603 のため${minElapsedMinutes}分待機をバイパス`
         );
       }
       console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 処理続行`);
@@ -4191,6 +4191,13 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
               skipUser = true;
             }
           }
+        }
+
+        // ─── replaceHeader: hoモードと同様、noresHo等のsubAction設定に
+        // replaceHeaderがあれば取得した文章の文頭を差し替える ──────
+        if (replyData && actionCfg.replaceHeader) {
+          replyData.replyText = applyReplaceHeader(replyData.replyText, actionCfg.replaceHeader);
+          console.log(`[JSON] subAction replaceHeader適用 (${userName}) actionKey="${parsed.actionKey}"`);
         }
 
         if (replyData) break;
