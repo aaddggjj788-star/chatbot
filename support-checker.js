@@ -1962,21 +1962,35 @@ async function checkSupport(
             `返答文生成に失敗: ${e.message}`
           );
         }
+        const queueSourceData = {
+          source: 'support',
+          uid: candidate.uid,
+          kid:
+            candidate.kid ||
+            candidate.charaId ||
+            '',
+          receivedAt:
+            latestDatetime ||
+            candidate.receivedAt ||
+            '',
+          userText:
+            latestMessage || ''
+        };
 
+        if (
+          generatedQueue.isAlreadyGenerated(
+            queueSourceData
+          )
+        ) {
+          console.log(
+            `[GENERATED-QUEUE][SUPPORT] ` +
+            `uid=${candidate.uid} ` +
+            `同一問い合わせは生成済み → AI生成をスキップ`
+          );
+
+          continue;
+        }
         if (aiReplyText) {
-          const queueSourceData = {
-            source: 'support',
-            uid: candidate.uid,
-            kid:
-              candidate.kid ||
-              candidate.charaId ||
-              '',
-            receivedAt:
-              candidate.receivedAt ||
-              '',
-            userText:
-              latestMessage || ''
-          };
 
           const generatedItem =
             generatedQueue.addGeneratedItem({
@@ -2131,6 +2145,35 @@ async function checkSupport(
             `[AI-REPLY] ${candidate.userName}: ` +
             `返答文生成に失敗: ${e.message}`
           );
+        }
+
+        const queueSourceData = {
+          source: 'support',
+          uid: candidate.uid,
+          kid:
+            candidate.kid ||
+            candidate.charaId ||
+            '',
+          receivedAt:
+            latestDatetime ||
+            candidate.receivedAt ||
+            '',
+          userText:
+            latestMessage || ''
+        };
+
+        if (
+          generatedQueue.isAlreadyGenerated(
+            queueSourceData
+          )
+        ) {
+          console.log(
+            `[GENERATED-QUEUE][SUPPORT] ` +
+            `uid=${candidate.uid} ` +
+            `同一問い合わせは生成済み → AI生成をスキップ`
+          );
+
+          continue;
         }
 
         if (aiReplyText) {

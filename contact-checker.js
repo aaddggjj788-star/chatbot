@@ -47,6 +47,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const { chromium } = require('playwright');
 const Anthropic = require('@anthropic-ai/sdk').default;
+const OpenAI = require('openai');
 const axios = require('axios');
 const generatedQueue = require('./generated-queue');
 const fs = require('fs');
@@ -67,7 +68,9 @@ const DRY_RUN    = process.env.DRY_RUN === 'true';
 
 const CONTACT_TEMPLATES_PATH = path.join(__dirname, 'contact-templates.json');
 const claudeClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 // reply-checker.js と同じstate fileを共有する（同時稼働はしない前提）
 const STATE_FILE = '/tmp/rune-reply-state.json';
 const POLL_INTERVAL_MS = 2000;
@@ -1086,6 +1089,30 @@ async function processContacts(
     try {
       const content = await getLatestThreadMessage(threadPage, contact.preview);
 
+
+      const queueSourceData = {
+        source: 'contact',
+        uid: contact.uid || '',
+        kid: '',
+        receivedAt: contact.datetime || '',
+        userText: content || ''
+      };
+
+      if (
+        autoGenerate &&
+        generatedQueue.isAlreadyGenerated(
+          queueSourceData
+        )
+      ) {
+        console.log(
+          `[GENERATED-QUEUE][CONTACT] ` +
+          `uid=${contact.uid} ` +
+          `同一問い合わせは生成済み → 巡回処理をスキップ`
+        );
+
+        continue;
+      }
+
       // ─── 問い合わせ内容を先にLINEへ表示し、処理コマンドを待つ ──────
       // 「メール確認」「決済確認」等の照会コマンドを受けた場合は次のユーザーへ
       // 進まず、結果を確認したうえで再度コマンドを入力できるようにする
@@ -1338,109 +1365,126 @@ async function processContacts(
         );
       }
 
-      // ─── STEP4.6b: 「開始」→ Claude APIで返答文を自動生成 ─────────
+      // ─── STEP4.6b: 「開始」→ OpenAIで返答文を自動生成 ─────────
       // テンプレート自動照合は廃止したため、開始コマンドは常にAI生成を行う。
-      // STEP4.5で実施した割引率・ポイント調整の内容・補足をプロンプトに反映する
-      {
-        let aiReplyText = null;
-        try {
-        const memberInfoText = [
-          ...basicInfoLines,
-          ...(memberInfoLines.length > 0
-            ? ['', ...memberInfoLines]
-            : [])
-        ].join('\n');
-
-        aiReplyText = await generateReplyWithOpenAI(
-          content,
-          campaignResult,
-          supplement,
-          memberInfoText
+      // 手動時はSTEP4.5で実施した調整内容、自動時は取得済み情報をプロンプトへ反映する。
+      // 同一問い合わせですでに返信案を生成済みなら、
+      // OpenAIを呼ばず次の問い合わせへ進む
+        if (
+          autoGenerate &&
+          generatedQueue.isAlreadyGenerated(
+            queueSourceData
+          )
+        ) {
+        console.log(
+          `[GENERATED-QUEUE][CONTACT] ` +
+          `uid=${contact.uid} ` +
+          `同一問い合わせは生成済み → AI生成をスキップ`
         );
-        } catch (e) {
-          console.log(`[AI-REPLY] uid=${contact.uid}: 返答文生成に失敗: ${e.message}`);
-        }
 
-        if (aiReplyText) {
-          const queueResult =
-            generatedQueue.addGeneratedItem({
-              source: 'contact',
+        continue;
+      }
 
-              uid:
-                contact.uid || '',
+      const memberInfoText = [
+        ...basicInfoLines,
+        ...(memberInfoLines.length > 0
+          ? ['', ...memberInfoLines]
+          : [])
+      ].join('\n');
 
-              kid: '',
+      let aiReplyText = null;
 
-              userName:
-                contact.username || '',
-
-              receivedAt:
-                contact.datetime || '',
-
-              userText:
-                content || '',
-
-              reason:
-                'contact-ai-reply',
-
-              decision: {
-                questionType:
-                  'contact',
-
-                hasReplyWord:
-                  null,
-
-                action:
-                  'contact_reply',
-
-                reason:
-                  supplement
-                    ? 'コンタクト問い合わせに対して補足内容を含めAI返信を生成'
-                    : 'コンタクト問い合わせに対してAI返信を生成'
-              },
-
-              replyDraft:
-                aiReplyText,
-
-              commands: [
-                'CONTACT_SEND'
-              ],
-
-              action:
-                'contact_reply',
-
-              generatedText:
-                aiReplyText,
-
-              comment:
-                '',
-
-              finalText:
-                ''
-            });
-
-          const generatedItem =
-            queueResult?.item || null;
-
-          console.log(
-            `[GENERATED-QUEUE][CONTACT] ` +
-            `uid=${contact.uid} ` +
-            `created=${queueResult?.created === true} ` +
-            `id=${generatedItem?.id || '不明'}`
+      try {
+        aiReplyText =
+          await generateReplyWithOpenAI(
+            content,
+            campaignResult,
+            supplement,
+            memberInfoText
           );
 
-          await sendLine([
-            '【コンタクトAI返信を生成リストへ保存】',
-            `生成ID：${generatedItem?.id || '不明'}`,
-            `ユーザー：${contact.username}`,
-            `会員ID：${contact.uid}`,
-            '',
-            aiReplyText
-          ].join('\n'));
-
-          continue;
-        }
+      } catch (e) {
+        console.log(
+          `[AI-REPLY] uid=${contact.uid}: ` +
+          `返答文生成に失敗: ${e.message}`
+        );
       }
+
+      if (!aiReplyText) {
+        console.log(
+          `[AI-REPLY] uid=${contact.uid}: ` +
+          `返信案が生成されなかったため次の問い合わせへ`
+        );
+
+        continue;
+      }
+
+      const queueResult =
+        generatedQueue.addGeneratedItem({
+          ...queueSourceData,
+
+          userName:
+            contact.username || '',
+
+          reason:
+            'contact-ai-reply',
+
+          decision: {
+            questionType:
+              'contact',
+
+            hasReplyWord:
+              null,
+
+            action:
+              'contact_reply',
+
+            reason:
+              supplement
+                ? 'コンタクト問い合わせに対して補足内容を含めAI返信を生成'
+                : 'コンタクト問い合わせに対してAI返信を生成'
+          },
+
+          replyDraft:
+            aiReplyText,
+
+          commands: [
+            'CONTACT_SEND'
+          ],
+
+          action:
+            'contact_reply',
+
+          generatedText:
+            aiReplyText,
+
+          comment:
+            '',
+
+          finalText:
+            ''
+        });
+
+      const generatedItem =
+        queueResult?.item || null;
+
+      console.log(
+        `[GENERATED-QUEUE][CONTACT] ` +
+        `uid=${contact.uid} ` +
+        `created=${queueResult?.created === true} ` +
+        `id=${generatedItem?.id || '不明'}`
+      );
+
+      await sendLine([
+        '【コンタクトAI返信を生成リストへ保存】',
+        `生成ID：${generatedItem?.id || '不明'}`,
+        `ユーザー：${contact.username}`,
+        `会員ID：${contact.uid}`,
+        '',
+        aiReplyText
+      ].join('\n'));
+
+      continue;
 
       // ─── STEP5 ────────────────────────────────────────────────
       await sendLine([
