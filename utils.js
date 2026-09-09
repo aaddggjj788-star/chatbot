@@ -125,6 +125,26 @@ async function adjustPoint(kyouseiPage, amount, sign = '+') {
   await kyouseiPage.waitForLoadState('networkidle');
 }
 
+
+async function adrentPoint(kyouseiPage, amount) {
+  console.log(`[UTILS] adrentPoint: sign=${sign} amount=${amount}`);
+  console.log(`[UTILS] adrentPoint時のURL: ${kyouseiPage.url()}`);
+
+const currentRental = await kyouseiPage
+
+  .locator('input[name="ATZupdate[ATpointZAN]"]')
+  .inputValue();
+
+const rental = Number(currentRental)+amount;
+
+await kyouseiPage.fill('input[name="pointOut"]', String(amount));
+await kyouseiPage.fill('input[name="ATZupdate[ATpointZAN]"]',
+  String(rental));
+  await kyouseiPage.click('input[name="user_henko"]');
+  await kyouseiPage.waitForLoadState('networkidle');
+}
+
+
 /**
  * ポイントレベル（割引率）を設定する共通関数
  * level: 10〜17のvalue値
@@ -1159,5 +1179,5 @@ module.exports = {
   checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
   getCampaignInfo, formatCampaignInfo, calcCouponPoint,
-  calcPaymentPoints, processPayment, runPaymentCommand,
+  calcPaymentPoints, processPayment, runPaymentCommand,adrentPoint,
 };

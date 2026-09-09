@@ -884,6 +884,7 @@ function parseMemberCommand(command) {
   return {
     point: (m => (m ? { amount: m[1], sign: m[2] === '減算' ? '-' : '+' } : null))(body.match(/(?:ポイント)?(\d+)pt(追加|減算)/)),
     level: body.match(/レベル変更:(\d+)/)?.[1] ?? null,
+    rentpoint: (m => (m ? { amount: m[1] } : null))(body.match(/レンタルポイント(\d+)pt追加/)),
     love:  (m => (m ? { charaId: m[1], value: m[2] } : null))(body.match(/絆変更:(\d+):(\d+)/)),
   };
 }
@@ -921,7 +922,7 @@ async function runMemberCommand(uid, command) {
   }
 
   const { chromium } = require('playwright');
-  const { openKyouseitaikaiBySearch, adjustPoint, setPointLevel, setLoveLevel } = require('./utils');
+  const { openKyouseitaikaiBySearch, adjustPoint, setPointLevel, setLoveLevel, adrentPoint } = require('./utils');
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({
@@ -957,6 +958,17 @@ async function runMemberCommand(uid, command) {
         await adjustPoint(await freshKyouseiPage(), amount, sign);
         submitted = true;
         results.push(`ポイント：${sign}${amount}pt`);
+      }
+    }
+
+    if (cmd.rentpoint) {
+      const { amount } = cmd.rentpoint;
+      if (DRY_RUN) {
+        results.push(`レンタルポイント：${amount}pt（DRY RUNのため未実行）`);
+      } else {
+        await adrentPoint(await freshKyouseiPage(), amount);
+        submitted = true;
+        results.push(`レンタルポイント：${amount}pt`);
       }
     }
 
