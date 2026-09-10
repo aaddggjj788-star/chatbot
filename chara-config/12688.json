@@ -72,6 +72,7 @@
         },
         "yu4mu": {
             "fileId": "12688yu4musinko",
+            "minElapsedMinutes": 20,
             "ho": {
                 "searchTarget": "12688yu4mu/sinko/1",
                 "useCurrentRow": true
