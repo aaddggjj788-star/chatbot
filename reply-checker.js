@@ -3175,6 +3175,409 @@ async function searchSinkoFromRirekiHistory(page, charaId) {
   return { comments, sinkoComments, maxSinko, latestComment, charaId: resolvedCharaId };
 }
 
+
+async function analyzeMessagesFromRirekiHistory(page) {
+  const mainFrame = page.frame({ name: 'ope_main' });
+
+  if (!mainFrame) {
+    console.log(
+      '[RIREKI-ANALYZE] ope_mainフレームが取得できません'
+    );
+    return null;
+  }
+
+  const link =
+    mainFrame.locator(
+      'a[href*="mg_k_rireki.php"]'
+    ).first();
+
+  if (await link.count() === 0) {
+    console.log(
+      '[RIREKI-ANALYZE] 履歴100件ページへのリンクが見つかりません'
+    );
+    return null;
+  }
+
+  let rirekiPage = null;
+
+  try {
+    [rirekiPage] =
+      await Promise.all([
+        page.context().waitForEvent(
+          'page',
+          { timeout: 10000 }
+        ),
+        link.click()
+      ]);
+
+    await rirekiPage.waitForLoadState(
+      'load'
+    );
+
+
+    const analysis =
+      await rirekiPage.evaluate(() => {
+
+        function normStyle(el) {
+          return (
+            el.getAttribute('style') || ''
+          )
+            .replace(/\s/g, '')
+            .toLowerCase();
+        }
+
+
+        function findNextBody(el) {
+          let node = el;
+
+          while (node) {
+            let sibling =
+              node.nextElementSibling;
+
+            while (sibling) {
+
+              const p =
+                sibling.tagName === 'P'
+                  ? sibling
+                  : sibling.querySelector?.('p');
+
+              if (p) {
+                return p;
+              }
+
+
+              const body =
+                sibling.querySelector?.(
+                  'div.bodyNaibu'
+                );
+
+              if (body) {
+                return body;
+              }
+
+
+              sibling =
+                sibling.nextElementSibling;
+            }
+
+            node =
+              node.parentElement;
+          }
+
+          return null;
+        }
+
+
+        function decodeBody(raw) {
+          return String(raw || '')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/\x3C/g, '<')
+            .replace(/\x3E/g, '>');
+        }
+
+
+        const rows =
+          Array.from(
+            document.querySelectorAll('tr')
+          );
+
+        const msgs = [];
+
+
+        for (const tr of rows) {
+
+          const trBg =
+            normStyle(tr);
+
+          const tdBg =
+            Array.from(
+              tr.querySelectorAll('td')
+            )
+              .map(td =>
+                normStyle(td)
+              )
+              .join('');
+
+          const bg =
+            trBg + tdBg;
+
+
+          // ==========================================
+          // 鑑定士
+          // ==========================================
+          if (
+            bg.includes('90ee90') ||
+            bg.includes('144,238,144')
+          ) {
+
+            const bodyInput =
+              tr.querySelector(
+                'input[type="hidden"][id^="body_"]'
+              );
+
+            let bodyText = '';
+
+
+            if (bodyInput) {
+
+              bodyText =
+                bodyInput.value || '';
+
+            } else {
+
+              const bodyEl =
+                findNextBody(tr);
+
+              if (bodyEl) {
+                bodyText =
+                  bodyEl.innerHTML ||
+                  bodyEl.textContent ||
+                  '';
+              }
+            }
+
+
+            bodyText =
+              decodeBody(bodyText);
+
+
+            const comments = [];
+
+            const cre =
+              /<!--([^>]+)-->/g;
+
+            let cm;
+
+            while (
+              (cm = cre.exec(bodyText)) !== null
+            ) {
+              comments.push(cm[1]);
+            }
+
+
+            msgs.push({
+              type: 'kanteishi',
+
+              trText:
+                tr.textContent || '',
+
+              bodyText,
+
+              comments,
+
+              html:
+                tr.innerHTML || ''
+            });
+
+            continue;
+          }
+
+
+          // ==========================================
+          // ユーザー
+          // ==========================================
+          if (
+            bg.includes('aaaaff') ||
+            bg.includes('ffaaaa')
+          ) {
+
+            const timeTd =
+              tr.querySelector(
+                'td[style*="width:110px"]'
+              );
+
+            const timeText =
+              timeTd
+                ? timeTd.textContent.trim()
+                : '';
+
+
+            let userText = '';
+
+            const bodyInput =
+              tr.querySelector(
+                'input[type="hidden"][id^="body_"]'
+              );
+
+            if (bodyInput) {
+
+              userText =
+                bodyInput.value || '';
+
+            } else {
+
+              const bodyEl =
+                findNextBody(tr);
+
+              if (bodyEl) {
+                userText =
+                  bodyEl.textContent || '';
+              }
+            }
+
+
+            msgs.push({
+              type: 'user',
+
+              rowText:
+                tr.textContent || '',
+
+              timeText,
+
+              userText:
+                userText.trim()
+            });
+          }
+        }
+
+
+        // ============================================
+        // 最新メッセージ判定
+        // ============================================
+
+        if (msgs.length === 0) {
+          return {
+            target: false,
+            reason:
+              '履歴100件ページにもメッセージなし'
+          };
+        }
+
+
+        if (
+          msgs[0].type === 'kanteishi'
+        ) {
+          return {
+            target: false,
+            reason:
+              '最新メッセージが鑑定士（返信済み）'
+          };
+        }
+
+
+        const firstKIdx =
+          msgs.findIndex(
+            m => m.type === 'kanteishi'
+          );
+
+
+        if (firstKIdx === -1) {
+          return {
+            target: false,
+            reason:
+              '履歴100件ページにも鑑定士メッセージなし'
+          };
+        }
+
+
+        const km =
+          msgs[firstKIdx];
+
+
+        // 最新鑑定士より上の
+        // ユーザーメッセージ
+        const beforeUser =
+          msgs
+            .slice(0, firstKIdx)
+            .filter(
+              m => m.type === 'user'
+            );
+
+
+        // ============================================
+        // span数
+        // ============================================
+
+        const spanRe =
+          /<span class="fortune-word-insert">[^<]+<\/span>/g;
+
+        let spanCount = 0;
+
+        while (
+          spanRe.exec(
+            km.bodyText || ''
+          ) !== null
+        ) {
+          spanCount++;
+        }
+
+
+        const allKanteishiComments =
+          msgs
+            .filter(
+              m => m.type === 'kanteishi'
+            )
+            .flatMap(
+              m => m.comments || []
+            );
+
+
+        return {
+          target: true,
+          reason: '',
+
+          kanteishiHtml:
+            km.html || '',
+
+          kanteishiTrHtml:
+            km.html || '',
+
+          kanteishiBodyText:
+            km.bodyText || '',
+
+          kanteishiComments:
+            km.comments || [],
+
+          allKanteishiComments,
+
+          spanCount,
+
+          userMsgCount:
+            beforeUser.length,
+
+          latestUserTime:
+            beforeUser[0]?.timeText || '',
+
+          latestUserTexts:
+            beforeUser.map(
+              m =>
+                m.userText ||
+                m.rowText ||
+                ''
+            )
+        };
+      });
+
+
+    console.log(
+      `[RIREKI-ANALYZE] target=${analysis?.target} ` +
+      `reason="${analysis?.reason || ''}" ` +
+      `userMsgCount=${analysis?.userMsgCount || 0} ` +
+      `spanCount=${analysis?.spanCount || 0}`
+    );
+
+    return analysis;
+
+  } catch (e) {
+
+    console.log(
+      `[RIREKI-ANALYZE] 解析失敗: ${e.message}`
+    );
+
+    return null;
+
+  } finally {
+
+    if (rirekiPage) {
+      await rirekiPage
+        .close()
+        .catch(() => {});
+    }
+  }
+}
+
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
 async function processUsers(
@@ -3441,7 +3844,61 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     console.log(`[DEBUG] 緑セル件数: ${greenCount}`);
 
     // ─── メッセージ履歴の詳細判定 ───────────────────────────────
-    const analysis = await analyzeMessages(page);
+    let analysis =
+      await analyzeMessages(page);
+
+
+    // ==========================================
+    // ope_mainに鑑定士メッセージが無い場合だけ
+    // 100件履歴ページで再解析
+    // ==========================================
+
+    if (
+      !analysis.target &&
+      analysis.reason ===
+        '鑑定士メッセージなし'
+    ) {
+
+      console.log(
+        `[RIREKI-ANALYZE] ${userName}: ` +
+        `ope_main内に鑑定士メッセージなし → ` +
+        `100件履歴で再検索`
+      );
+
+
+      const rirekiAnalysis =
+        await analyzeMessagesFromRirekiHistory(
+          page
+        );
+
+
+      if (
+        rirekiAnalysis &&
+        rirekiAnalysis.target
+      ) {
+
+        console.log(
+          `[RIREKI-ANALYZE] ${userName}: ` +
+          `100件履歴から鑑定士メッセージを取得`
+        );
+
+        analysis =
+          rirekiAnalysis;
+
+      } else if (rirekiAnalysis) {
+
+        console.log(
+          `[RIREKI-ANALYZE] ${userName}: ` +
+          `100件履歴解析結果: ` +
+          `${rirekiAnalysis.reason}`
+        );
+
+        analysis =
+          rirekiAnalysis;
+      }
+    }
+
+
     if (!analysis.target) {
 
       const shouldMarkAsReplied =
