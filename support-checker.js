@@ -1140,95 +1140,152 @@ async function getLatestUserMessage(page) {
   const mainFrame = page.frame({ name: 'ope_main' });
 
   if (!mainFrame) {
-    console.log('[SUPPORT] ope_mainフレームが取得できません');
+    console.log(
+      '[SUPPORT] ope_mainフレームが取得できません'
+    );
     return '';
   }
 
   try {
-    const texts = await mainFrame.evaluate(() => {
-      function normStyle(el) {
-        return (el.getAttribute('style') || '')
-          .replace(/\s/g, '')
-          .toLowerCase();
-      }
+    const texts =
+      await mainFrame.evaluate(() => {
+        const rows =
+          Array.from(
+            document.querySelectorAll('tr')
+          );
 
-      function isKanteishiAncestor(el) {
-        let node = el.parentElement;
+        const latestUserMessages = [];
 
-        while (node) {
-          const style = normStyle(node);
+        let startedUserGroup = false;
 
-          if (
-            style.includes('90ee90') ||
-            style.includes('144,238,144')
-          ) {
-            return true;
-          }
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
 
-          node = node.parentElement;
-        }
+          const style =
+            (row.getAttribute('style') || '')
+              .replace(/\s/g, '')
+              .toLowerCase();
 
-        return false;
-      }
+          const isUserHeader =
+            style.includes(
+              'background-color:#aaaaff'
+            ) ||
+            style.includes(
+              'background-color:#ffaaaa'
+            );
 
-      const all = Array.from(
-        document.querySelectorAll('div.bodyNaibu')
-      );
+          const isSupportHeader =
+            style.includes(
+              'background-color:#90ee90'
+            ) ||
+            style.includes(
+              '144,238,144'
+            );
 
-      // DOMは上ほど新しい
-      // 最初に現れる緑本文 = 最新の鑑定士側返信
-      const latestKanteishi =
-        all.find(el =>
-          isKanteishiAncestor(el)
-        ) || null;
 
-      let latestUserGroup;
+          // ==================================================
+          // ユーザー行
+          // ==================================================
+          if (isUserHeader) {
+            startedUserGroup = true;
 
-      if (latestKanteishi) {
-        // 最新の鑑定士返信より上にある
-        // ユーザーメッセージだけ取得
-        latestUserGroup =
-          all.filter(el => {
-            if (isKanteishiAncestor(el)) {
-              return false;
+            // 色付き行の次以降から
+            // 最初のbodyNaibuを持つ行を探す
+            let bodyText = '';
+
+            for (
+              let j = i + 1;
+              j < rows.length;
+              j++
+            ) {
+              const nextRow = rows[j];
+
+              const nextStyle =
+                (
+                  nextRow.getAttribute('style') ||
+                  ''
+                )
+                  .replace(/\s/g, '')
+                  .toLowerCase();
+
+
+              // 次の色付きメッセージ行まで来たら終了
+              if (
+                nextStyle.includes(
+                  'background-color:#aaaaff'
+                ) ||
+                nextStyle.includes(
+                  'background-color:#ffaaaa'
+                ) ||
+                nextStyle.includes(
+                  'background-color:#90ee90'
+                ) ||
+                nextStyle.includes(
+                  '144,238,144'
+                )
+              ) {
+                break;
+              }
+
+              const body =
+                nextRow.querySelector(
+                  'div.bodyNaibu'
+                );
+
+              if (body) {
+                bodyText =
+                  (
+                    body.textContent || ''
+                  ).trim();
+
+                break;
+              }
             }
 
-            return Boolean(
-              latestKanteishi.compareDocumentPosition(el) &
-              Node.DOCUMENT_POSITION_PRECEDING
-            );
-          });
 
-      } else {
-        // 鑑定士返信がまだ無ければ
-        // ユーザー本文をすべて対象
-        latestUserGroup =
-          all.filter(el =>
-            !isKanteishiAncestor(el)
-          );
-      }
+            if (bodyText) {
+              latestUserMessages.push(
+                bodyText
+              );
+            }
 
-      // DOMは最新→過去なので
-      // AIへは過去→最新で渡す
-      return latestUserGroup
-        .map(el =>
-          (el.textContent || '').trim()
-        )
-        .filter(Boolean)
-        .reverse();
-    });
+            continue;
+          }
+
+
+          // ==================================================
+          // サポート側の返信に到達
+          // 最新ユーザー群を取得済みなら、ここを境界に終了
+          // ==================================================
+          if (
+            isSupportHeader &&
+            startedUserGroup
+          ) {
+            break;
+          }
+        }
+
+
+        // DOMは最新→過去
+        // AIには過去→最新の順番で渡す
+        return latestUserMessages.reverse();
+      });
+
 
     const messageBlock =
       texts.join('\n---\n');
 
+
     console.log(
-      `[SUPPORT] 最新ユーザーメッセージ群: ${texts.length}件`
+      `[SUPPORT] 最新ユーザーメッセージ群: ` +
+      `${texts.length}件`
     );
 
     console.log(
       `[SUPPORT] メッセージ群(先頭150文字): ` +
       `"${messageBlock.slice(0, 150)}"`
     );
+
 
     return messageBlock;
 
@@ -1241,9 +1298,6 @@ async function getLatestUserMessage(page) {
     return '';
   }
 }
-
-
-
 
 async function countSupportTargets() {
   console.log('=== support-checker 件数確認開始 ===');
