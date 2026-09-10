@@ -425,24 +425,39 @@ function applyReplaceHeader(replyText, replaceHeader) {
 // processUsers の返信確認フローと、対象外ID次行照会（inquireNextLine）の
 // 両方から利用する。差し込み位置指定・差し替え前文の解釈をここに集約する。
 
-// baseReplyText の指定行の直前に insertText を挿入した本文を生成する。
-// lineNum=2（デフォルト）で「2行目に挿入」（＝1行目の直後）、
-// lineNum=3 で3行目、lineNum=4 で4行目…に挿入する。
+// baseReplyText の「N番目の非空行」の直後に insertText を挿入した本文を生成する。
+// lineNum=1（デフォルト）で1番目の非空行の後、lineNum=2 で2番目の非空行の後…に挿入する。
+// ※空行（改行のみ・空白のみの行）はカウント対象から除外する。
+//   文章によって空行の有無が異なっても、意図した非空行の位置に挿入できるようにするため。
 // ※返信文の改行はCSV由来のリテラル "\n" のため、実改行へ正規化してから分割する。
-function buildSplicedReply(baseReplyText, insertText, lineNum = 2) {
-  const baseLines = baseReplyText.replace(/\\n/g, '\n').trim().split('\n');
-  const n = Number.isFinite(lineNum) ? lineNum : 2;
-  const pos = Math.max(1, n - 1); // 挿入位置（先頭行の直後 = 1）
-  const splicedLines = [...baseLines.slice(0, pos), insertText, ...baseLines.slice(pos)];
-  return splicedLines.join('\n');
+function buildSplicedReply(baseReplyText, insertText, lineNum = 1) {
+  const allLines = baseReplyText.replace(/\\n/g, '\n').trim().split('\n');
+  const n = Number.isFinite(lineNum) ? Math.max(1, lineNum) : 1;
+
+  // 空行でない行のインデックスを取得（空行はカウントしない）
+  const nonEmptyIndices = [];
+  allLines.forEach((line, idx) => {
+    if (line.trim() !== '') nonEmptyIndices.push(idx);
+  });
+
+  // n番目の非空行の直後に挿入する
+  const targetIndex = nonEmptyIndices[n - 1];
+  if (targetIndex === undefined) {
+    // 指定行数が非空行数を超える場合は末尾に追加
+    return allLines.concat(insertText).join('\n');
+  }
+
+  const result = [...allLines];
+  result.splice(targetIndex + 1, 0, insertText);
+  return result.join('\n');
 }
 
 // 返信確認コマンド文字列を解釈する。
 // ・「送信」                    → { kind: 'send' }
 // ・「差し替え前文#{文章}」      → { kind: 'sashikaeZenbun', text }
 // ・「差し替え#{文章}」          → { kind: 'sashikae', text }
-// ・「差し込み{N}#{文章}」       → { kind: 'sashikomi', lineNum: N, text }
-// ・「差し込み#{文章}」          → { kind: 'sashikomi', lineNum: 2, text }
+// ・「差し込み{N}#{文章}」       → { kind: 'sashikomi', lineNum: N, text }（N番目の非空行の後）
+// ・「差し込み#{文章}」          → { kind: 'sashikomi', lineNum: 1, text }（1番目の非空行の後）
 // ・その他                      → { kind: 'skip' }
 // ※「差し替え前文#」は「差し替え#」より先に、「差し込み{N}#」は「差し込み#」より
 //   先に判定する（前方一致の取りこぼしを防ぐため）。
@@ -453,7 +468,7 @@ function parseConfirmCommand(reply) {
   if ((m = r.match(/^差し替え前文#([\s\S]+)$/))) return { kind: 'sashikaeZenbun', text: m[1] };
   if ((m = r.match(/^差し替え#([\s\S]+)$/)))     return { kind: 'sashikae', text: m[1] };
   if ((m = r.match(/^差し込み(\d+)#([\s\S]+)$/))) return { kind: 'sashikomi', lineNum: parseInt(m[1], 10), text: m[2] };
-  if ((m = r.match(/^差し込み#([\s\S]+)$/)))      return { kind: 'sashikomi', lineNum: 2, text: m[1] };
+  if ((m = r.match(/^差し込み#([\s\S]+)$/)))      return { kind: 'sashikomi', lineNum: 1, text: m[1] };
   return { kind: 'skip' };
 }
 
@@ -724,7 +739,7 @@ async function resolveConfirmCommand({
     return { send: true, text: replyText.replace(/\\n/g, '\n').trim() + '\n' + tail };
   }
 
-  // 差し込み#（2行目）/ 差し込み{N}#（N行目）
+  // 差し込み#（1番目の非空行の後）/ 差し込み{N}#（N番目の非空行の後）
   // 「テンプレート{番号}」指定はcharaId対応のテンプレート本文に置換する
   if (cmd.kind === 'sashikomi') {
     let insertText;
@@ -758,12 +773,12 @@ async function resolveConfirmCommand({
     const label =
       cmd.text.trim() === 'AI返信'
         ? (
-            cmd.lineNum === 2
+            cmd.lineNum === 1
               ? 'AI差し込み確認'
               : `AI差し込み確認（${cmd.lineNum}行目）`
           )
         : (
-            cmd.lineNum === 2
+            cmd.lineNum === 1
               ? '差し込み確認'
               : `差し込み確認（${cmd.lineNum}行目）`
           );
@@ -3585,6 +3600,13 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
       }
 
+      const longMessageExceptions =
+        new Set([
+          normalizeMatchText(
+            '霊力感応再開(れいりょくかんおうさいかい)'
+          )
+        ]);
+
       const longUserMessages =
         userTextsForAuto
           .map((text, index) => {
@@ -3599,7 +3621,11 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
             };
           })
           .filter(
-            item => item.length >= 20
+            item =>
+              item.length >= 20 &&
+              !longMessageExceptions.has(
+                item.normalized
+              )
           );
 
       if (
@@ -4925,11 +4951,11 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       '「送信」：そのまま送信',
       '【AI返信】',
       '「スキップ」：送信しない',
-      '「差し込み#{文章}」：2行目の後に文章を追加',
-      '「差し込み{N}#{文章}」：指定したN行目の後に文章を追加',
+      '「差し込み#{文章}」：1番目の非空行の後に文章を追加',
+      '「差し込み{N}#{文章}」：N番目の非空行の後に文章を追加',
       '「差し替え#{文章}」：返信文を丸ごと差し替え',
       '「差し替え前文#{文章}」：返信文の前半部分のみ差し替え',
-      '「差し込み#AI返信」：回答を2行目へ差し込み',
+      '「差し込み#AI返信」：回答を1番目の非空行の後へ差し込み',
       '「差し込み{N}#AI返信」：回答を指定位置へ差し込み',
       '「差し替え#AI返信」：返信全文を生成',
       '「差し替え前文#AI返信」：冒頭回答のみ生成',
@@ -7328,11 +7354,11 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
       '「送信」：そのまま送信',
       '【AI返信】',
       '「スキップ」：送信しない',
-      '「差し込み#{文章}」：2行目の後に文章を追加',
-      '「差し込み{N}#{文章}」：指定したN行目の後に文章を追加',
+      '「差し込み#{文章}」：1番目の非空行の後に文章を追加',
+      '「差し込み{N}#{文章}」：N番目の非空行の後に文章を追加',
       '「差し替え#{文章}」：返信文を丸ごと差し替え',
       '「差し替え前文#{文章}」：返信文の前半部分のみ差し替え',
-      '「差し込み#AI返信」：回答を2行目へ差し込み',
+      '「差し込み#AI返信」：回答を1番目の非空行の後へ差し込み',
       '「差し込み{N}#AI返信」：回答を指定位置へ差し込み',
       '「差し替え#AI返信」：返信全文を生成',
       '「差し替え前文#AI返信」：冒頭回答のみ生成',
@@ -7717,11 +7743,11 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
       '「送信」：そのまま送信',
       '【AI返信】',
       '「スキップ」：送信しない',
-      '「差し込み#{文章}」：2行目の後に文章を追加',
-      '「差し込み{N}#{文章}」：指定したN行目の後に文章を追加',
+      '「差し込み#{文章}」：1番目の非空行の後に文章を追加',
+      '「差し込み{N}#{文章}」：N番目の非空行の後に文章を追加',
       '「差し替え#{文章}」：返信文を丸ごと差し替え',
       '「差し替え前文#{文章}」：返信文の前半部分のみ差し替え',
-      '「差し込み#AI返信」：回答を2行目へ差し込み',
+      '「差し込み#AI返信」：回答を1番目の非空行の後へ差し込み',
       '「差し込み{N}#AI返信」：回答を指定位置へ差し込み',
       '「差し替え#AI返信」：返信全文を生成',
       '「差し替え前文#AI返信」：冒頭回答のみ生成',
