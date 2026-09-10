@@ -70,6 +70,19 @@
         "yu4": {
             "fileId": "12688yu2sinko"
         },
+        "yu4mu": {
+            "fileId": "12688yu4musinko",
+            "ho": {
+                "searchTarget": "12688yu4mu/sinko/1",
+                "useCurrentRow": true
+            },
+            "sinko14": {
+                "useHistorySearch": true,
+                "historyCharaId": "12688yu2",
+                "replaceHeader": "重要な時間に取り組みありがとうございました。\n\nこれは本当に素晴らしい事です。\n\nまず今の自分を認めてあげましょう。\n\nここまでの反応は良い状態です。\n\nこのクッションでは現在地を確認出来ましたので、通常返信の続きへ戻しましょう。\n\nでは下記から進めて行きましょう。\n\n",
+                "fallbackSearch": "12688yu2/sinko/3"
+            }
+        },
         "yu11": {
             "fileId": "12688yu2sinko"
         },
@@ -78,13 +91,6 @@
         },
         "yu21": {
             "fileId": "12688yu2sinko"
-        },
-        "yu4mu": {
-            "fileId": "12688yu4musinko",
-            "ho": {
-                "searchTarget": "12688yu4mu/sinko/1",
-                "useCurrentRow": true
-            }
         },
         "yu11mu": {
             "fileId": "12688yu11musinko",
