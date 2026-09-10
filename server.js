@@ -882,7 +882,7 @@ function buildSkippedUsersMessage() {
 function parseMemberCommand(command) {
   const body = command || '';
   return {
-    point: (m => (m ? { amount: m[1], sign: m[2] === '減算' ? '-' : '+' } : null))(body.match(/(?:ポイント)?(\d+)pt(追加|減算)/)),
+    point: (m => (m ? { amount: m[1], sign: m[2] === '減算' ? '-' : '+' } : null))(body.match(/(?:^|\s)(?:ポイント)?(\d+)pt(追加|減算)(?:\s|$)/)),
     level: body.match(/レベル変更:(\d+)/)?.[1] ?? null,
     rentpoint: (m => (m ? { amount: m[1] } : null))(body.match(/レンタルポイント(\d+)pt追加/)),
     love:  (m => (m ? { charaId: m[1], value: m[2] } : null))(body.match(/絆変更:(\d+):(\d+)/)),
