@@ -1,0 +1,119 @@
+{
+    "charaId": "12689",
+    "globalStopTime": {
+        "start": "23:00",
+        "end": "09:00"
+    },
+    "spanMatchExclude": [],
+    "phases": {
+        "mu1": {
+            "fileId": "12689mu1sinko",
+            "do": {
+                "searchTarget": "12689mu1/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "mu2": {
+            "fileId": "12689mu2his",
+            "do": {
+                "searchTarget": "12689mu2/his/1",
+                "useCurrentRow": true
+            },
+            "ho": {
+                "searchTarget": "12689mu2/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu1": {
+            "fileId": "12689yu1sinko",
+            "ho": {
+                "searchTarget": "12689yu1/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu2": {
+            "fileId": "12689yu2sinko",
+            "ho": {
+                "searchTarget": "12689yu2/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu3": {
+            "fileId": "12689yu3sinko",
+            "ho": {
+                "searchTarget": "12689yu3/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4": {
+            "fileId": "12689yu4sinko",
+            "ho": {
+                "searchTarget": "12689yu4/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu5": {
+            "fileId": "12689yu5sinko",
+            "ho": {
+                "searchTarget": "12689yu5/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu6": {
+            "fileId": "12689yu6sinko",
+            "ho": {
+                "searchTarget": "12689yu6/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu7": {
+            "fileId": "12689yu7sinko",
+            "ho": {
+                "searchTarget": "12689yu7/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu8": {
+            "fileId": "12689yu8sinko",
+            "ho": {
+                "searchTarget": "12689yu8/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu9": {
+            "fileId": "12689yu9sinko",
+            "ho": {
+                "searchTarget": "12689yu9/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4mu": {
+            "fileId": "12689yu4musinko",
+            "ho": {
+                "searchTarget": "12689yu4mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu11mu": {
+            "fileId": "12689yu11musinko",
+            "ho": {
+                "searchTarget": "12689yu11mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu14mu": {
+            "fileId": "12689yu14musinko",
+            "ho": {
+                "searchTarget": "12689yu14mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu21mu": {
+            "fileId": "12689yu21musinko",
+            "ho": {
+                "searchTarget": "12689yu21mu/sinko/1",
+                "useCurrentRow": true
+            }
+        }
+    }
+}
