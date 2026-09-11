@@ -11,6 +11,14 @@
             "do1": {
                 "searchTarget": "12689mu1/sinko/1",
                 "useCurrentRow": true
+            },
+            "sinko1": {
+                "specialProcess": [
+                    "saveMemo1",
+                    "saveNickname"
+                ],
+                "searchTarget": "12689mu1/sinko/2",
+                "useCurrentRow": true
             }
         },
         "mu2": {
