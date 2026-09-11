@@ -35,7 +35,7 @@
       "do1": { "searchTarget": "12672mu1/do/1", "useCurrentRow": false }
     },
     "mu2": {
-      "ho": { "searchTarget": "12672mu2/sinko1", "useCurrentRow": true }
+      "ho": { "searchTarget": "12672mu2/sinko/1", "useCurrentRow": true }
     },
     "yu1": {
       "ho": { "searchTarget": "12672yu1/ho", "useCurrentRow": false }
