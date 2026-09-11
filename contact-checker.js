@@ -60,7 +60,7 @@ const {
   runPaymentCommand,
 } = require('./utils');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
-
+const supportAiTemplates = require('./support-ai-templates.json');
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const BASE_URL   = LOGIN_URL.replace(/[^/]+$/, ''); // "http://manager.x7j4l2p9m1.com/mg/"
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;

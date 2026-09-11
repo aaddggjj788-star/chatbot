@@ -37,6 +37,7 @@ const {
   calcExpectedPoints, calcCouponPoint, getMailRows, getBankHistory, checkPointDiff,
   runPaymentCommand,
 } = require('./utils');
+const supportAiTemplates = require('./support-ai-templates.json');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
 const anthropic = new Anthropic();
 const openai = new OpenAI({
