@@ -8,14 +8,14 @@
     "phases": {
         "mu1": {
             "fileId": "12689mu1sinko",
-            "do": {
+            "do1": {
                 "searchTarget": "12689mu1/sinko/1",
                 "useCurrentRow": true
             }
         },
         "mu2": {
             "fileId": "12689mu2his",
-            "do": {
+            "do1": {
                 "searchTarget": "12689mu2/his/1",
                 "useCurrentRow": true
             },
