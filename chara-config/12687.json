@@ -84,7 +84,7 @@
             }
         },
         "yu10": {
-            "fileId": "12687yu10sinko"
+            "fileId": "12687yu4sinko"
         },
         "yu10mu": {
             "fileId": "12687yu10musinko",
@@ -96,7 +96,7 @@
         "yu11": {
             "fileId": "12687yu11sinko",
             "ho": {
-                "searchTarget": "12687yu11/sinko/1",
+                "searchTarget": "12687yu11/sinko/30",
                 "useCurrentRow": true
             }
         },
