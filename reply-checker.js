@@ -3381,7 +3381,8 @@ function validateStructuredAge(text, rule) {
 // 希望当選金額
 // ======================================================
 function validateStructuredMoney(text, rule) {
-  const t = normalizeStructuredText(text);
+  const t =
+    normalizeStructuredText(text);
 
   if (!t) {
     return {
@@ -3391,55 +3392,155 @@ function validateStructuredMoney(text, rule) {
   }
 
 
-  // --------------------------------------------------
-  // 金額質問は「？」があれば必ず内容確認
-  //
-  // 5000万円でいいですか？
-  // 1億でも大丈夫？
-  //
-  // → 金額があってもAI
-  // --------------------------------------------------
-  if (/[？?]/.test(t)) {
+  // ======================================================
+  // 明確に「決められない・分からない」などの場合
+  // 金額らしい数字が文章中にあっても正常回答にはしない
+  // ======================================================
+
+  const rejectPatterns =
+    Array.isArray(rule?.rejectPatterns)
+      ? rule.rejectPatterns
+      : [];
+
+  const matchedReject =
+    rejectPatterns.find(pattern =>
+      t.includes(String(pattern))
+    );
+
+  if (matchedReject) {
     return {
       status: 'needs_ai',
-      reason: 'money_question'
+      reason:
+        `money_rejected:${matchedReject}`
     };
   }
 
 
-  // --------------------------------------------------
-  // 算用数字
+  // ======================================================
+  // 金額候補を抽出
   //
-  // 3000
-  // 3000万
   // 5000万円
-  // 100000000円
-  // --------------------------------------------------
-  const hasArabicNumber =
-    /\d[\d,，]*/.test(t);
-
-
-  // --------------------------------------------------
-  // 漢数字
-  //
-  // 一億
+  // 1億円
+  // 3000万
+  // 3000
   // 三億円
-  // 五千万
-  // --------------------------------------------------
-  const hasKanjiAmount =
-    /[一二三四五六七八九十百千万億兆]+(?:万|億|兆)?円?/.test(t);
+  // ======================================================
+
+  const amountCandidates = [];
 
 
-  if (
-    hasArabicNumber ||
-    hasKanjiAmount
-  ) {
+  // ------------------------------------------------------
+  // 算用数字 + 単位あり
+  // ------------------------------------------------------
+
+  const arabicWithUnit =
+    t.match(
+      /\d[\d,，]*(?:\.\d+)?\s*(?:兆|億|万|円)(?:円)?/g
+    ) || [];
+
+
+  for (const raw of arabicWithUnit) {
+    const value =
+      String(raw || '')
+        .replace(/\s+/g, '')
+        .trim();
+
+    if (value) {
+      amountCandidates.push(value);
+    }
+  }
+
+
+  // ------------------------------------------------------
+  // 漢数字
+  // ------------------------------------------------------
+
+  const kanjiAmounts =
+    t.match(
+      /[一二三四五六七八九十百千万億兆]+(?:円)?/g
+    ) || [];
+
+
+  for (const raw of kanjiAmounts) {
+    const value =
+      String(raw || '').trim();
+
+    if (value) {
+      amountCandidates.push(value);
+    }
+  }
+
+
+  // 重複除去
+  const uniqueAmounts =
+    [...new Set(amountCandidates)];
+
+
+  // ======================================================
+  // 金額候補が複数ある
+  //
+  // 3000万か5000万
+  // 1億か2億
+  //
+  // → どちらを希望しているか機械判定では決めない
+  // ======================================================
+
+  if (uniqueAmounts.length >= 2) {
+    return {
+      status: 'needs_ai',
+      reason:
+        `multiple_amounts:${uniqueAmounts.join(',')}`
+    };
+  }
+
+
+  // ======================================================
+  // 金額候補が1つだけある
+  //
+  // 5000万円です
+  // 5000万円でいいですか？
+  // 1億でも大丈夫ですか？
+  // 1億円くらいを希望します
+  //
+  // → 質問記号があっても正常回答
+  // ======================================================
+
+  if (uniqueAmounts.length === 1) {
     return {
       status: 'valid',
-      reason: 'money_found'
+      reason:
+        `money_found:${uniqueAmounts[0]}`
     };
   }
 
+
+  // ======================================================
+  // 単位なし数字のみ
+  //
+  // 「3000」
+  // のような回答も従来どおり許可
+  // ======================================================
+
+  const plainNumber =
+    t.match(/^\s*\d[\d,，]*\s*$/);
+
+  if (plainNumber) {
+    return {
+      status: 'valid',
+      reason: 'plain_money_number'
+    };
+  }
+
+
+  // ======================================================
+  // 金額そのものを取得できなかった
+  //
+  // いくらくらいがいいですか？
+  // 決められません
+  // 高すぎてもいいですか？
+  //
+  // → fallback AI分類
+  // ======================================================
 
   return {
     status: 'needs_ai',
