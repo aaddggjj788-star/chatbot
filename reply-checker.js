@@ -32,6 +32,7 @@ const { sendSlack, isSlackOnly } = require('./slack-notify');
 const { checkReplySafety } = require('./reply-safety');
 const generatedQueue = require('./generated-queue');
 const OpenAI = require('openai');
+const structuredQuestionRules = require('./reply-structured-rules.json');
 const REPLY_SAFETY_IGNORE_FILE = path.join(
   __dirname,
   'reply-safety-ignore.json'
@@ -3009,6 +3010,467 @@ return phraseMatch(
   word
 );
 }
+
+
+// ─── 定型質問の機械判定 ──────────────────────────────────────────
+// reply-structured-rules.json に登録されたコメントアウトだけを対象にする。
+// valid     = AI不要。通常の次返信処理へ進めてよい
+// needs_ai  = 内容確認が必要。従来のAI判定へ回す
+
+function normalizeStructuredText(text) {
+  return String(text || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[０-９]/g, c =>
+      String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
+    )
+    .replace(/\u3000/g, ' ')
+    .trim();
+}
+
+
+// ======================================================
+// 名前・ニックネーム
+// ======================================================
+function validateStructuredName(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+
+  // --------------------------------------------------
+  // 明示的に名前・ニックネームを回答している
+  //
+  // 例:
+  // 本名じゃないと駄目ですか？ニックネームはカナです。
+  // 名前は山田太郎です。
+  // 呼び名はタロです。
+  // --------------------------------------------------
+  const explicitName =
+    /(?:ニックネーム|名前|呼び名|イニシャル)\s*(?:は|が|:|：)?\s*[「『"'“”]?([^。！？?\n]{1,40})/.test(t);
+
+
+  // --------------------------------------------------
+  // 「○○と呼ばれています」
+  // 「○○って呼ばれてます」
+  // --------------------------------------------------
+  const calledName =
+    /[^。！？?\n]{1,40}(?:って|と)\s*呼ばれ/.test(t);
+
+
+  // --------------------------------------------------
+  // 「○○です」「○○と申します」
+  // --------------------------------------------------
+  const selfIntroduction =
+    /[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]{1,40}(?:です|と申します|といいます|と言います)/.test(t);
+
+
+  // 質問を含んでいても、
+  // 必要な名前回答まで含まれていれば正常扱い
+  if (
+    explicitName ||
+    calledName ||
+    selfIntroduction
+  ) {
+    return {
+      status: 'valid',
+      reason: 'name_answer_found'
+    };
+  }
+
+
+  // --------------------------------------------------
+  // 名前だけが送られたケース
+  //
+  // 山田太郎
+  // ヤマダタロウ
+  // かな
+  // T.Y
+  //
+  // 疑問文・拒否文はここでvalidにしない
+  // --------------------------------------------------
+  const hasQuestion =
+    /[？?]/.test(t);
+
+  const hasQuestionOrRejectWords =
+    /(本名|なぜ|なんで|どうして|必要|言いたくない|教えたくない|答えたくない)/.test(t);
+
+  const plainName =
+    /^[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]{1,40}$/.test(t);
+
+
+  if (
+    plainName &&
+    !hasQuestion &&
+    !hasQuestionOrRejectWords
+  ) {
+    return {
+      status: 'valid',
+      reason: 'plain_name'
+    };
+  }
+
+
+  return {
+    status: 'needs_ai',
+    reason: 'name_ambiguous'
+  };
+}
+
+
+// ======================================================
+// 転機の年齢
+// ======================================================
+function validateStructuredAge(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+
+  const min =
+    Number(rule?.answerPolicy?.minimum ?? 0);
+
+  const max =
+    Number(rule?.answerPolicy?.maximum ?? 120);
+
+
+  // --------------------------------------------------
+  // 25歳 / 25才 / 25歳頃 / 25才の時
+  // 長文中でも拾う
+  // --------------------------------------------------
+  const explicitAges =
+    [...t.matchAll(/(\d{1,3})\s*(?:歳|才)/g)]
+      .map(m => Number(m[1]))
+      .filter(n =>
+        n >= min &&
+        n <= max
+      );
+
+
+  if (explicitAges.length > 0) {
+    return {
+      status: 'valid',
+      reason:
+        `age_found:${explicitAges.join(',')}`
+    };
+  }
+
+
+  // --------------------------------------------------
+  // 25の時 / 30の頃 / 42のころ
+  // --------------------------------------------------
+  const timeAges =
+    [...t.matchAll(
+      /(\d{1,3})\s*(?:の)?\s*(?:時|頃|ころ)/g
+    )]
+      .map(m => Number(m[1]))
+      .filter(n =>
+        n >= min &&
+        n <= max
+      );
+
+
+  if (timeAges.length > 0) {
+    return {
+      status: 'valid',
+      reason:
+        `age_time_found:${timeAges.join(',')}`
+    };
+  }
+
+
+  // --------------------------------------------------
+  // 質問側が「数字のみ」と指定しているため
+  //
+  // 25
+  // 25、32
+  // 25と32
+  // --------------------------------------------------
+  const numberOnly =
+    /^[\s\d、,，・\/／と〜～\-]+$/.test(t);
+
+
+  if (numberOnly) {
+    const nums =
+      (t.match(/\d{1,3}/g) || [])
+        .map(Number)
+        .filter(n =>
+          n >= min &&
+          n <= max
+        );
+
+
+    if (nums.length > 0) {
+      return {
+        status: 'valid',
+        reason:
+          `plain_age:${nums.join(',')}`
+      };
+    }
+  }
+
+
+  // 「？」があっても、年齢回答があれば
+  // 上ですでにvalidになっている。
+  //
+  // ここまで来た = 年齢自体を取得できていない。
+  return {
+    status: 'needs_ai',
+    reason: 'age_ambiguous'
+  };
+}
+
+
+// ======================================================
+// 希望当選金額
+// ======================================================
+function validateStructuredMoney(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+
+  // --------------------------------------------------
+  // 金額質問は「？」があれば必ず内容確認
+  //
+  // 5000万円でいいですか？
+  // 1億でも大丈夫？
+  //
+  // → 金額があってもAI
+  // --------------------------------------------------
+  if (/[？?]/.test(t)) {
+    return {
+      status: 'needs_ai',
+      reason: 'money_question'
+    };
+  }
+
+
+  // --------------------------------------------------
+  // 算用数字
+  //
+  // 3000
+  // 3000万
+  // 5000万円
+  // 100000000円
+  // --------------------------------------------------
+  const hasArabicNumber =
+    /\d[\d,，]*/.test(t);
+
+
+  // --------------------------------------------------
+  // 漢数字
+  //
+  // 一億
+  // 三億円
+  // 五千万
+  // --------------------------------------------------
+  const hasKanjiAmount =
+    /[一二三四五六七八九十百千万億兆]+(?:万|億|兆)?円?/.test(t);
+
+
+  if (
+    hasArabicNumber ||
+    hasKanjiAmount
+  ) {
+    return {
+      status: 'valid',
+      reason: 'money_found'
+    };
+  }
+
+
+  return {
+    status: 'needs_ai',
+    reason: 'money_ambiguous'
+  };
+}
+
+
+// ======================================================
+// type → validator
+// ======================================================
+const STRUCTURED_VALIDATORS = {
+  name: validateStructuredName,
+  age: validateStructuredAge,
+  money: validateStructuredMoney
+};
+
+
+// ======================================================
+// コメントアウトとユーザーメッセージ群をまとめて判定
+// ======================================================
+function checkStructuredQuestion(
+  latestComment,
+  userTexts
+) {
+  const config =
+    structuredQuestionRules || {};
+
+  const defaultPolicy =
+    config.defaultPolicy || {};
+
+  const rules =
+    config.rules || {};
+
+
+  // --------------------------------------------------
+  // 完全一致のみ
+  // --------------------------------------------------
+  const rule =
+    rules[latestComment];
+
+  if (!rule || rule.enabled === false) {
+    return null;
+  }
+
+
+  const validator =
+    STRUCTURED_VALIDATORS[
+      rule.type
+    ];
+
+
+  // JSONに未知typeが書かれていた場合も、
+  // 自動返信せず従来AIへ逃がす
+  if (!validator) {
+    return {
+      matched: true,
+      status: 'needs_ai',
+      reason:
+        `unknown_validator:${rule.type || ''}`
+    };
+  }
+
+
+  const texts =
+    Array.isArray(userTexts)
+      ? userTexts
+          .map(normalizeStructuredText)
+          .filter(Boolean)
+      : [];
+
+
+  if (texts.length === 0) {
+    return {
+      matched: true,
+      status: 'needs_ai',
+      reason: 'no_user_messages'
+    };
+  }
+
+
+  // --------------------------------------------------
+  // money等:
+  // questionMark = always_ai の場合
+  //
+  // ユーザーメッセージ群のどこか1通でも
+  // 「？」があればAIを優先する。
+  //
+  // 例:
+  // 1通目: 5000万円
+  // 2通目: これで大丈夫ですか？
+  //
+  // → AI
+  // --------------------------------------------------
+  if (
+    rule?.questionPolicy?.questionMark ===
+    'always_ai'
+  ) {
+    const hasQuestion =
+      texts.some(t =>
+        /[？?]/.test(t)
+      );
+
+
+    if (hasQuestion) {
+      return {
+        matched: true,
+        status: 'needs_ai',
+        reason:
+          'question_mark_policy'
+      };
+    }
+  }
+
+
+  const results =
+    texts.map(text => {
+      try {
+        return validator(
+          text,
+          rule
+        );
+      } catch (e) {
+        return {
+          status: 'needs_ai',
+          reason:
+            `validator_error:${e.message}`
+        };
+      }
+    });
+
+
+  // --------------------------------------------------
+  // name / age:
+  // どれか1通に正常回答があればOK
+  //
+  // 例:
+  // 1通目 本名じゃないとダメですか？
+  // 2通目 ニックネームはカナです
+  //
+  // → valid
+  // --------------------------------------------------
+  const valid =
+    results.find(
+      r => r?.status === 'valid'
+    );
+
+
+  if (valid) {
+    return {
+      matched: true,
+      status: 'valid',
+      reason: valid.reason || 'valid',
+      type: rule.type
+    };
+  }
+
+
+  // 明確なvalid以外はすべてAIへ。
+  // 「たぶん正常」で自動返信しない。
+  return {
+    matched: true,
+    status: 'needs_ai',
+    reason:
+      results
+        .map(r => r?.reason)
+        .filter(Boolean)
+        .join(' / ') ||
+      'ambiguous',
+
+    type: rule.type
+  };
+}
+
+
+
+
 
 // ope_mainフレームの div.bodyNaibu からユーザーメッセージ本文のみ取得する
 // 全 div.bodyNaibu から鑑定士行（90ee90 背景）に属するものを除外し、
@@ -6507,10 +6969,102 @@ async function classifyLongSkippedWithAI(item) {
       )
     );
 
-  const hasReplyWord =
-    expectedReplyWords.length > 0 &&
-    matchedReplyWords.length > 0;
 
+const hasReplyWord =
+  expectedReplyWords.length > 0 &&
+  matchedReplyWords.length > 0;
+
+
+// ======================================================
+// 定型質問の機械判定
+// ======================================================
+//
+// item.userTexts が将来配列で渡される場合はそれを優先。
+// 現状 userText が "---" 区切りで結合されている場合にも対応する。
+//
+// 例:
+//   1通目: 本名じゃないとダメですか？
+//   2通目: ニックネームはカナです
+//
+// を別々のメッセージとして判定する。
+//
+const structuredUserTexts =
+  Array.isArray(item.userTexts) &&
+  item.userTexts.length > 0
+    ? item.userTexts
+    : userText
+        .split(/\n\s*---\s*\n/)
+        .map(t => t.trim())
+        .filter(Boolean);
+
+
+const structuredResult =
+  checkStructuredQuestion(
+    String(item.latestComment || ''),
+    structuredUserTexts
+  );
+
+
+// ======================================================
+// 定型質問 判定ログ
+// ======================================================
+if (structuredResult) {
+  console.log(
+    `[STRUCTURED] ` +
+    `uid=${item.uid} ` +
+    `kid=${item.kid} ` +
+    `comment=${item.latestComment || '-'} ` +
+    `type=${structuredResult.type || '-'} ` +
+    `messages=${structuredUserTexts.length} ` +
+    `status=${structuredResult.status || '-'} ` +
+    `reason="${structuredResult.reason || ''}"`
+  );
+}
+
+
+// ======================================================
+// 正常回答ならAI判定を完全スキップ
+// ======================================================
+//
+// structured question では通常の「返信ワード」そのものは存在しないが、
+// 質問に対する必要回答を正常に受け取ったことを
+// 「工程を進めてよい」という意味で hasReplyWord=true 相当として扱う。
+//
+// none + true → insert_next
+//
+if (
+  structuredResult?.status === 'valid'
+) {
+  console.log(
+    `[STRUCTURED] ` +
+    `uid=${item.uid} ` +
+    `comment=${item.latestComment || '-'} ` +
+    `→ 正常回答のためOpenAI判定をスキップ / insert_next`
+  );
+
+  return {
+    questionType: 'none',
+    hasReplyWord: true,
+    action: 'insert_next',
+    reason:
+      `定型質問への正常回答を機械判定 ` +
+      `(${structuredResult.reason || 'valid'})`
+  };
+}
+
+
+// needs_ai の場合はreturnしない。
+// このまま従来のOpenAI判定へ流す。
+if (
+  structuredResult?.status === 'needs_ai'
+) {
+  console.log(
+    `[STRUCTURED] ` +
+    `uid=${item.uid} ` +
+    `comment=${item.latestComment || '-'} ` +
+    `→ 内容確認が必要なため従来AI判定へ`
+  );
+}
 
   // ======================================================
   // 鑑定士AIプロフィールを取得
