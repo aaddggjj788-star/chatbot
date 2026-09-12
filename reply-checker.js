@@ -3024,6 +3024,7 @@ function normalizeStructuredText(text) {
     .replace(/[０-９]/g, c =>
       String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
     )
+    .replace(/^\s*\|\s*/gm, '')
     .replace(/\u3000/g, ' ')
     .trim();
 }
@@ -4781,6 +4782,52 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         /[？?]/.test(String(text || ''))
       );
 
+      // ======================================================
+      // 定型質問：JSONルールによる機械判定
+      // ======================================================
+
+      const latestCommentForStructured =
+        getLatestSinkoComment(allComments) ||
+        allComments[0] ||
+        '';
+
+      const structuredResult =
+        checkStructuredQuestion(
+          latestCommentForStructured,
+          userTextsForAuto
+        );
+
+      const structuredValid =
+        structuredResult?.status === 'valid';
+
+      const structuredNeedsAi =
+        structuredResult?.status === 'needs_ai';
+
+      if (structuredResult) {
+        console.log(
+          `[STRUCTURED] ${userName}: ` +
+          `comment=${latestCommentForStructured || '-'} ` +
+          `type=${structuredResult.type || '-'} ` +
+          `messages=${userTextsForAuto.length} ` +
+          `status=${structuredResult.status || '-'} ` +
+          `reason="${structuredResult.reason || ''}"`
+        );
+      }
+
+      if (structuredValid) {
+        console.log(
+          `[STRUCTURED] ${userName}: ` +
+          `正常回答を機械判定 → OpenAI確認不要`
+        );
+      }
+
+      if (structuredNeedsAi) {
+        console.log(
+          `[STRUCTURED] ${userName}: ` +
+          `機械判定では確定できない → OpenAI確認へ`
+        );
+      }      
+
       if (
         hasUserQuestion &&
         isQuestionComment
@@ -4795,10 +4842,11 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       // 送り返す言葉が取得できた場合、
       // 最新ユーザー本文との部分一致を確認
       // --------------------------------------------------
-      if (
-        nengenWords.length > 0 &&
-        !isQuestionComment
-      ) {
+        if (
+          nengenWords.length > 0 &&
+          !isQuestionComment &&
+          !structuredResult
+        ) {
         const unmatchedWords = nengenWords.filter(word =>
           !matchesReturnWord(
             normalizedCombinedUserText,
@@ -4845,10 +4893,11 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
       }
 
-      if (
-        hasUserQuestion &&
-        !isQuestionComment
-      ) {
+        if (
+          hasUserQuestion &&
+          !isQuestionComment &&
+          !structuredResult
+        ) {
         console.log(
           `[AUTO-CHECK] ${userName}: ユーザー質問（？/?）を検出 → 対象外`
         );
@@ -4870,20 +4919,16 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
       }
 
-      if (
-        nengenWords.length > 0 &&
-        isQuestionComment
-      ) {
-        console.log(
-          `[AUTO-QUESTION] ${userName}: 質問型コメントのため送り返す言葉一致判定をスキップ → OpenAI判定へ`
-        );
-      }
-
-
   // ======================================================
   // 質問型コメント：OpenAIで回答内容を確認
   // ======================================================
-        if (isQuestionComment) {
+        if (
+            !structuredValid &&
+            (
+              isQuestionComment ||
+              structuredNeedsAi
+            )
+          ) {
           const kanteishiQuestionText = String(
             analysis.kanteishiBodyText || ''
           )
@@ -6974,97 +7019,6 @@ const hasReplyWord =
   expectedReplyWords.length > 0 &&
   matchedReplyWords.length > 0;
 
-
-// ======================================================
-// 定型質問の機械判定
-// ======================================================
-//
-// item.userTexts が将来配列で渡される場合はそれを優先。
-// 現状 userText が "---" 区切りで結合されている場合にも対応する。
-//
-// 例:
-//   1通目: 本名じゃないとダメですか？
-//   2通目: ニックネームはカナです
-//
-// を別々のメッセージとして判定する。
-//
-const structuredUserTexts =
-  Array.isArray(item.userTexts) &&
-  item.userTexts.length > 0
-    ? item.userTexts
-    : userText
-        .split(/\n\s*---\s*\n/)
-        .map(t => t.trim())
-        .filter(Boolean);
-
-
-const structuredResult =
-  checkStructuredQuestion(
-    String(item.latestComment || ''),
-    structuredUserTexts
-  );
-
-
-// ======================================================
-// 定型質問 判定ログ
-// ======================================================
-if (structuredResult) {
-  console.log(
-    `[STRUCTURED] ` +
-    `uid=${item.uid} ` +
-    `kid=${item.kid} ` +
-    `comment=${item.latestComment || '-'} ` +
-    `type=${structuredResult.type || '-'} ` +
-    `messages=${structuredUserTexts.length} ` +
-    `status=${structuredResult.status || '-'} ` +
-    `reason="${structuredResult.reason || ''}"`
-  );
-}
-
-
-// ======================================================
-// 正常回答ならAI判定を完全スキップ
-// ======================================================
-//
-// structured question では通常の「返信ワード」そのものは存在しないが、
-// 質問に対する必要回答を正常に受け取ったことを
-// 「工程を進めてよい」という意味で hasReplyWord=true 相当として扱う。
-//
-// none + true → insert_next
-//
-if (
-  structuredResult?.status === 'valid'
-) {
-  console.log(
-    `[STRUCTURED] ` +
-    `uid=${item.uid} ` +
-    `comment=${item.latestComment || '-'} ` +
-    `→ 正常回答のためOpenAI判定をスキップ / insert_next`
-  );
-
-  return {
-    questionType: 'none',
-    hasReplyWord: true,
-    action: 'insert_next',
-    reason:
-      `定型質問への正常回答を機械判定 ` +
-      `(${structuredResult.reason || 'valid'})`
-  };
-}
-
-
-// needs_ai の場合はreturnしない。
-// このまま従来のOpenAI判定へ流す。
-if (
-  structuredResult?.status === 'needs_ai'
-) {
-  console.log(
-    `[STRUCTURED] ` +
-    `uid=${item.uid} ` +
-    `comment=${item.latestComment || '-'} ` +
-    `→ 内容確認が必要なため従来AI判定へ`
-  );
-}
 
   // ======================================================
   // 鑑定士AIプロフィールを取得
