@@ -4678,7 +4678,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       const elapsedMin = (new Date().getTime() - receivedAt.getTime()) / 60000;
       const bypassWaitForAutoTest =
         autoMode &&
-        String(kid) === '12541';
+        String(kid) === '12689';
 
       if (elapsedMin < minElapsedMinutes && !bypassWaitForAutoTest) {
         console.log(
@@ -4691,7 +4691,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
 
       if (elapsedMin < minElapsedMinutes && bypassWaitForAutoTest) {
         console.log(
-          `[AUTO-TEST] ${userName}: kid=12541 のため${minElapsedMinutes}分待機をバイパス`
+          `[AUTO-TEST] ${userName}: kid=12689 のため${minElapsedMinutes}分待機をバイパス`
         );
       }
       console.log(`[TIMER] ${userName}: 受信から${elapsedMin.toFixed(1)}分経過 → 処理続行`);
