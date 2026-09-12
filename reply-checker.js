@@ -3166,45 +3166,184 @@ function validateStructuredName(text, rule) {
 
 
   // ======================================================
-  // 1. 明確な名前・ニックネーム回答
-  // 質問文を含んでいても、ここに該当すれば正常回答
+  // 名前候補として明らかに不自然な文章語を除外
   // ======================================================
 
+  function isNameCandidate(value) {
+    const s =
+      String(value || '')
+        .replace(/[「」『』【】"'“”]/g, '')
+        .trim();
+
+    if (!s) {
+      return false;
+    }
+
+    // 長すぎるものは名前扱いしない
+    if ([...s].length > 20) {
+      return false;
+    }
+
+    // 名前として使える文字のみ
+    if (
+      !/^[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]+$/.test(s)
+    ) {
+      return false;
+    }
+
+    const ngWords = [
+      '言いたく',
+      '教えたく',
+      '答えたく',
+      '必要',
+      'なぜ',
+      'なんで',
+      'どうして',
+      '本名',
+      '個人情報',
+      '秘密',
+      '心配',
+      '不安',
+      '大丈夫',
+      '構わない',
+      '構いません',
+      'よろしく',
+      'お願い',
+      '鑑定',
+      '先生',
+      'ありがとう',
+      'ありがとうございます',
+      '分から',
+      'わから'
+    ];
+
+    if (
+      ngWords.some(word =>
+        s.includes(word)
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+
+  // ======================================================
+  // 1. 明示的なニックネーム・呼び名・イニシャル
+  //
   // ニックネームはカナです
-  // 呼び名はタロです
-  // イニシャルはT.Yです
+  // 呼び名はタロ
+  // イニシャルはT.Y
+  // ======================================================
+
   const explicitNickname =
-    /(?:ニックネーム|呼び名|イニシャル)\s*(?:は|:|：)\s*[「『"'“”]?([ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ0-9０-９・.\s]{1,30})/.test(t);
-
-
-  // よくタロって呼ばれてます
-  // カナと呼ばれています
-  const calledName =
-    /[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ0-9０-９・.]{1,30}(?:って|と)\s*呼ばれ/.test(t);
-
-
-  // 山田太郎です
-  // T.Yです
-  // カナと申します
-  const selfIntroduction =
-    /(?:^|[。\n！？?])\s*[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]{1,30}(?:です|と申します|といいます|と言います)(?:[。\n！？?]|$)/.test(t);
-
+    t.match(
+      /(?:ニックネーム|呼び名|呼び方|イニシャル)\s*(?:は|:|：)\s*[「『"'“”]?([ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]{1,20})/
+    );
 
   if (
-    explicitNickname ||
-    calledName ||
-    selfIntroduction
+    explicitNickname &&
+    isNameCandidate(explicitNickname[1])
   ) {
     return {
       status: 'valid',
-      reason: 'name_answer_found'
+      reason: 'explicit_nickname'
     };
   }
 
 
   // ======================================================
-  // 2. 「名前は○○」形式
-  // ○○部分が拒否・質問・説明文なら名前扱いしない
+  // 2. ○○と呼ばれている
+  //
+  // タロって呼ばれています
+  // カナと呼ばれています
+  // ======================================================
+
+  const calledName =
+    t.match(
+      /([ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.]{1,20})(?:って|と)\s*呼ばれ/
+    );
+
+  if (
+    calledName &&
+    isNameCandidate(calledName[1])
+  ) {
+    return {
+      status: 'valid',
+      reason: 'called_name'
+    };
+  }
+
+
+  // ======================================================
+  // 3. 【名前】形式
+  //
+  // 【ヤマモトミヨコ】鑑定宜しくお願いします
+  // ======================================================
+
+  const bracketName =
+    t.match(
+      /【([ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]{1,20})】/
+    );
+
+  if (
+    bracketName &&
+    isNameCandidate(bracketName[1])
+  ) {
+    return {
+      status: 'valid',
+      reason: 'bracket_name'
+    };
+  }
+
+
+  // ======================================================
+  // 4. ○○より
+  //
+  // 福島恵理子より
+  // ======================================================
+
+  const fromName =
+    t.match(
+      /([ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.]{2,20})より(?:[。！!]|$)/
+    );
+
+  if (
+    fromName &&
+    isNameCandidate(fromName[1])
+  ) {
+    return {
+      status: 'valid',
+      reason: 'name_from_signature'
+    };
+  }
+
+
+  // ======================================================
+  // 5. 名前 + よろしくお願いします
+  //
+  // フクシマエリコよろしくお願い致します
+  // ======================================================
+
+  const beforeGreetingName =
+    t.match(
+      /([ァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.]{2,20})(?=よろしく|宜しく)/
+    );
+
+  if (
+    beforeGreetingName &&
+    isNameCandidate(beforeGreetingName[1])
+  ) {
+    return {
+      status: 'valid',
+      reason: 'name_before_greeting'
+    };
+  }
+
+
+  // ======================================================
+  // 6. 「名前は○○」
   // ======================================================
 
   const nameMatch =
@@ -3216,18 +3355,13 @@ function validateStructuredName(text, rule) {
     const candidate =
       String(nameMatch[1] || '')
         .replace(/[」』"'“”]/g, '')
+        .replace(
+          /(?:です|と申します|といいます|と言います).*$/,
+          ''
+        )
         .trim();
 
-    const invalidNameCandidate =
-      /(言いたく|教えたく|答えたく|必要|なぜ|なんで|どうして|本名|秘密|嫌|無理|わから|分から)/.test(candidate);
-
-    const nameLikeCandidate =
-      /^[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]{1,30}(?:です)?$/.test(candidate);
-
-    if (
-      nameLikeCandidate &&
-      !invalidNameCandidate
-    ) {
+    if (isNameCandidate(candidate)) {
       return {
         status: 'valid',
         reason: 'explicit_name'
@@ -3236,19 +3370,46 @@ function validateStructuredName(text, rule) {
   }
 
 
-   // ======================================================
-  // 3. 名前だけ送られてきたケース
+  // ======================================================
+  // 7. 明確な自己紹介
+  //
+  // 山田太郎です
+  // カナと申します
+  //
+  // 「心配です」など普通の文章を拾わないよう、
+  // 候補部分を狭くする
+  // ======================================================
+
+  const selfIntroduction =
+    t.match(
+      /(?:^|[。\n！？?])\s*(?:私は)?([ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.]{1,20})(?:です|と申します|といいます|と言います)(?:[。\n！？?]|$)/
+    );
+
+  if (
+    selfIntroduction &&
+    isNameCandidate(selfIntroduction[1])
+  ) {
+    return {
+      status: 'valid',
+      reason: 'self_introduction'
+    };
+  }
+
+
+  // ======================================================
+  // 8. 名前だけ
+  //
+  // 山田太郎
+  // ヤマダタロウ
+  // T.Y
   // ======================================================
 
   const plainName =
-    /^[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]{1,30}$/.test(t);
-
-  const hasQuestionOrReject =
-    /[？?]|(?:本名|なぜ|なんで|どうして|必要|言いたく|教えたく|答えたく|秘密|嫌|無理)/.test(t);
+    /^[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]{1,20}$/.test(t);
 
   if (
     plainName &&
-    !hasQuestionOrReject
+    isNameCandidate(t)
   ) {
     return {
       status: 'valid',
@@ -3257,9 +3418,9 @@ function validateStructuredName(text, rule) {
   }
 
 
-    // ======================================================
-  // 4. それ以外
-  // 質問・拒否・曖昧回答はAIへ
+  // ======================================================
+  // それ以外
+  // 質問・拒否・不安等はfallback AIへ
   // ======================================================
 
   return {
