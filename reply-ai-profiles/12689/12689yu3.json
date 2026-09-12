@@ -1,0 +1,448 @@
+{
+  "phaseKey": "12689yu3",
+  "situation": "有料3日目。購入場所、生活リズム、天候相性、数値条件を段階的に整理する日。",
+  "startState": "yu2で選択式宝くじ側の適性が強いという流れまで進んでいる。",
+  "goal": "距離帯→立地→生活リズム→天候相性→数値・条件統合の順に進み、購入条件を具体化する。",
+  "currentProcess": {
+    "summary": "距離帯→立地→生活リズム→天候相性→数値・条件統合の順に進み、購入条件を具体化する。",
+    "steps": [
+      {
+        "replyNumber": "1",
+        "comment": "<!--12689yu3/sinko/1-->",
+        "sendWords": [
+          "1000"
+        ],
+        "freeInput": false,
+        "purpose": "今日は、購入場所の条件をもう少し具体的に見ていきます。 / まず確認するのは「どの売り場か」ではなく、普段の生活圏からどれくらい離れた場所で財運の反応が変わるのかという距離の幅です。"
+      },
+      {
+        "replyNumber": "2",
+        "comment": "<!--12689yu3/sinko/2-->",
+        "sendWords": [
+          "2000"
+        ],
+        "freeInput": false,
+        "purpose": "【1000】の反応を見ました。 / 悪いわけではありませんが、生活圏に近すぎるのか、財運の動きとしてはまだ少し弱いですね。"
+      },
+      {
+        "replyNumber": "3",
+        "comment": "<!--12689yu3/sinko/3-->",
+        "sendWords": [
+          "4000"
+        ],
+        "freeInput": false,
+        "purpose": "【2000】では先ほどより反応が上がりました。 / ただ、まだ「ここだ」と言い切れるほどではありません。"
+      },
+      {
+        "replyNumber": "4",
+        "comment": "<!--12689yu3/sinko/4-->",
+        "sendWords": [
+          "7000"
+        ],
+        "freeInput": false,
+        "purpose": "【4000】はかなり反応が良いですね。 / ここで大事なのは「4km地点で買う」という意味ではありません。"
+      },
+      {
+        "replyNumber": "5",
+        "comment": "<!--12689yu3/sinko/5-->",
+        "sendWords": [],
+        "freeInput": false,
+        "purpose": "【7000】まで広げると、反応は少し散りました。 / ここまでを見る限り、あなたに合っているのは「極端に遠い場所」ではなく、普段の生活圏から少し外れた中距離帯ですね。"
+      },
+      {
+        "replyNumber": "6",
+        "comment": "<!--12689yu3/sinko/6-->",
+        "sendWords": [
+          "繁流域（はんりゅういき）"
+        ],
+        "freeInput": false,
+        "purpose": "まずは、人の流れが多い場所に対する反応を見ます。 / 【{getUserData(siteOriginal[wordinsert/start])}繁流域（はんりゅういき）{getUserData(siteOriginal[wordinsert/end])}】"
+      },
+      {
+        "replyNumber": "7",
+        "comment": "<!--12689yu3/sinko/7-->",
+        "sendWords": [
+          "静商域（せいしょういき）"
+        ],
+        "freeInput": false,
+        "purpose": "【繁流域】の反応は悪くありませんが、少し散りやすいですね。 / 人の流れが多すぎる場所では、あなた自身の財運反応が周囲に埋もれやすいようです。"
+      },
+      {
+        "replyNumber": "8",
+        "comment": "<!--12689yu3/sinko/8-->",
+        "sendWords": [
+          "常路域（じょうろいき）"
+        ],
+        "freeInput": false,
+        "purpose": "【静商域】は先ほどより反応がまとまっています。 / 人が少なければ良い、という単純な話ではありませんが、あなたの場合は「適度に人の流れがある場所」の方が合いそうですね。"
+      },
+      {
+        "replyNumber": "9",
+        "comment": "<!--12689yu3/sinko/9-->",
+        "sendWords": [
+          "新路域（しんろいき）"
+        ],
+        "freeInput": false,
+        "purpose": "【常路域】では、反応がやや慣れすぎていますね。 / 普段から見慣れている場所よりも、少し行動範囲を外した方が財運の変化が出やすそうです。"
+      },
+      {
+        "replyNumber": "10",
+        "comment": "<!--12689yu3/sinko/10-->",
+        "sendWords": [
+          "駅周域（えきしゅういき）"
+        ],
+        "freeInput": false,
+        "purpose": "【新路域】はかなり良いですね。 / 距離の結果と合わせると、"
+      },
+      {
+        "replyNumber": "11",
+        "comment": "<!--12689yu3/sinko/11-->",
+        "sendWords": [
+          "住近域（じゅうきんいき）"
+        ],
+        "freeInput": false,
+        "purpose": "【駅周域】は反応が出ていますが、強すぎる人の流れが少し気になります。 / 次は住宅地寄りの場所です。"
+      },
+      {
+        "replyNumber": "12",
+        "comment": "<!--12689yu3/sinko/12-->",
+        "sendWords": [
+          "商近域（しょうきんいき）"
+        ],
+        "freeInput": false,
+        "purpose": "【住近域】は安定していますね。 / ただし、静かすぎる場所よりも、多少人の動きがある方が財運反応は上がっています。"
+      },
+      {
+        "replyNumber": "13",
+        "comment": "<!--12689yu3/sinko/13-->",
+        "sendWords": [
+          "開路域（かいろいき）"
+        ],
+        "freeInput": false,
+        "purpose": "【商近域】はかなり反応が良いですね。 / ここまでの結果を重ねると、"
+      },
+      {
+        "replyNumber": "14",
+        "comment": "<!--12689yu3/sinko/14-->",
+        "sendWords": [],
+        "freeInput": false,
+        "purpose": "【開路域】も良い反応です。 / 建物に囲まれすぎた場所より、道路が開けていたり、人の流れが一方向に偏っていない場所の方が、あなたの財運反応はまとまりやすいようですね。"
+      },
+      {
+        "replyNumber": "15",
+        "comment": "<!--12689yu3/sinko/15-->",
+        "sendWords": [],
+        "freeInput": true,
+        "purpose": "普段、一週間の中で比較的動きやすい曜日はありますか？ / 仕事や生活の都合もあると思いますので、"
+      },
+      {
+        "replyNumber": "16",
+        "comment": "<!--12689yu3/sinko/16-->",
+        "sendWords": [],
+        "freeInput": true,
+        "purpose": "ありがとうございます。 / 次に、普段の平均的な睡眠時間を教えてください。"
+      },
+      {
+        "replyNumber": "17",
+        "comment": "<!--12689yu3/sinko/17-->",
+        "sendWords": [
+          "63"
+        ],
+        "freeInput": false,
+        "purpose": "曜日の周期と睡眠時間を重ねて見ています。 / ここで一つ、基準になる数値が出ました。"
+      },
+      {
+        "replyNumber": "18",
+        "comment": "<!--12689yu3/sinko/18-->",
+        "sendWords": [
+          "晴財度（せいざいど）"
+        ],
+        "freeInput": false,
+        "purpose": "ここからは天候との相性を見ます。 / ただし、「この天気でなければ買ってはいけない」という意味ではありません。"
+      },
+      {
+        "replyNumber": "19",
+        "comment": "<!--12689yu3/sinko/19-->",
+        "sendWords": [
+          "雲財度（うんざいど）"
+        ],
+        "freeInput": false,
+        "purpose": "【晴財度】は安定しています。 / 悪い反応ではありませんが、大きく跳ねる感じではありませんね。"
+      },
+      {
+        "replyNumber": "20",
+        "comment": "<!--12689yu3/sinko/20-->",
+        "sendWords": [
+          "雨財度（うざいど）"
+        ],
+        "freeInput": false,
+        "purpose": "【雲財度】では、晴天より少し反応が高まりました。 / あなたの場合、完全に晴れ渡った状態よりも、空に少し変化がある時の方が財運反応が動きやすいようです。"
+      },
+      {
+        "replyNumber": "23",
+        "comment": "<!--12689yu3/sinko/23-->",
+        "sendWords": [
+          "湿財度（しつざいど）"
+        ],
+        "freeInput": false,
+        "purpose": "【雨財度】も良いですね。 / ただし、雨の日だけが良いという意味ではありません。"
+      },
+      {
+        "replyNumber": "24",
+        "comment": "<!--12689yu3/sinko/24-->",
+        "sendWords": [
+          "風財度（ふうざいど）"
+        ],
+        "freeInput": false,
+        "purpose": "【湿財度】はかなり強く出ています。 / つまり、雨そのものよりも「空気に湿り気がある状態」の方が重要そうですね。"
+      },
+      {
+        "replyNumber": "25",
+        "comment": "<!--12689yu3/sinko/25-->",
+        "sendWords": [
+          "湿風度（しつふうど）"
+        ],
+        "freeInput": false,
+        "purpose": "【風財度】も反応があります。 / 無風の状態より、少し空気が動いている方があなたの財運反応は整いやすいようです。"
+      },
+      {
+        "replyNumber": "26",
+        "comment": "<!--12689yu3/sinko/26-->",
+        "sendWords": [
+          "調和度（ちょうわど）"
+        ],
+        "freeInput": false,
+        "purpose": "【湿風度】はかなり良いですね。 / ここまでを見ると、"
+      },
+      {
+        "replyNumber": "27",
+        "comment": "<!--12689yu3/sinko/27-->",
+        "sendWords": [
+          "気財結（きざいけつ）"
+        ],
+        "freeInput": false,
+        "purpose": "【調和度】を見る限り、極端な悪天候が必要というわけではありません。 / むしろ、少し天気が動いている程度の方が相性は良さそうです。"
+      },
+      {
+        "replyNumber": "28",
+        "comment": "<!--12689yu3/sinko/28-->",
+        "sendWords": [],
+        "freeInput": false,
+        "purpose": "【気財結】の反応まで確認できました。 / これで天候についても、"
+      },
+      {
+        "replyNumber": "29",
+        "comment": "<!--12689yu3/sinko/29-->",
+        "sendWords": [],
+        "freeInput": false,
+        "purpose": "確認しました。 / 次は少し異なる行ないで参ります。"
+      },
+      {
+        "replyNumber": "30",
+        "comment": "<!--12689yu3/sinko/30-->",
+        "sendWords": [
+          "604",
+          "59",
+          "46",
+          "337",
+          "21"
+        ],
+        "freeInput": false,
+        "purpose": "分かりました。 / 【{getUserData(siteOriginal[wordinsert/start])}604{getUserData(siteOriginal[wordinsert/end])}】【{getUserData(siteOriginal[wordinsert/start])}59{getUserData(siteOriginal[wordinsert/end])}】【{getUserData(siteOrigina"
+      },
+      {
+        "replyNumber": "31",
+        "comment": "<!--12689yu3/sinko/31-->",
+        "sendWords": [
+          "38",
+          "621",
+          "76",
+          "63",
+          "354"
+        ],
+        "freeInput": false,
+        "purpose": "確認しました。 / 【{getUserData(siteOriginal[wordinsert/start])}38{getUserData(siteOriginal[wordinsert/end])}】は除外されました。"
+      },
+      {
+        "replyNumber": "32",
+        "comment": "<!--12689yu3/sinko/32-->",
+        "sendWords": [
+          "29",
+          "587",
+          "42",
+          "320"
+        ],
+        "freeInput": false,
+        "purpose": "確認しましたよ。 / 【{getUserData(siteOriginal[wordinsert/start])}29{getUserData(siteOriginal[wordinsert/end])}】は除外です、非常に順調ですね。"
+      },
+      {
+        "replyNumber": "33",
+        "comment": "<!--12689yu3/sinko/33-->",
+        "sendWords": [
+          "360",
+          "627",
+          "82"
+        ],
+        "freeInput": false,
+        "purpose": "確認しました。 / 【{getUserData(siteOriginal[wordinsert/start])}360{getUserData(siteOriginal[wordinsert/end])}】は今回、間違いなく除外です。"
+      },
+      {
+        "replyNumber": "34",
+        "comment": "<!--12689yu3/sinko/34-->",
+        "sendWords": [
+          "36"
+        ],
+        "freeInput": false,
+        "purpose": "判明しました。 / 【{getUserData(siteOriginal[wordinsert/start])}36{getUserData(siteOriginal[wordinsert/end])}】ですね。"
+      },
+      {
+        "replyNumber": "35",
+        "comment": "<!--12689yu3/sinko/35-->",
+        "sendWords": [
+          "福財導（ふくざいどう）",
+          "福財門（ふくざいもん）",
+          "福財脈（ふくざいみゃく）"
+        ],
+        "freeInput": false,
+        "purpose": "ここで少し気になる事があります。 / 【{getUserData(siteOriginal[wordinsert/start])}福財導（ふくざいどう）{getUserData(siteOriginal[wordinsert/end])}】"
+      },
+      {
+        "replyNumber": "36",
+        "comment": "<!--12689yu3/sinko/36-->",
+        "sendWords": [
+          "福財印（ふくざいいん）",
+          "福財環（ふくざいかん）",
+          "福財路（ふくざいろ）"
+        ],
+        "freeInput": false,
+        "purpose": "もう少しです。 / 【{getUserData(siteOriginal[wordinsert/start])}福財印（ふくざいいん）{getUserData(siteOriginal[wordinsert/end])}】"
+      },
+      {
+        "replyNumber": "37",
+        "comment": "<!--12689yu3/sinko/37-->",
+        "sendWords": [
+          "福財核（ふくざいかく）",
+          "福財選（ふくざいせん）",
+          "福財兆（ふくざいちょう）"
+        ],
+        "freeInput": false,
+        "purpose": "良いですね。 / その調子でしっかりと集中していきましょう。"
+      },
+      {
+        "replyNumber": "38",
+        "comment": "<!--12689yu3/sinko/38-->",
+        "sendWords": [
+          "福財勢（ふくざいせい）",
+          "福財相（ふくざいそう）",
+          "福財図（ふくざいず）"
+        ],
+        "freeInput": false,
+        "purpose": "とてもいい調子で進んでいます。 / 集中して進行を続けていきましょう。"
+      },
+      {
+        "replyNumber": "39",
+        "comment": "<!--12689yu3/sinko/39-->",
+        "sendWords": [],
+        "freeInput": false,
+        "purpose": "【】 / 【】"
+      }
+    ]
+  },
+  "progressRules": [
+    "この日程の既存返信順を飛ばさない。",
+    "外部判定で次返信へ進める場合のみ既存次行を使用する。",
+    "自由回答ログでは固定返信語を要求しない。",
+    "返信語不足時はbaseProfileのcountValidationとaiModesに従う。",
+    "当日のgoalを越えて次日程を先出ししない。"
+  ],
+  "replyRules": [
+    "ユーザーから質問が来た場合は質問へ先に答える。",
+    "送られた返信語の結果判定は既存次返信本文の内容を優先し、AIが新しい判定を創作しない。",
+    "検証中は現在の比較対象を崩さない。",
+    "締めを機械的に追加しない。"
+  ],
+  "allowed": [
+    "この日程で既に開示済みの設定・固有語",
+    "この日程の既存返信本文に存在する返信語・数値",
+    "当日の掘り起こし・まとめで既に示された状態"
+  ],
+  "forbidden": [
+    "次日程の内容",
+    "未実施の返信結果",
+    "新しい送り返す言葉",
+    "新しい数値候補",
+    "未公開の後半固有語",
+    "返信ペースを保証する表現"
+  ],
+  "importantTerms": {
+    "基準反応値": "有料3日目で生活リズムと購入条件を重ねて得る基準値。返信17では63を使用し、当選番号ではないと明示する。"
+  },
+  "referenceLogs": [
+    {
+      "purpose": "当日の通常返信の口調・進行参考",
+      "sourceFile": "【風舞姫】有料3日目返信_流れ再構成済み.txt",
+      "phase": "yu3",
+      "replyNumber": "2",
+      "comment": "<!--12689yu3/sinko/2-->",
+      "text": "【1000】の反応を見ました。 / 悪いわけではありませんが、生活圏に近すぎるのか、財運の動きとしてはまだ少し弱いですね。"
+    },
+    {
+      "purpose": "当日の通常返信の口調・進行参考",
+      "sourceFile": "【風舞姫】有料3日目返信_流れ再構成済み.txt",
+      "phase": "yu3",
+      "replyNumber": "1",
+      "comment": "<!--12689yu3/sinko/1-->",
+      "text": "今日は、購入場所の条件をもう少し具体的に見ていきます。 / まず確認するのは「どの売り場か」ではなく、普段の生活圏からどれくらい離れた場所で財運の反応が変わるのかという距離の幅です。"
+    },
+    {
+      "purpose": "朝掘りの条件・口調参考",
+      "sourceFile": "有料3日目※0904※/【風舞姫】有料3日目堀.txt",
+      "phase": "yu3",
+      "replyNumber": "",
+      "comment": "<!--12689yu3/ho-->",
+      "text": ">◇◇◇◇◇◇◇▼朝堀▼◇◇◇◇◇◇◇<\n>ALL\n----------------------\n\n本当に鑑定をやって当選なんか出来るのか？\n鑑定を始めてしばらく経ってもその気持が拭えない事は至って正常だと思います。\n\nあなたも「一体何をやらされているのだ」とご不安に思うことはありませんか？\n\nそのような思いの解消の一つになれればと、一部詳細をご説明しますね。\n\n以前にもご説明したので重複する箇所もございますが、私の施術は\n\n「あなたの現在の波動状態」に合わせて\n「高額当選」に特化した働きかけをし\n「当選するための"
+    }
+  ],
+  "additionalRules": [
+    {
+      "scheduleBranches": [
+        {
+          "type": "朝掘り",
+          "condition": "ALL",
+          "sourceFile": "有料3日目※0904※/【風舞姫】有料3日目堀.txt",
+          "comment": "<!--12689yu3/ho-->",
+          "textSample": ">◇◇◇◇◇◇◇▼朝堀▼◇◇◇◇◇◇◇<\n>ALL\n----------------------\n\n本当に鑑定をやって当選なんか出来るのか？\n鑑定を始めてしばらく経ってもその気持が拭えない事は至って正常だと思います。\n\nあなたも「一体何をやらされているのだ」とご不安に思うことはありませんか？\n\nそのような思いの解消の一つになれればと、一部詳細をご説明しますね。\n\n以前にもご説明したので重複する箇所もございますが、私の施術は\n\n「あなたの現在の波動状態」に合わせて\n「高額当選」に特化した働きかけをし\n「当選するための"
+        },
+        {
+          "type": "昼掘り",
+          "condition": "当日レス無し",
+          "sourceFile": "有料3日目※0904※/【風舞姫】有料3日目堀.txt",
+          "comment": "<!--12689yu3/ho-->",
+          "textSample": ">◇◇◇◇◇◇◇▼昼堀▼◇◇◇◇◇◇◇<\n>当日レス無し\n----------------------\n\nあなたがどうやって当選を果たすのか、\nこの鑑定が示す高額当選のメカニズムとは？\n\nあなたも最も気になる所かと思いますが、\n朝お送りした鑑定文に記載しておりますので、まだでしたら一読下さいね。\n\n一部の詳細ですが、私の施術は\n\n「あなたの現在の波動状態」に合わせて\n「高額当選」に特化した働きかけをし\n「当選するための行動」を割り出し\n「数脈調整」にて最終的な結果を導き出すものです。\n\n全ての工程、回答。\nただ言葉"
+        },
+        {
+          "type": "昼掘り",
+          "condition": "当レス11時",
+          "sourceFile": "有料3日目※0904※/【風舞姫】有料3日目堀.txt",
+          "comment": "<!--12689yu3/ho-->",
+          "textSample": ">◇◇◇◇◇◇◇▼昼堀▼◇◇◇◇◇◇◇<\n当レス11時\n----------------------\n\nあなたがどうやって当選を果たすのか、\nこの鑑定が示す高額当選のメカニズムとは？\n\nあなたも最も気になる所かと思いますが、\n朝お送りした鑑定文に記載しておりますので、まだでしたら一読下さいね。\n\n一部の詳細ですが、私の施術は\n\n「あなたの現在の波動状態」に合わせて\n「高額当選」に特化した働きかけをし\n「当選するための行動」を割り出し\n「数脈調整」にて最終的な結果を導き出すものです。\n\n全ての工程、回答。\nただ言葉の"
+        },
+        {
+          "type": "夜掘り",
+          "condition": "当日レス無し",
+          "sourceFile": "有料3日目※0904※/【風舞姫】有料3日目堀.txt",
+          "comment": "<!--12689yu3/ho-->",
+          "textSample": ">◇◇◇◇◇◇◇▼夜堀▼◇◇◇◇◇◇◇<\n>当日レス無し\n----------------------\n\nあなたが願わないのであれば絶対に叶いません。\n\n『病気を治す気のない患者を救えない』ように、\nあなた自身が高額当選を望み、その為に出来る事を行う事にはとても大きな意味が込められて居るのです。\n\n絶対に大金を手に入れる。\n理想の未来を手にする。\n\nあなたの幸福を求める思いは、強い力となります。\n高額当選は今のあなたであれば夢物語などではありません。\n\n私の長い鑑定人生の中、そのような方を何人も何人も見て来ました。"
+        },
+        {
+          "type": "夜掘り",
+          "condition": "当日レス有り（2時間ほどレス止まり）",
+          "sourceFile": "有料3日目※0904※/【風舞姫】有料3日目堀.txt",
+          "comment": "<!--12689yu3/ho-->",
+          "textSample": ">◇◇◇◇◇◇◇▼夜堀▼◇◇◇◇◇◇◇<\n>当日レス有り（2時間ほどレス止まり）\n----------------------\n\n後少しでも進めて置きたいのが本音です。\nあなたが願わないのであれば絶対に叶いません。\n\n『病気を治す気のない患者を救えない』ように、\nあなた自身が高額当選を望み、その為に出来る事を行う事にはとても大きな意味が込められて居るのです。\n\n絶対に大金を手に入れる。\n理想の未来を手にする。\n\nあなたの幸福を求める思いは、強い力となります。\n高額当選は今のあなたであれば夢物語などではありません。\n"
+        }
+      ]
+    },
+    "日別返信境界が要確認となっている場合、AIは共通返信ログから日程を推測してはいけない。"
+  ]
+}

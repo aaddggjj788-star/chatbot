@@ -1,0 +1,252 @@
+{
+  "kid": "12689",
+  "routingPolicy": {
+    "baseProfile": "12689.json",
+    "phaseProfileRule": "最新コメントアウト内の mu/yu + 日数を基準に、完全一致する日程JSONを選択する。",
+    "fallback": "完全一致する日程JSONが無い場合はbaseProfileのみを使用し、別日程へ推測ルーティングしない。",
+    "doNotCrossBoundary": true
+  },
+  "commentPatterns": {
+    "broadcast": "<!--12689muN/do/番号-->",
+    "reply": "<!--12689muN/sinko/番号--> / <!--12689yuN/sinko/番号-->",
+    "dig": "<!--12689muN/ho--> / <!--12689yuN/ho-->",
+    "summary": "<!--12689yuN/mtm-->",
+    "summaryNoReply": "<!--12689yuN/nores/mtm-->"
+  },
+  "specialMappings": {
+    "12689yu4": {
+      "profile": "12689yu4.json",
+      "note": "18時〜20時の特別無料展開を同日程内の特殊進行として扱う。"
+    },
+    "12689yu11": {
+      "profile": "12689yu11.json",
+      "note": "18時以降の万福財運80％浸透展開ログあり。"
+    },
+    "12689yu18": {
+      "profile": "12689yu18.json",
+      "note": "当選因子覚醒に関する展開ログあり。"
+    },
+    "12689mu1": {
+      "profile": "12689mu1.json"
+    },
+    "12689mu2": {
+      "profile": "12689mu2.json"
+    },
+    "12689yu1": {
+      "profile": "12689yu1.json"
+    },
+    "12689yu2": {
+      "profile": "12689yu2.json"
+    },
+    "12689yu3": {
+      "profile": "12689yu3.json"
+    },
+    "12689yu5": {
+      "profile": "12689yu5.json"
+    },
+    "12689yu6": {
+      "profile": "12689yu6.json"
+    },
+    "12689yu7": {
+      "profile": "12689yu7.json"
+    },
+    "12689yu8": {
+      "profile": "12689yu8.json"
+    },
+    "12689yu9": {
+      "profile": "12689yu9.json"
+    },
+    "12689yu10": {
+      "profile": "12689yu10.json"
+    },
+    "12689yu12": {
+      "profile": "12689yu12.json"
+    },
+    "12689yu13": {
+      "profile": "12689yu13.json"
+    },
+    "12689yu14": {
+      "profile": "12689yu14.json"
+    },
+    "12689yu15": {
+      "profile": "12689yu15.json"
+    },
+    "12689yu16": {
+      "profile": "12689yu16.json"
+    },
+    "12689yu17": {
+      "profile": "12689yu17.json"
+    },
+    "12689yu19": {
+      "profile": "12689yu19.json"
+    },
+    "12689yu20": {
+      "profile": "12689yu20.json"
+    },
+    "12689yu21": {
+      "profile": "12689yu21.json"
+    },
+    "12689yu22": {
+      "profile": "12689yu22.json"
+    },
+    "12689yu23": {
+      "profile": "12689yu23.json"
+    },
+    "12689yu24": {
+      "profile": "12689yu24.json"
+    },
+    "12689yu25": {
+      "profile": "12689yu25.json"
+    },
+    "12689yu26": {
+      "profile": "12689yu26.json"
+    },
+    "12689yu27": {
+      "profile": "12689yu27.json"
+    },
+    "12689yu28": {
+      "profile": "12689yu28.json"
+    },
+    "12689yu29": {
+      "profile": "12689yu29.json"
+    },
+    "12689yu30": {
+      "profile": "12689yu30.json"
+    },
+    "12689yu31": {
+      "profile": "12689yu31.json"
+    },
+    "12689yu32": {
+      "profile": "12689yu32.json"
+    },
+    "12689yu33": {
+      "profile": "12689yu33.json"
+    },
+    "12689yu34": {
+      "profile": "12689yu34.json"
+    },
+    "12689yu35": {
+      "profile": "12689yu35.json"
+    },
+    "12689yu36": {
+      "profile": "12689yu36.json"
+    },
+    "12689yu37": {
+      "profile": "12689yu37.json"
+    },
+    "12689yu38": {
+      "profile": "12689yu38.json"
+    },
+    "12689yu39": {
+      "profile": "12689yu39.json"
+    },
+    "12689yu40": {
+      "profile": "12689yu40.json"
+    },
+    "12689yu41": {
+      "profile": "12689yu41.json"
+    },
+    "12689yu42": {
+      "profile": "12689yu42.json"
+    },
+    "12689yu43": {
+      "profile": "12689yu43.json"
+    },
+    "12689yu44": {
+      "profile": "12689yu44.json"
+    },
+    "12689yu45": {
+      "profile": "12689yu45.json"
+    },
+    "12689yu46": {
+      "profile": "12689yu46.json"
+    },
+    "12689yu47": {
+      "profile": "12689yu47.json"
+    },
+    "12689yu48": {
+      "profile": "12689yu48.json"
+    },
+    "12689yu49": {
+      "profile": "12689yu49.json"
+    },
+    "12689yu50": {
+      "profile": "12689yu50.json"
+    },
+    "12689yu51": {
+      "profile": "12689yu51.json"
+    },
+    "12689yu52": {
+      "profile": "12689yu52.json"
+    },
+    "12689yu53": {
+      "profile": "12689yu53.json"
+    },
+    "12689yu54": {
+      "profile": "12689yu54.json"
+    },
+    "12689yu55": {
+      "profile": "12689yu55.json"
+    },
+    "12689yu56": {
+      "profile": "12689yu56.json"
+    },
+    "12689yu57": {
+      "profile": "12689yu57.json"
+    },
+    "12689yu58": {
+      "profile": "12689yu58.json"
+    },
+    "12689yu59": {
+      "profile": "12689yu59.json"
+    },
+    "12689yu60": {
+      "profile": "12689yu60.json"
+    },
+    "12689yu61": {
+      "profile": "12689yu61.json"
+    },
+    "12689yu62": {
+      "profile": "12689yu62.json"
+    },
+    "12689yu63": {
+      "profile": "12689yu63.json"
+    },
+    "12689yu64": {
+      "profile": "12689yu64.json"
+    },
+    "12689yu65": {
+      "profile": "12689yu65.json"
+    },
+    "12689yu66": {
+      "profile": "12689yu66.json"
+    },
+    "12689yu67": {
+      "profile": "12689yu67.json"
+    },
+    "12689yu68": {
+      "profile": "12689yu68.json"
+    },
+    "12689yu69": {
+      "profile": "12689yu69.json"
+    },
+    "12689yu70": {
+      "profile": "12689yu70.json"
+    },
+    "12689yu71": {
+      "profile": "12689yu71.json"
+    },
+    "12689yu72": {
+      "profile": "12689yu72.json"
+    },
+    "12689yu73": {
+      "profile": "12689yu73.json"
+    },
+    "12689yu74": {
+      "profile": "12689yu74.json"
+    },
+    "12689yu75": {
+      "profile": "12689yu75.json"
+    }
+  }
+}

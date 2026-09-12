@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "defaultPolicy": {
+    "onNoRule": "use_existing_ai",
+    "onValidationError": "use_existing_ai",
+    "onAmbiguous": "use_existing_ai",
+    "requireExactCommentMatch": true
+  },
+
+  "rules": {
+    "12689mu1/sinko/1": {
+      "enabled": true,
+      "type": "name",
+
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+
+      "answerPolicy": {
+        "allowNickname": true,
+        "allowInitials": true,
+        "allowFullName": true,
+        "allowHiragana": true,
+        "allowKatakana": true,
+        "allowKanji": true,
+        "allowLatin": true,
+        "requireKatakana": false
+      },
+
+      "questionPolicy": {
+        "questionMark": "allow_if_answer_exists",
+        "questionWords": "allow_if_answer_exists"
+      },
+
+      "rejectPatterns": [
+        "言いたくない",
+        "教えたくない",
+        "答えたくない"
+      ],
+
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+
+    "12689mu1/sinko/5": {
+      "enabled": true,
+      "type": "age",
+
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+
+      "answerPolicy": {
+        "allowPlainNumber": true,
+        "allowAgeSuffix": true,
+        "allowLongText": true,
+        "allowMultipleValues": true,
+        "minimum": 0,
+        "maximum": 120
+      },
+
+      "acceptedForms": [
+        "NUMBER",
+        "NUMBER歳",
+        "NUMBER才",
+        "NUMBERの時",
+        "NUMBERの頃",
+        "NUMBER歳の時",
+        "NUMBER才の時",
+        "NUMBER歳頃",
+        "NUMBER才頃"
+      ],
+
+      "questionPolicy": {
+        "questionMark": "allow_if_answer_exists",
+        "questionWords": "allow_if_answer_exists"
+      },
+
+      "rejectPatterns": [
+        "覚えていない",
+        "覚えてない",
+        "わからない",
+        "分からない",
+        "転機はない",
+        "転機はありません"
+      ],
+
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+
+    "12689mu1/sinko/6": {
+      "enabled": true,
+      "type": "money",
+
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+
+      "answerPolicy": {
+        "allowPlainNumber": true,
+        "allowArabicNumber": true,
+        "allowKanjiNumber": true,
+        "allowManUnit": true,
+        "allowOkuUnit": true,
+        "allowYenUnit": true
+      },
+
+      "questionPolicy": {
+        "questionMark": "always_ai",
+        "questionWords": "always_ai"
+      },
+
+      "rejectPatterns": [
+        "決められない",
+        "わからない",
+        "分からない",
+        "特にない",
+        "希望はない"
+      ],
+
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+"12541mu1/sinko/1": {
+      "enabled": true,
+      "type": "name",
+
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+
+      "answerPolicy": {
+        "allowNickname": true,
+        "allowInitials": true,
+        "allowFullName": true,
+        "allowHiragana": true,
+        "allowKatakana": true,
+        "allowKanji": true,
+        "allowLatin": true,
+        "requireKatakana": false
+      },
+
+      "questionPolicy": {
+        "questionMark": "allow_if_answer_exists",
+        "questionWords": "allow_if_answer_exists"
+      },
+
+      "rejectPatterns": [
+        "言いたくない",
+        "教えたくない",
+        "答えたくない"
+      ],
+
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+
+    "12541mu1/sinko/5": {
+      "enabled": true,
+      "type": "age",
+
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+
+      "answerPolicy": {
+        "allowPlainNumber": true,
+        "allowAgeSuffix": true,
+        "allowLongText": true,
+        "allowMultipleValues": true,
+        "minimum": 0,
+        "maximum": 120
+      },
+
+      "acceptedForms": [
+        "NUMBER",
+        "NUMBER歳",
+        "NUMBER才",
+        "NUMBERの時",
+        "NUMBERの頃",
+        "NUMBER歳の時",
+        "NUMBER才の時",
+        "NUMBER歳頃",
+        "NUMBER才頃"
+      ],
+
+      "questionPolicy": {
+        "questionMark": "allow_if_answer_exists",
+        "questionWords": "allow_if_answer_exists"
+      },
+
+      "rejectPatterns": [
+        "覚えていない",
+        "覚えてない",
+        "わからない",
+        "分からない",
+        "転機はない",
+        "転機はありません"
+      ],
+
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+
+    "12541mu1/sinko/6": {
+      "enabled": true,
+      "type": "money",
+
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+
+      "answerPolicy": {
+        "allowPlainNumber": true,
+        "allowArabicNumber": true,
+        "allowKanjiNumber": true,
+        "allowManUnit": true,
+        "allowOkuUnit": true,
+        "allowYenUnit": true
+      },
+
+      "questionPolicy": {
+        "questionMark": "always_ai",
+        "questionWords": "always_ai"
+      },
+
+      "rejectPatterns": [
+        "決められない",
+        "わからない",
+        "分からない",
+        "特にない",
+        "希望はない"
+      ],
+
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    }
+  }
+}
