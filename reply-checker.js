@@ -991,6 +991,34 @@ function resolvePhaseCfg(parsed, config) {
   return null;
 }
 
+// minElapsedMinutes（経過待機時間）の指定値を解決する。
+// ・数値指定（従来通り）           → その数値をそのまま返す
+// ・オブジェクト指定（時間帯別）    → 現在時刻に応じて before{HHMM}/after{HHMM} の値を返す
+//   例: { "before1700": 30, "after1700": 20 } → 17:00前は30分、17:00以降は20分
+//   timeBasedSearch と同様に「現在時刻(分換算)」で判定する。
+// ・該当なし／不正指定             → デフォルト15分
+function resolveMinElapsedMinutes(minElapsedMinutes) {
+  if (typeof minElapsedMinutes === 'number') return minElapsedMinutes;
+  if (typeof minElapsedMinutes === 'object' && minElapsedMinutes !== null) {
+    const now = new Date();
+    const curMin = now.getHours() * 60 + now.getMinutes();
+    for (const [key, val] of Object.entries(minElapsedMinutes)) {
+      const bm = key.match(/^before(\d{3,4})$/);
+      const am = key.match(/^after(\d{3,4})$/);
+      if (bm) {
+        const t = bm[1].padStart(4, '0');
+        const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+        if (curMin < tMin) return val;
+      } else if (am) {
+        const t = am[1].padStart(4, '0');
+        const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+        if (curMin >= tMin) return val;
+      }
+    }
+  }
+  return 15; // デフォルト
+}
+
 // hoコメントのtypeNumからphase設定を解決する
 // 完全一致 → typeNumを接頭辞とするphase検索 (例: "yu3" → "yu3sinko")
 // 複数マッチ時はhoTypeキーを持つphaseを優先
@@ -4664,10 +4692,14 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       const _latestComment = getLatestSinkoComment(_comments) || _comments[0] || null;
       const _parsed = _latestComment ? parseCommentStr(_latestComment) : null;
       const _phaseResult = _parsed ? resolvePhaseCfg(_parsed, loadCharaConfig(kid)) : null;
-      if (typeof _phaseResult?.cfg?.minElapsedMinutes === 'number') {
-        minElapsedMinutes = _phaseResult.cfg.minElapsedMinutes;
+      const _cfgMin = _phaseResult?.cfg?.minElapsedMinutes;
+      // 数値（固定値）／オブジェクト（時間帯別）どちらの指定も resolveMinElapsedMinutes で解決する
+      if (typeof _cfgMin === 'number' ||
+          (typeof _cfgMin === 'object' && _cfgMin !== null)) {
+        minElapsedMinutes = resolveMinElapsedMinutes(_cfgMin);
         console.log(
-          `[TIMER] ${userName}: phase "${_phaseResult.key}" のminElapsedMinutes=${minElapsedMinutes}分を使用`
+          `[TIMER] ${userName}: phase "${_phaseResult.key}" のminElapsedMinutes=${minElapsedMinutes}分を使用` +
+          (typeof _cfgMin === 'object' ? `（時間帯別指定: ${JSON.stringify(_cfgMin)}）` : '')
         );
       }
     }
