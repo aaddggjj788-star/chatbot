@@ -7,6 +7,41 @@
     "requireExactCommentMatch": true
   },
 
+  "fallbackProfiles": {
+    "name": {
+      "enabled": true,
+      "maxAutoUse": 1,
+
+      "categories": {
+        "necessity_question": {
+          "description": "名前や呼び名を教える必要性・理由を質問している",
+          "template": "【テスト返信】お名前をお伺いする必要性についてご説明します。フルネームに抵抗がある場合は、ニックネームやイニシャルでも構いません。",
+          "commentPolicy": "same"
+        },
+
+        "privacy_concern": {
+          "description": "個人情報、情報漏洩、プライバシー、安全性を心配している",
+          "template": "【テスト返信】個人情報についてご不安がある場合は、フルネームではなくニックネームやイニシャルでも構いません。",
+          "commentPolicy": "same"
+        },
+
+        "refusal": {
+          "description": "名前や呼び名を伝えること自体を拒否している",
+          "template": "【テスト返信】フルネームに抵抗がある場合は、ニックネームやイニシャルでも構いませんので、差し支えない範囲でお送りください。",
+          "commentPolicy": "same"
+        },
+
+        "nickname_question": {
+          "description": "本名ではなくニックネームやイニシャルでもよいか確認している",
+          "template": "【テスト返信】はい、フルネームでなくても構いません。ニックネームやイニシャルをお送りください。",
+          "commentPolicy": "same"
+        }
+      },
+
+      "noTemplateAction": "existing_false_flow"
+    }
+  },
+
   "rules": {
     "12689mu1/sinko/1": {
       "enabled": true,
@@ -100,135 +135,6 @@
     },
 
     "12689mu1/sinko/6": {
-      "enabled": true,
-      "type": "money",
-
-      "messagePolicy": {
-        "scope": "all_after_latest_kanteishi",
-        "matchMode": "any_message_valid",
-        "preserveSeparateMessages": true
-      },
-
-      "answerPolicy": {
-        "allowPlainNumber": true,
-        "allowArabicNumber": true,
-        "allowKanjiNumber": true,
-        "allowManUnit": true,
-        "allowOkuUnit": true,
-        "allowYenUnit": true
-      },
-
-      "questionPolicy": {
-        "questionMark": "always_ai",
-        "questionWords": "always_ai"
-      },
-
-      "rejectPatterns": [
-        "決められない",
-        "わからない",
-        "分からない",
-        "特にない",
-        "希望はない"
-      ],
-
-      "result": {
-        "valid": "continue_without_ai",
-        "ambiguous": "use_existing_ai",
-        "rejected": "use_existing_ai"
-      }
-    },
-"12541mu1/sinko/1": {
-      "enabled": true,
-      "type": "name",
-
-      "messagePolicy": {
-        "scope": "all_after_latest_kanteishi",
-        "matchMode": "any_message_valid",
-        "preserveSeparateMessages": true
-      },
-
-      "answerPolicy": {
-        "allowNickname": true,
-        "allowInitials": true,
-        "allowFullName": true,
-        "allowHiragana": true,
-        "allowKatakana": true,
-        "allowKanji": true,
-        "allowLatin": true,
-        "requireKatakana": false
-      },
-
-      "questionPolicy": {
-        "questionMark": "allow_if_answer_exists",
-        "questionWords": "allow_if_answer_exists"
-      },
-
-      "rejectPatterns": [
-        "言いたくない",
-        "教えたくない",
-        "答えたくない"
-      ],
-
-      "result": {
-        "valid": "continue_without_ai",
-        "ambiguous": "use_existing_ai",
-        "rejected": "use_existing_ai"
-      }
-    },
-
-    "12541mu1/sinko/5": {
-      "enabled": true,
-      "type": "age",
-
-      "messagePolicy": {
-        "scope": "all_after_latest_kanteishi",
-        "matchMode": "any_message_valid",
-        "preserveSeparateMessages": true
-      },
-
-      "answerPolicy": {
-        "allowPlainNumber": true,
-        "allowAgeSuffix": true,
-        "allowLongText": true,
-        "allowMultipleValues": true,
-        "minimum": 0,
-        "maximum": 120
-      },
-
-      "acceptedForms": [
-        "NUMBER",
-        "NUMBER歳",
-        "NUMBER才",
-        "NUMBERの時",
-        "NUMBERの頃",
-        "NUMBER歳の時",
-        "NUMBER才の時",
-        "NUMBER歳頃",
-        "NUMBER才頃"
-      ],
-
-      "questionPolicy": {
-        "questionMark": "allow_if_answer_exists",
-        "questionWords": "allow_if_answer_exists"
-      },
-
-      "rejectPatterns": [
-        "覚えていない",
-        "覚えてない",
-        "わからない",
-        "分からない",
-        "転機はない",
-        "転機はありません"
-      ],
-
-      "result": {
-        "valid": "continue_without_ai",
-        "ambiguous": "use_existing_ai",
-        "rejected": "use_existing_ai"
-      }
-    },
-
-    "12541mu1/sinko/6": {
       "enabled": true,
       "type": "money",
 

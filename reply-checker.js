@@ -85,6 +85,8 @@ const STATE_FILE = '/tmp/rune-reply-state.json';
 const SKIPPED_LIST_FILE = '/tmp/rune-skipped-list.json';
 const SKIPPED_AUTO_CANDIDATES_FILE =
   '/tmp/rune-skipped-auto-candidates.json';
+const STRUCTURED_FALLBACK_STATE_FILE =
+  '/tmp/rune-structured-fallback-state.json';
 const POLL_INTERVAL_MS = 2000;
 const REPLY_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
@@ -239,6 +241,97 @@ function resetSkippedList() {
   } catch (e) {
     console.error(`[SKIPPED-LIST] リセットに失敗: ${e.message}`);
   }
+}
+
+
+
+function loadStructuredFallbackState() {
+  try {
+    if (!fs.existsSync(STRUCTURED_FALLBACK_STATE_FILE)) {
+      return {};
+    }
+
+    const data = JSON.parse(
+      fs.readFileSync(
+        STRUCTURED_FALLBACK_STATE_FILE,
+        'utf8'
+      )
+    );
+
+    return (
+      data &&
+      typeof data === 'object' &&
+      !Array.isArray(data)
+    )
+      ? data
+      : {};
+
+  } catch (e) {
+    console.error(
+      '[STRUCTURED-FALLBACK] state読込失敗:',
+      e.message
+    );
+
+    return {};
+  }
+}
+
+
+function getStructuredFallbackUseCount(
+  uid,
+  kid,
+  comment,
+  category
+) {
+  const state =
+    loadStructuredFallbackState();
+
+  const key =
+    [
+      uid,
+      kid,
+      comment,
+      category
+    ].join('|');
+
+  return Number(
+    state[key]?.count || 0
+  );
+}
+
+
+function markStructuredFallbackUsed(
+  uid,
+  kid,
+  comment,
+  category
+) {
+  const state =
+    loadStructuredFallbackState();
+
+  const key =
+    [
+      uid,
+      kid,
+      comment,
+      category
+    ].join('|');
+
+  state[key] = {
+    count:
+      Number(
+        state[key]?.count || 0
+      ) + 1,
+
+    updatedAt:
+      new Date().toISOString()
+  };
+
+  fs.writeFileSync(
+    STRUCTURED_FALLBACK_STATE_FILE,
+    JSON.stringify(state, null, 2),
+    'utf8'
+  );
 }
 
 // ─── LINE / Slack 送信 ────────────────────────────────────────────
@@ -3497,6 +3590,152 @@ function checkStructuredQuestion(
 
 
 
+
+async function classifyStructuredFallbackWithAI(
+  fallbackAi,
+  userTexts
+) {
+
+  if (
+    !fallbackAi?.enabled ||
+    !fallbackAi?.categories
+  ) {
+    return {
+      category: 'other',
+      reason: 'fallbackAi未設定'
+    };
+  }
+
+
+  const categories =
+    Object.entries(
+      fallbackAi.categories
+    );
+
+  if (categories.length === 0) {
+    return {
+      category: 'other',
+      reason: 'カテゴリなし'
+    };
+  }
+
+
+  const categoryNames =
+    categories.map(
+      ([key]) => key
+    );
+
+
+  const categoryGuide =
+    categories
+      .map(
+        ([key, cfg]) =>
+          `${key}: ${cfg.description || ''}`
+      )
+      .join('\n');
+
+
+  const combinedText =
+    (userTexts || [])
+      .map(normalizeStructuredText)
+      .filter(Boolean)
+      .join('\n---\n');
+
+
+  const response =
+    await openai.responses.create({
+      model: 'gpt-5-mini',
+
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                'ユーザー返信を指定カテゴリへ分類してください。',
+                '',
+                '返信文章は作成してはいけません。',
+                '最も意味の近いカテゴリを1つだけ選択してください。',
+                'どのカテゴリにも明確に該当しない場合は other を選択してください。',
+                '',
+                '【カテゴリ】',
+                categoryGuide,
+                '',
+                'other: 上記のどれにも明確に該当しない',
+                '',
+                '単語一致だけで決めず、ユーザーが何を伝えたいのかを意味で判断してください。'
+              ].join('\n')
+            }
+          ]
+        },
+
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text:
+                `【ユーザー返信】\n${combinedText}`
+            }
+          ]
+        }
+      ],
+
+      text: {
+        format: {
+          type: 'json_schema',
+          name:
+            'structured_fallback_classification',
+
+          strict: true,
+
+          schema: {
+            type: 'object',
+
+            properties: {
+              category: {
+                type: 'string',
+                enum: [
+                  ...categoryNames,
+                  'other'
+                ]
+              },
+
+              reason: {
+                type: 'string'
+              }
+            },
+
+            required: [
+              'category',
+              'reason'
+            ],
+
+            additionalProperties: false
+          }
+        }
+      }
+    });
+
+
+  const result =
+    JSON.parse(
+      response.output_text
+    );
+
+
+  return {
+    category:
+      result.category || 'other',
+
+    reason:
+      String(result.reason || '')
+  };
+}
+
+
+
 // ope_mainフレームの div.bodyNaibu からユーザーメッセージ本文のみ取得する
 // 全 div.bodyNaibu から鑑定士行（90ee90 背景）に属するものを除外し、
 // さらに最新の鑑定士メッセージより上（新しい）のユーザー分のみに限定する
@@ -4468,6 +4707,10 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     const allComments = analysis.kanteishiComments || [];
     console.log(`[COMMENT-LIST] ${userName}: ${JSON.stringify(allComments)}`);
 
+    let structuredFallbackReplyText = '';
+    let structuredFallbackComment = '';
+    let structuredFallbackCategory = '';
+
     // 三段形式の特殊コメント検出（sinkoHo/noresHo/stop1等）
     const subActionComments = allComments.map(parseSubActionComment).filter(Boolean);
     const hasSubAction = subActionComments.length > 0;
@@ -4827,6 +5070,19 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       const structuredNeedsAi =
         structuredResult?.status === 'needs_ai';
 
+      const structuredRule =
+        structuredQuestionRules
+          ?.rules
+          ?.[latestCommentForStructured] || null;
+
+      const fallbackProfileName =
+        structuredRule?.fallbackProfile || '';
+
+      const fallbackAi =
+        structuredQuestionRules
+          ?.fallbackProfiles
+          ?.[fallbackProfileName] || null;
+
       if (structuredResult) {
         console.log(
           `[STRUCTURED] ${userName}: ` +
@@ -4848,9 +5104,121 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       if (structuredNeedsAi) {
         console.log(
           `[STRUCTURED] ${userName}: ` +
-          `機械判定では確定できない → OpenAI確認へ`
+          `機械判定では確定できない → fallbackカテゴリ判定へ`
         );
-      }      
+
+        const fallbackResult =
+          await classifyStructuredFallbackWithAI(
+            fallbackAi,
+            userTextsForAuto
+          );
+
+        console.log(
+          `[STRUCTURED-FALLBACK] ${userName}: ` +
+          `category=${fallbackResult.category} ` +
+          `reason="${fallbackResult.reason}"`
+        );
+
+        const fallbackCfg =
+          fallbackAi
+            ?.categories
+            ?.[fallbackResult.category] || null;
+
+        if (
+          fallbackResult.category === 'other' ||
+          !fallbackCfg
+        ) {
+          console.log(
+            `[STRUCTURED-FALLBACK] ${userName}: ` +
+            `該当テンプレートなし → 従来false処理`
+          );
+
+          recordSkip(
+            `自動返信対象外: 定型質問fallback該当なし ` +
+            `(${fallbackResult.reason || 'other'})`
+          );
+
+          continue;
+        }
+
+
+        // ======================================================
+        // 同じfallbackテンプレートの使用回数チェック
+        // ======================================================
+
+        const maxAutoUse =
+          Number(
+            fallbackAi?.maxAutoUse ?? 1
+          );
+
+        const usedCount =
+          getStructuredFallbackUseCount(
+            uid,
+            kid,
+            latestCommentForStructured,
+            fallbackResult.category
+          );
+
+        if (usedCount >= maxAutoUse) {
+          console.log(
+            `[STRUCTURED-FALLBACK] ${userName}: ` +
+            `同一テンプレート使用上限 ` +
+            `${usedCount}/${maxAutoUse} → 従来false処理`
+          );
+
+          recordSkip(
+            `自動返信対象外: 定型質問fallback使用済み ` +
+            `category=${fallbackResult.category}`
+          );
+
+          continue;
+        }
+
+
+        // ======================================================
+        // テンプレート本文を取得
+        // ======================================================
+
+        const templateText =
+          String(
+            fallbackCfg.template || ''
+          ).trim();
+
+        if (!templateText) {
+          console.log(
+            `[STRUCTURED-FALLBACK] ${userName}: ` +
+            `テンプレート本文が空 → 従来false処理`
+          );
+
+          recordSkip(
+            `自動返信対象外: 定型質問fallbackテンプレート空 ` +
+            `category=${fallbackResult.category}`
+          );
+
+          continue;
+        }
+
+
+        // ======================================================
+        // 後段の返信作成処理へ渡す
+        // ======================================================
+
+        structuredFallbackReplyText =
+          templateText;
+
+        structuredFallbackComment =
+          latestCommentForStructured;
+
+        structuredFallbackCategory =
+          fallbackResult.category;
+
+        console.log(
+          `[STRUCTURED-FALLBACK] ${userName}: ` +
+          `テンプレート採用 ` +
+          `category=${structuredFallbackCategory} ` +
+          `comment=${structuredFallbackComment}`
+        );
+      }
 
       if (
         hasUserQuestion &&
@@ -4946,12 +5314,9 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
   // ======================================================
   // 質問型コメント：OpenAIで回答内容を確認
   // ======================================================
-        if (
-            !structuredValid &&
-            (
-              isQuestionComment ||
-              structuredNeedsAi
-            )
+          if (
+            !structuredResult &&
+            isQuestionComment
           ) {
           const kanteishiQuestionText = String(
             analysis.kanteishiBodyText || ''
@@ -5050,7 +5415,49 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     // （LINE確認通知の「対象コメントアウト」行に注記を付けるために保持する）
     let historyNotFound = false;
 
-    if (hasSubAction) {
+    if (structuredFallbackReplyText) {
+      latestComment =
+        structuredFallbackComment;
+
+      const parsedStructured =
+        parseCommentStr(
+          structuredFallbackComment
+        );
+
+      charaId =
+        parsedStructured
+          ? (
+              parsedStructured.baseId +
+              parsedStructured.typeNum
+            )
+          : String(kid);
+
+
+      const sameCommentTag =
+        structuredFallbackComment
+          ? `<!--${structuredFallbackComment}-->`
+          : '';
+
+
+      replyData = {
+        title:
+          'structured-fallback',
+
+        replyText:
+          structuredFallbackReplyText,
+
+        nextComment:
+          sameCommentTag
+      };
+
+
+      console.log(
+        `[STRUCTURED-FALLBACK] ${userName}: ` +
+        `同行コメントで返信を作成 ` +
+        `comment=${structuredFallbackComment}`
+      );
+
+    } else if (hasSubAction) {
       // ─── subAction処理（requiredMessages判定 + searchTarget）──────
       let skipUser = false;
       for (const parsed of subActionComments) {
@@ -6018,6 +6425,24 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       );
 
       await sendReplyText(textToSend);
+
+      if (
+        !DRY_RUN &&
+        structuredFallbackReplyText &&
+        structuredFallbackCategory
+      ) {
+        markStructuredFallbackUsed(
+          uid,
+          kid,
+          structuredFallbackComment,
+          structuredFallbackCategory
+        );
+
+        console.log(
+          `[STRUCTURED-FALLBACK] ${userName}: ` +
+          `使用済み記録 category=${structuredFallbackCategory}`
+        );
+      }      
 
       autoSendResults.push({
         userName,
