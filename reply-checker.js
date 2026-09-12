@@ -4974,7 +4974,11 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
             `reason="${aiCheck.reason}"`
           );
 
-          if (!aiCheck.answered || !aiCheck.relevant) {
+          if (
+              !aiCheck.answered ||
+              !aiCheck.relevant ||
+              !aiCheck.requiredAnswerProvided
+            ) {
             recordSkip(
               `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
             );
@@ -5002,8 +5006,10 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           }
 
           console.log(
+            `requiredAnswerProvided=${aiCheck.requiredAnswerProvided} ` +
             `[AUTO-QUESTION] ${userName}: ` +
             '質問回答OK・追加質問なし → 自動返信続行'
+            
           );
         }
       }
@@ -8161,6 +8167,15 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
                 '3. hasFollowupQuestion',
                 'ユーザーが鑑定士から追加の説明・回答・確認を必要とする質問を残しているか。',
                 '',
+                '4. requiredAnswerProvided',
+                '鑑定士が求めた具体的な回答・情報・選択肢を、ユーザーが実際に提示しているか。',
+                '拒否、回答回避、「分からない」「言いたくない」などは false。',
+                '質問に対して何らかの返事をしていても、求められた情報を提示していなければ false。',
+                '例：「名前を教えてください」→「名前は言いたくありません」は answered=true でも requiredAnswerProvided=false。',
+                '例：「名前を教えてください」→「山田太郎です」は requiredAnswerProvided=true。',
+                '例：「何歳の頃ですか」→「覚えていません」は requiredAnswerProvided=false。',
+                '例：「何歳の頃ですか」→「35歳です」は requiredAnswerProvided=true。',
+                '',
                 '【hasFollowupQuestion の重要ルール】',
                 '・文中に「？」「?」があるだけでは true にしない。',
                 '・ユーザー自身の迷い、自問自答、考え直しは追加質問ではない。',
@@ -8210,6 +8225,9 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
           schema: {
             type: 'object',
             properties: {
+              requiredAnswerProvided: {
+                type: 'boolean'
+              },              
               answered: {
                 type: 'boolean'
               },
@@ -8236,6 +8254,7 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
               'relevant',
               'hasFollowupQuestion',
               'safety',
+              'requiredAnswerProvided',
               'reason'
             ],
             additionalProperties: false
@@ -8249,8 +8268,13 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
     return {
       answered: result.answered === true,
       relevant: result.relevant === true,
+
+      requiredAnswerProvided:
+        result.requiredAnswerProvided === true,
+
       hasFollowupQuestion:
         result.hasFollowupQuestion === true,
+
       safety: result.safety || 'ambiguous',
       reason: String(result.reason || '')
     };
@@ -8264,6 +8288,7 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
     return {
       answered: false,
       relevant: false,
+      requiredAnswerProvided: false,
       hasFollowupQuestion: true,
       safety: 'ambiguous',
       reason: `AI判定エラー: ${err.message}`
