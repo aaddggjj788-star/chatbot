@@ -46,7 +46,7 @@
     "12689mu1/sinko/1": {
       "enabled": true,
       "type": "name",
-
+      "fallbackProfile": "name",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",
@@ -85,7 +85,7 @@
     "12689mu1/sinko/5": {
       "enabled": true,
       "type": "age",
-
+      "fallbackProfile": "name",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",
@@ -137,7 +137,7 @@
     "12689mu1/sinko/6": {
       "enabled": true,
       "type": "money",
-
+      "fallbackProfile": "name",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",
