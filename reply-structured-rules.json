@@ -104,6 +104,230 @@
         }
       },
       "noTemplateAction": "existing_false_flow"
+    },
+    "12689date_or_none": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "最近宝くじを購入した大体の時期、月日、先月・夏頃などの時期を答えている。または最近は購入していない、購入履歴がない、履歴0など、質問への回答が意味として成立している",
+          "action": "continue_without_ai"
+        },
+        "date_uncertain": {
+          "description": "宝くじを購入したことは覚えているが、いつ購入したのか正確な時期や日にちを思い出せない、曖昧だと伝えている",
+          "template": "ご連絡確認しましたよ。\n\n正確な日にちまで覚えていなくても大丈夫です。\n\n今回確認したいのは、何月何日に購入したのかを細かく特定する事ではなく、あなたが最後に宝くじを購入した時期が大体いつ頃だったのかという点ですからね。\n\n「先月の中頃」\n「夏頃」\n「〇月の初め頃」\n\nといった形でも構いませんよ。\n\n思い出せる範囲で構いませんので、最後に宝くじを購入した大体の時期を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "どの宝くじについて答えるのか、最後に購入したものだけでよいのか、どこまで遡ればよいのかなど質問内容の意味や対象範囲を確認している",
+          "template": "ご連絡確認しましたよ。\n\nここで確認したいのは、宝くじの種類や購入した場所ではなく、あなたが最近いつ頃宝くじを購入したのかという点です。\n\nロトでもスクラッチでも、一般的な宝くじでも構いません。\n\n複数回購入されているのであれば、その中で一番最近購入した時期を教えてください。\n\n正確な日にちまで分からなければ、大体の時期でも大丈夫ですよ。\n\n「〇月頃」\n「先月の初め頃」\n\nといった形でも構いませんので、思い当たる範囲で教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689weight": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "現在の体重について、具体的なキログラム数、何キロ台、何キロ前後など質問への回答として成立する内容を提示している",
+          "action": "continue_without_ai"
+        },
+        "unknown_weight": {
+          "description": "最近体重を測っていない、現在何キロか分からない、正確な体重を把握していないと伝えている",
+          "template": "ご連絡確認しましたよ。\n\n最近体重を測っていないのであれば、正確な数字でなくても大丈夫です。\n\n今回確認したいのは、何キロ何グラムという細かな数値ではなく、あなたの現在の体重が大体どのくらいなのかという点ですからね。\n\n「50キロ台」\n「60キロ前後」\n\nといった形でも構いません。\n\n今のご自身の体重を思い出せる範囲で、大体の数字を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "体重を伝えることへの抵抗、恥ずかしさ、個人情報として伝えてよいのかなどの不安を示している",
+          "template": "ご連絡確認しましたよ。\n\n体重というのは少し答えにくく感じる内容ですよね。\n\nですが、ここで必要としているのは正確な数値ではありません。\n\n今回の鑑定では、あなたの体内にある磁場の状態を確認していく上で、現在の体重を一つの目安として使わせて頂きたいのです。\n\nですから、細かな数字までお伝え頂く必要はありませんよ。\n\n「50キロ台」\n「60キロくらい」\n\nといった大体の範囲でも構いませんので、差し支えない範囲で教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "necessity_question": {
+          "description": "なぜ体重を聞く必要があるのか、体重と鑑定にどのような関係があるのかを質問している",
+          "template": "ご連絡確認しましたよ。\n\nなぜ体重が必要なのか、疑問に感じられたのですね。\n\n体重というものは重力と関係し、そこからあなたの体内にある磁場の状態を読み取っていく上で、一つの基準として使わせて頂くものです。\n\nですから、正確な数字まで必要というわけではありません。\n\n大体何キロくらいなのかが分かれば十分ですので、今の体重を思い当たる範囲で教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689eight_relation": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "部屋にある8から連想できる物や該当しそうな物を答えている。または、なし、特にない、思い当たらないなど質問への回答として成立している",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "8と関係する物とは何を指すのか、数字の8が直接書いてある必要があるのかなど質問の意味を確認している",
+          "template": "ご連絡確認しましたよ。\n\nここで言う【８】と関係するものというのは、数字の「8」が直接書かれている物だけを指しているわけではありません。\n\n先ほどお伝えした蜂蜜、タコ、鉢植え、葉っぱなどのように、あなた自身が【８】から連想出来る物であれば大丈夫です。\n\n難しく考える必要はありませんので、お部屋の中を見渡してみて、何か思い当たる物があれば教えてくださいね。\n\n特に思い当たる物がなければ「なし」で構いません。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "8に関係する物があるような気はするが分からない、該当するか自信がない、判断がつかないと伝えている",
+          "template": "ご連絡確認しましたよ。\n\nはっきりと【８】に関係していると言い切れる物でなくても大丈夫です。\n\nここでは、あなた自身が見た時に「【８】から何か連想できる」と感じる物があるかどうかを確認したいのです。\n\n蜂蜜、タコ、鉢植え、葉っぱなどのように、少しでも【８】を連想出来る物があれば教えてくださいね。\n\nそれでも思い当たる物がなければ「なし」で構いません。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689direction": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "寝室の方位について東、西、南、北、北東、南東、南西、北西などの方角を答えている。または方角が分からない、614など、質問への回答として成立している",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "寝室の方角をどこを基準に考えればよいのか、家の中でどのように方角を判断すればよいのかを質問している",
+          "template": "ご連絡確認しましたよ。\n\nここで確認したいのは、あなたの寝室が住まい全体の中でどの方角に位置しているのかという点です。\n\n平面の間取り図をイメージしてみて貰えばわかりやすいと思いますが、寝室が家の中でどの方角に位置しているかというのをイメージしてみてくださいね。\n\n東・西・南・北のどれに近いのか、大体の方角で構いませんよ。\n\nもし判断が難しい場合は、無理に方角を決める必要はありませんので、その場合は【614】とお送りくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "direction_uncertain": {
+          "description": "寝室の方角がどうしても分からない、東か南など複数候補の間で迷っている、方角に自信がないと伝えている",
+          "template": "ご連絡確認しましたよ。\n\n方角がどうしてもわからない場合は今回は【614】とお送りください。\n\n東か南か迷う、などの場合は南東などざっくりとした感覚で答えてもらって大丈夫ですからね。\n\nではお待ちしていますね。",
+          "commentPolicy": "same"
+        },
+        "between_directions": {
+          "description": "一つの寝室が東と南の間、南と西の間など、二つの方角の間に位置していると伝えている",
+          "template": "ご連絡確認しましたよ。\n\n一つの寝室が二つの方角の間にあるのであれば、南東、南西などでお答えいただいて大丈夫です。\n\nそれも正しい方位ですからね。\n\n東西南北の四つだけに絞って答える必要はありません。\n\nざっくりとした方位で大丈夫ですので教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "multiple_bedrooms": {
+          "description": "寝室が複数ある、普段眠る部屋が複数ある場合にどの寝室を基準にすればよいか質問している",
+          "template": "ご連絡確認しましたよ。\n\n寝室が複数ある場合は、普段あなたが一番多く眠っている寝室を基準に考えてください。\n\nあまり無いことだとは思いますが、日によって寝室を移動しているという事があれば判断が難しいとも思いますので、【614】とお送りくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689choice_word": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "直近5年間に宝くじ、競馬、ボートレースなどで投資額を差し引いた10万円以上の利益を得た経験があるかないかについて、運継100、運継50、ある、ない、具体的な利益額など意味として回答が成立している",
+          "action": "continue_without_ai"
+        },
+        "amount_definition_question": {
+          "description": "10万円とは当選額そのものなのか、購入費用や投資額を引いた後の利益なのかなど、金額条件の意味を確認している",
+          "template": "ご連絡確認しましたよ。\n\nここで確認したいのは当選した金額そのものではなく、そこから購入費用や投資した金額を差し引いた後に、最終的に【10万円以上】の利益が残った経験があるかどうかです。\n\n例えば15万円当選していたとしても、その為に6万円使っていたのであれば利益は9万円になりますので、今回の条件には当てはまりません。\n\n反対に12万円の当選でも、使った金額が1万円であれば利益は11万円となりますので、こちらは該当します。\n\nこの5年間の中で、そうした形で10万円以上の利益が残った経験があるかどうかを教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "period_question": {
+          "description": "5年以上前の経験は含むのか、何年前まで遡ればよいのかなど対象期間を質問している",
+          "template": "ご連絡確認しましたよ。\n\n今回確認したいのは【直近5年間】の中で、宝くじや競馬、ボートレースなどによって10万円以上の利益を得た経験があるかどうかです。\n\nですから、それより前の出来事については今回は含めなくて大丈夫です。\n\n今から遡って5年間の中で該当する経験があったかどうかを思い返してみてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "uncertain_profit": {
+          "description": "当選した経験はあるが実際の利益が10万円以上だったか分からない、投資額や使った金額を覚えていないなど判断できないと伝えている",
+          "template": "ご連絡確認しましたよ。\n\n当選した経験自体はあるけれど、実際の利益が10万円を超えていたかまでは分からないのですね。\n\n正確な金額まで思い出せなくても構いません。\n\nその時に使った金額と、最終的に手元へ残った金額を思い出せる範囲で考えてみてください。\n\nそれでも10万円以上の利益だったか判断が難しい場合は、その旨をそのまま教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689yes_no": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "九死に一生を得た経験について、ある、ない、はい、いいえ、一度ある、何度かあるなど意味として回答が成立している",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "九死に一生とはどの程度の経験を指すのか、事故や病気でなければならないのかなど意味を質問している",
+          "template": "ご連絡確認しましたよ。\n\n先ほど説明させて頂いた通り、ここで言う「九死に一生を得た経験」というのは、事故や病気だけを指しているものではありません。\n\nあなた自身が「あの時は本当に危なかった」「もし少し状況が違っていたら大事になっていたかもしれない」と感じるような出来事があったかどうかを思い返してみてくださいね。\n\nそうした経験があれば「ある」、特に思い当たらなければ「ない」で構いません。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "危険な経験はあるものの九死に一生と言えるのか判断できない、そこまで大きな出来事だったか自信がないと伝えている",
+          "template": "ご連絡確認しましたよ。\n\n先ほど説明させて頂いた通り、事故や病気だけが「九死に一生を得た経験」というわけではありません。\n\nその時にあなた自身が「本当に危なかった」「少し状況が違っていたら大事になっていたかもしれない」と感じるような出来事であれば、その経験を基準に考えて頂いて大丈夫です。\n\n思い当たる経験があれば「ある」、特に思い当たらなければ「ない」とお答えくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "multiple_experiences": {
+          "description": "九死に一生と思える経験が複数あり、複数の場合にどう答えればよいか質問している",
+          "template": "ご連絡確認しましたよ。\n\nそうした経験が複数ある場合でも大丈夫です。\n\n今回は一つ一つの出来事の内容を細かく確認するものではなく、過去に「九死に一生を得た」と感じるような経験があったかどうかを確認しています。\n\nですから、複数回思い当たるのであれば「ある」とお答え頂ければ大丈夫ですよ。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689periodic": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "毎年や特定の季節に起きやすい体調不良、不幸、仕事、人間関係、気分の変化など周期的に感じる出来事を答えている。または特にない、ありません、ないなど質問への回答として成立している",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "どの程度繰り返していれば周期的と言えるのか、毎年同じ時期でなければならないのかなど意味を質問している",
+          "template": "ご連絡確認しましたよ。\n\nここで言う「周期的」というのは、必ず毎年まったく同じ時期、同じ出来事が起きているという意味ではありません。\n\n例えば、\n\n「寒くなってくる頃になると体調を崩しやすい」\n「夏頃になると仕事や人間関係で問題が起こりやすい」\n「春先になると気持ちが落ち込みやすい」\n\nといったように、振り返ってみると似た時期に似た変化が起きていると感じるものであれば大丈夫です。\n\nあなた自身が「そういえば、この時期になると同じようなことが起きている気がする」と感じることがないか、思い返してみてくださいね。\n\n特に思い当たるものがなければ「ない」で構いません。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "周期的に起きているような気はするが偶然かもしれない、毎年ではないため分からないなど曖昧だと伝えている",
+          "template": "ご連絡確認しましたよ。\n\nはっきりと毎年繰り返していると言い切れるものでなくても大丈夫です。\n\n過去を振り返ってみて、\n\n「同じ季節になると体調を崩すことが多い」\n「この時期になると似たような出来事が起こりやすい」\n\nなど、あなた自身が何となくでも繰り返しているように感じるものがあれば教えてくださいね。\n\nそれでも特に思い当たることがなければ「ない」で構いませんよ。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689money_amount": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "一カ月の生活費について具体的な金額、何万円前後、何万円から何万円程度など質問への回答として成立する概算を提示している",
+          "action": "continue_without_ai"
+        },
+        "calculation_question": {
+          "description": "生活費に何を含めればよいか、家賃、光熱費、交際費、嗜好品などを含めるのかを質問している",
+          "template": "ご連絡確認しましたよ。\n\nここで確認したい生活費というのは、家賃や光熱費、食費だけではなく、普段の生活の中で使っているお金を全体的に含めた金額です。\n\n例えば、外食や交際費、嗜好品、日用品、交通費なども含めて考えてみてくださいね。\n\n細かな内訳まで出して頂く必要はありません。\n\n一カ月を通して、だいたいどれくらいのお金を使っているのか、その概算を教えて頂ければ大丈夫です。\n\nではお待ちしていますね。",
+          "commentPolicy": "same"
+        },
+        "unknown_amount": {
+          "description": "毎月生活費が異なるため分からない、正確な金額を把握していないなど概算を出せずにいる",
+          "template": "ご連絡確認しましたよ。\n\n毎月使う金額に多少ばらつきがあるのであれば、大体の平均で考えて頂ければ大丈夫です。\n\n例えば、\n\n「20万円前後」\n「15万～20万円くらい」\n\nといった形でも構いませんよ。\n\n今回確認したいのは細かな支出の内訳ではなく、あなたが一カ月の生活の中で大体どのくらいのお金を使っているのかという部分です。\n\n思い当たる範囲で概算を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "生活費や支出額を伝えることに抵抗がある、金銭情報を伝えてよいのか不安を示している",
+          "template": "ご連絡確認しましたよ。\n\n生活費のようなお金の話は、少し答えにくく感じるかもしれませんね。\n\nですが、ここでは細かな内訳や正確な支出額までお聞きしたいわけではありません。\n\nあなたの日常生活に関わる数字を確認していく上で、一カ月に大体どれくらいのお金を使っているのかを一つの目安として知りたいのです。\n\n「20万円くらい」\n「30万円前後」\n\nといった概算で構いませんので、差し支えない範囲で教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689money_or_refusal": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "現在の資産額について具体的な金額、おおまかな金額範囲を答えている。または拒否、答えたくない、資産額を伝えたくないなど拒否意思が明確で質問への回答として成立している",
+          "action": "continue_without_ai"
+        },
+        "calculation_question": {
+          "description": "資産に何を含めればよいのか、現金、預貯金、不動産、装飾品、車などの扱いを質問している",
+          "template": "ご連絡確認しましたよ。\n\nここで言う資産というのは、現金や預貯金だけではなく、現在あなたが所有している物の中で金銭的な価値を持つものも含めて考えてください。\n\n例えば、不動産や装飾品なども、おおよその価値が分かるのであれば含めて頂いて大丈夫です。\n\n一つ一つ細かく内訳を出す必要はありませんので、全体を合わせて「だいたい○○万円くらい」という形で教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "unknown_amount": {
+          "description": "現在の資産額がいくらになるのか分からない、所有物の価値を把握していないなど概算を出せずにいる",
+          "template": "ご連絡確認しましたよ。\n\n正確な金額まで把握されていなくても大丈夫です。\n\n現金や預貯金、それに金銭的な価値を持つ物などを合わせて、ご自身の感覚で大体どのくらいになるのかを考えてみてください。\n\n例えば、\n\n「100万円前後」\n「500万～700万円くらい」\n\nといったおおまかな範囲でも構いませんよ。\n\n細かな内訳ではなく、今現在の資産全体がどのくらいの規模なのかを確認したいので、思い当たる範囲で教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "資産額を伝えることに抵抗がある、資産情報を伝えてよいのか不安だが明確な拒否回答まではしていない",
+          "template": "ご連絡確認しましたよ。\n\n資産についてお答えすることに抵抗があるのですね。\n\n今回必要としているのは細かな内訳や正確な金額ではありませんので、大体の範囲で構いません。\n\nそれでもお伝えすることに抵抗がある場合は、先ほどお伝えした通り【拒否】とお送りくださいね。\n\nその場合はこちらでおおまかな範囲を基準として確認を進めていく形になります。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
     }
   },
   "rules": {
@@ -249,6 +473,141 @@
         "教えたくない",
         "答えたくない"
       ],
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/ho": {
+      "enabled": true,
+      "type": "date_or_none",
+      "fallbackProfile": "12689date_or_none",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/sinko/2": {
+      "enabled": true,
+      "type": "weight",
+      "fallbackProfile": "12689weight",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/sinko/8": {
+      "enabled": true,
+      "type": "free_or_none",
+      "fallbackProfile": "12689eight_relation",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/sinko/9": {
+      "enabled": true,
+      "type": "direction",
+      "fallbackProfile": "12689direction",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/sinko/10": {
+      "enabled": true,
+      "type": "choice_word",
+      "fallbackProfile": "12689choice_word",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/sinko/11": {
+      "enabled": true,
+      "type": "yes_no",
+      "fallbackProfile": "12689yes_no",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/sinko/12": {
+      "enabled": true,
+      "type": "free_or_none",
+      "fallbackProfile": "12689periodic",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/sinko/13": {
+      "enabled": true,
+      "type": "money_amount",
+      "fallbackProfile": "12689money_amount",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/sinko/14": {
+      "enabled": true,
+      "type": "money_or_refusal",
+      "fallbackProfile": "12689money_or_refusal",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
       "result": {
         "valid": "continue_without_ai",
         "ambiguous": "use_existing_ai",

@@ -3710,13 +3710,355 @@ function validateStructuredMoney(text, rule) {
 }
 
 
+function validateStructuredDateOrNone(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 履歴0
+  if (/履歴\s*[0０]/.test(t)) {
+    return {
+      status: 'valid',
+      reason: 'no_purchase_history'
+    };
+  }
+
+  // 明確な未購入回答
+  if (
+    /(?:買っていない|買ってません|購入していない|購入してません|買ったことがない|購入したことがない)/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'no_purchase'
+    };
+  }
+
+  // 8月15日 / 8月頃 / 8月の初め
+  if (
+    /\d{1,2}\s*月(?:\s*\d{1,2}\s*日)?/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'purchase_date_found'
+    };
+  }
+
+  // 先月 / 今月 / 先週 / 去年 / 夏頃 等
+  if (
+    /(?:今月|先月|先々月|今週|先週|去年|今年|春|夏|秋|冬)(?:頃|ごろ|くらい|辺り|あたり)?/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'purchase_period_found'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'date_or_none_ambiguous'
+  };
+}
+
+
+function validateStructuredWeight(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 55kg / 55キロ / 50キロ台 / 60kg前後
+  if (
+    /\d{2,3}(?:\.\d+)?\s*(?:kg|ｋｇ|KG|キロ)(?:台|前後|くらい|ぐらい|程度)?/i.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'weight_found'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'weight_ambiguous'
+  };
+}
+
+
+
+function validateStructuredFreeOrNone(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 「なし」「ないです」「特にありません」等
+  if (
+    /^(?:特に)?(?:なし|ない|ないです|ありません|特にありません|思い当たりません)[。！!\s]*$/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'none_answer'
+    };
+  }
+
+  // 自由回答は誤判定を避けるためAIへ
+  return {
+    status: 'needs_ai',
+    reason: 'free_answer_needs_ai'
+  };
+}
+
+
+function validateStructuredDirection(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 指定回答
+  if (/^614$/.test(t)) {
+    return {
+      status: 'valid',
+      reason: 'direction_unknown_code'
+    };
+  }
+
+  // 東西南北 + 中間方位
+  if (
+    /(?:北東|北西|南東|南西|東|西|南|北)/.test(t) &&
+    !/[？?]/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'direction_found'
+    };
+  }
+
+  // 「分からない」自体も意味として回答成立
+  if (
+    /(?:方角|方位)?.*(?:わからない|分からない|分かりません|わかりません)/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'direction_unknown'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'direction_ambiguous'
+  };
+}
+
+
+function validateStructuredChoiceWord(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 指定ワード
+  if (
+    /運継\s*(?:100|１００|50|５０)/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'choice_word_found'
+    };
+  }
+
+  // 明確な「ある」
+  if (
+    /(?:あります|ありました|ある|得たことがあります|利益が出ました|利益がありました)/.test(t) &&
+    !/[？?]/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'profit_yes'
+    };
+  }
+
+  // 明確な「ない」
+  if (
+    /(?:ありません|ないです|ない|得たことはありません|利益はありません)/.test(t) &&
+    !/[？?]/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'profit_no'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'choice_word_ambiguous'
+  };
+}
+
+
+function validateStructuredYesNo(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 質問が残っていたらAIへ
+  if (/[？?]/.test(t)) {
+    return {
+      status: 'needs_ai',
+      reason: 'yes_no_question'
+    };
+  }
+
+  // 明確な肯定
+  if (
+    /^(?:はい|あります|ある|ありました|一度あります|何度かあります)[。！!\s]*$/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'yes_answer'
+    };
+  }
+
+  // 明確な否定
+  if (
+    /^(?:いいえ|ありません|ない|ないです|ありませんでした)[。！!\s]*$/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'no_answer'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'yes_no_ambiguous'
+  };
+}
+
+
+function validateStructuredMoneyAmount(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 20万円 / 25万前後 / 15万～20万円
+  if (
+    /\d[\d,，]*(?:\.\d+)?\s*(?:万|万円|円)/.test(t) &&
+    !/[？?]/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'money_amount_found'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'money_amount_ambiguous'
+  };
+}
+
+
+
+function validateStructuredMoneyOrRefusal(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 明確な拒否
+  if (
+    /^(?:拒否|答えたくありません|答えたくない|言いたくありません|言いたくない)[。！!\s]*$/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'asset_refusal'
+    };
+  }
+
+  // 500万円 / 1000万前後 / 500～700万円
+  if (
+    /\d[\d,，]*(?:\.\d+)?\s*(?:万|万円|円)/.test(t) &&
+    !/[？?]/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'asset_amount_found'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'money_or_refusal_ambiguous'
+  };
+}
+
+
 // ======================================================
 // type → validator
 // ======================================================
 const STRUCTURED_VALIDATORS = {
   name: validateStructuredName,
   age: validateStructuredAge,
-  money: validateStructuredMoney
+  money: validateStructuredMoney,
+
+  date_or_none:
+    validateStructuredDateOrNone,
+
+  weight:
+    validateStructuredWeight,
+
+  free_or_none:
+    validateStructuredFreeOrNone,
+
+  direction:
+    validateStructuredDirection,
+
+  choice_word:
+    validateStructuredChoiceWord,
+
+  yes_no:
+    validateStructuredYesNo,
+
+  money_amount:
+    validateStructuredMoneyAmount,
+
+  money_or_refusal:
+    validateStructuredMoneyOrRefusal
 };
 
 
