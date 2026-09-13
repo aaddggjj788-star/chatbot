@@ -6005,27 +6005,6 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
             `comment=${structuredFallbackComment}`
           );
         }
-
-
-        // ======================================================
-        // 後段の返信作成処理へ渡す
-        // ======================================================
-
-        structuredFallbackReplyText =
-          templateText;
-
-        structuredFallbackComment =
-          latestCommentForStructured;
-
-        structuredFallbackCategory =
-          fallbackResult.category;
-
-        console.log(
-          `[STRUCTURED-FALLBACK] ${userName}: ` +
-          `テンプレート採用 ` +
-          `category=${structuredFallbackCategory} ` +
-          `comment=${structuredFallbackComment}`
-        );
       }
 
       if (
@@ -6035,7 +6014,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         console.log(
           `[AUTO-QUESTION] ${userName}: 質問型コメントのため？/?を許容`
         );
-      }      
+      }
 
 
       // --------------------------------------------------
