@@ -61,11 +61,45 @@ async function main() {
 
 
     const text =
-      await ask(
-        'ユーザー返信   > '
-      );
+      await askMultiline();
 
+    function askMultiline() {
+      return new Promise(resolve => {
+        console.log(
+          'ユーザー返信   > '
+        );
 
+        console.log(
+          '※複数行入力できます。最後に END と入力してください。'
+        );
+
+        const lines = [];
+
+        const onLine = line => {
+          if (
+            String(line).trim() === 'END'
+          ) {
+            rl.removeListener(
+              'line',
+              onLine
+            );
+
+            resolve(
+              lines.join('\n')
+            );
+
+            return;
+          }
+
+          lines.push(line);
+        };
+
+        rl.on(
+          'line',
+          onLine
+        );
+      });
+    }
     if (
       text.trim().toLowerCase() === 'exit'
     ) {
