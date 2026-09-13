@@ -4024,7 +4024,136 @@ async function classifyStructuredFallbackWithAI(
   };
 }
 
+async function testStructuredReply(
+  latestComment,
+  userTexts
+) {
+  const texts =
+    Array.isArray(userTexts)
+      ? userTexts
+      : [userTexts];
 
+  const structuredResult =
+    checkStructuredQuestion(
+      latestComment,
+      texts
+    );
+
+  // ================================================
+  // structuredルール自体がない
+  // ================================================
+  if (!structuredResult) {
+    return {
+      finalStatus: 'no_rule',
+      machine: null,
+      fallback: null,
+      template: ''
+    };
+  }
+
+
+  // ================================================
+  // 機械判定だけで正常回答
+  // ================================================
+  if (structuredResult.status === 'valid') {
+    return {
+      finalStatus: 'machine_valid',
+      machine: structuredResult,
+      fallback: null,
+      template: ''
+    };
+  }
+
+
+  // ================================================
+  // fallbackProfile取得
+  // ================================================
+  const structuredRule =
+    structuredQuestionRules
+      ?.rules
+      ?.[latestComment] || null;
+
+  const fallbackProfileName =
+    structuredRule?.fallbackProfile || '';
+
+  const fallbackAi =
+    structuredQuestionRules
+      ?.fallbackProfiles
+      ?.[fallbackProfileName] || null;
+
+
+  if (!fallbackAi) {
+    return {
+      finalStatus: 'false',
+      machine: structuredResult,
+      fallback: {
+        category: 'other',
+        reason:
+          `fallbackProfile未設定: ${fallbackProfileName || '(空)'}`
+      },
+      template: ''
+    };
+  }
+
+
+  // ================================================
+  // AIによるfallback分類
+  // ================================================
+  const fallbackResult =
+    await classifyStructuredFallbackWithAI(
+      fallbackAi,
+      texts
+    );
+
+  const fallbackCfg =
+    fallbackAi
+      ?.categories
+      ?.[fallbackResult.category] || null;
+
+
+  // ================================================
+  // AI救済 valid_answer
+  // ================================================
+  if (
+    fallbackResult.category === 'valid_answer' &&
+    fallbackCfg?.action === 'continue_without_ai'
+  ) {
+    return {
+      finalStatus: 'ai_valid',
+      machine: structuredResult,
+      fallback: fallbackResult,
+      template: ''
+    };
+  }
+
+
+  // ================================================
+  // テンプレート一致
+  // ================================================
+  if (
+    fallbackResult.category !== 'other' &&
+    fallbackCfg?.template
+  ) {
+    return {
+      finalStatus: 'fallback_template',
+      machine: structuredResult,
+      fallback: fallbackResult,
+      template:
+        String(fallbackCfg.template).trim()
+    };
+  }
+
+
+  // ================================================
+  // どこにも該当しない
+  // ================================================
+  return {
+    finalStatus: 'false',
+    machine: structuredResult,
+    fallback: fallbackResult,
+    template: ''
+  };
+}
 
 // ope_mainフレームの div.bodyNaibu からユーザーメッセージ本文のみ取得する
 // 全 div.bodyNaibu から鑑定士行（90ee90 背景）に属するものを除外し、
@@ -9971,5 +10100,6 @@ module.exports = {
   sendLine,
   executeGeneratedSkippedPlan,
   resolveCurrentSkippedIndex,
+  testStructuredReply,
   waitForLineReply
 };
