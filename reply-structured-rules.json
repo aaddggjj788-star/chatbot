@@ -328,6 +328,94 @@
         }
       },
       "noTemplateAction": "existing_false_flow"
+    },
+    "12689available_time": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "ユーザーが自由に行動できる時間について、具体的な時刻、時間帯、午前・午後・夕方・夜など、または平日と休日それぞれの時間など質問への回答として成立する内容を提示している",
+          "action": "continue_without_ai"
+        },
+        "time_uncertain": {
+          "description": "自由に動ける時間が一定していない、その日にならないと分からない、正確な時間帯を決められないと伝えている",
+          "template": "ご連絡確認しましたよ。\n\n毎日の予定が一定ではないのであれば、正確な時間まで決めて頂かなくても大丈夫です。\n\n例えば、\n\n「夕方以降なら動きやすい」\n「午前中であれば比較的動ける」\n「夜なら時間を取りやすい」\n\nといった形でも構いません。\n\nここでは、あなたが現実的に動きやすい時間帯を大まかに把握しておきたいのです。\n\n普段の生活を思い返して、比較的自由に動きやすい時間帯を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "schedule_varies": {
+          "description": "平日と休日、曜日などによって自由に動ける時間帯が異なるため、どの時間を答えればよいか迷っている",
+          "template": "ご連絡確認しましたよ。\n\n日によって自由に動ける時間が違うのであれば、一つに絞らなくても大丈夫です。\n\n例えば、\n\n「平日は19時以降」\n「休日は10時から17時頃」\n\nというように、生活のパターンごとに分けて教えて頂ければ十分ですよ。\n\n今後の購入条件を組み立てる際には、実際にあなたが動ける時間を基準として考えていきます。\n\n分かる範囲で教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "自由に行動できる時間とは何を指すのか、仕事以外の時間なのか、どのような状態なら自由時間として考えてよいのかを質問している",
+          "template": "ご連絡確認しましたよ。\n\nここで確認したい「自由に行動できる時間」というのは、あなた自身の判断で外出したり、宝くじを購入しに動いたり出来る時間帯のことです。\n\n仕事や家事などで動くことが難しい時間ではなく、必要であればご自身で動くことが出来る時間を考えてみてくださいね。\n\n正確に何時何分まで決める必要はありませんので、大体の時間帯で構いません。\n\n分かる範囲で教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689given_name": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "ユーザーが自分の下の名前、名の部分を具体的に提示している。漢字、ひらがな、カタカナなど表記方法は問わない",
+          "action": "continue_without_ai"
+        },
+        "which_name_question": {
+          "description": "下の名前とは氏名のどの部分なのか、苗字ではなく名前だけでよいのかなどを確認している",
+          "template": "ご連絡確認しましたよ。\n\n今回は苗字ではなく、あなたの下のお名前だけを教えて頂ければ大丈夫です。\n\n例えば「山田花子」というお名前であれば、「花子」の部分ですね。\n\n漢字でも、普段使われている読み方でも構いません。\n\n下のお名前だけをお送りくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "下の名前を改めて伝えることに対して、個人情報やプライバシー上の不安、抵抗を示している",
+          "template": "ご連絡確認しましたよ。\n\nお名前を改めてお伝えすることに、少し抵抗を感じられたのですね。\n\n今回確認したいのは氏名全体ではなく、下のお名前だけです。\n\n先ほどお伝えした通り、名前の音の響きと現在の波の重なり方を見るために使わせて頂くものです。\n\n漢字でなくても、普段使われている読み方で構いませんので、下のお名前を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "今回質問されている下の名前そのものを伝えたくない、教えたくない、答えたくないと明確に拒否している。鑑定継続や料金など別の事柄への拒否は含めない",
+          "template": "ご連絡確認しましたよ。\n\n下のお名前をお伝えすることに抵抗があるのですね。\n\n今回は氏名全体ではなく、下のお名前の響きを現在の状態と重ねて確認するためにお伺いしています。\n\n漢字でお伝え頂くことに抵抗がある場合は、普段使われている読み方だけでも構いません。\n\n差し支えない範囲で、下のお名前を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "なぜもう一度名前を送る必要があるのか、なぜ下の名前が必要なのかを質問している",
+          "template": "ご連絡確認しましたよ。\n\nもう一度お名前を伺う理由が気になったのですね。\n\n今回は個人情報を改めて確認するためではなく、下のお名前の音の響きと、今の財運の波がどのように重なっているのかを見るために確認しています。\n\n氏名全体ではなく、下のお名前だけで構いません。\n\n普段使われている読み方でも大丈夫ですので、お送りくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12689fatigue_percent": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "現在の疲労度について、0から100を基準とした具体的な数字、パーセント、おおよその数値を提示している",
+          "action": "continue_without_ai"
+        },
+        "scale_question": {
+          "description": "0と100のどちらが疲労MAXなのか、100が最も疲れている状態なのかなど、数値の基準を質問している",
+          "template": "ご連絡確認しましたよ。\n\n今回の数字は、疲労がまったくない状態を【0】、これ以上ないほど疲れている状態を【100】として考えてください。\n\nその中で、今のあなた自身の体感がどの辺りにあるのかを数字にして頂ければ大丈夫です。\n\n正確に判断する必要はありませんので、今感じている疲労度に近い数字を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "uncertain_level": {
+          "description": "疲労度を数字にするのが難しい、何パーセントか分からない、数値として表せないと伝えている",
+          "template": "ご連絡確認しましたよ。\n\n疲れ具合を数字に置き換えるのは、少し難しく感じるかもしれませんね。\n\n細かく考える必要はありません。\n\n例えば、\n\n「半分くらい疲れている」と感じるのであれば【50】\n「かなり疲れている」と感じるのであれば【70〜80】\n\nというように、今の感覚に一番近い数字で構いませんよ。\n\n直感的に近いと思う数字を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "なぜ疲労度を確認する必要があるのか、疲労度と鑑定にどのような関係があるのかを質問している",
+          "template": "ご連絡確認しましたよ。\n\n現在の疲労度を確認しているのは、身体の状態によって反応の出方に違いが生じることがあるためです。\n\n疲れが強い時と、身体が比較的軽い時とでは、同じように言葉を送って頂いても反応の現れ方が変わることがありますからね。\n\nそこで今の状態を一つの数字として把握しておきたいのです。\n\nMAXを100として、現在の疲労度に近い数字を教えてくださいね。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        },
+        "out_of_range": {
+          "description": "疲労度として100を超える数字、マイナス値など0から100の範囲外の数値を提示している",
+          "template": "ご連絡確認しましたよ。\n\n今回は【0〜100】の範囲の中で、現在の疲労度を教えて頂ければ大丈夫です。\n\n【100】を「これ以上ないほど疲れている状態」として、今の体感がどのくらいなのかを考えてみてくださいね。\n\n大体の数字で構いませんので、0から100の範囲でお送りください。\n\nではお待ちしています。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
     }
   },
   "rules": {
@@ -603,6 +691,51 @@
       "enabled": true,
       "type": "money_or_refusal",
       "fallbackProfile": "12689money_or_refusal",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689yu1mu/sinko/3": {
+      "enabled": true,
+      "type": "available_time",
+      "fallbackProfile": "12689available_time",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689yu1mu/sinko/4": {
+      "enabled": true,
+      "type": "given_name",
+      "fallbackProfile": "12689given_name",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689yu1mu/sinko/5": {
+      "enabled": true,
+      "type": "fatigue_percent",
+      "fallbackProfile": "12689fatigue_percent",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",

@@ -4030,6 +4030,236 @@ function validateStructuredMoneyOrRefusal(text, rule) {
 
 
 // ======================================================
+// 自由に行動できる時間帯
+// ======================================================
+
+function validateStructuredAvailableTime(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 18時〜22時 / 18時から22時 / 18:00〜22:00
+  if (
+    /(?:\d{1,2}(?::\d{2})?\s*時?|\d{1,2}:\d{2})\s*(?:から|〜|～|-|－|ー)\s*(?:\d{1,2}(?::\d{2})?\s*時?|\d{1,2}:\d{2})/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'available_time_range_found'
+    };
+  }
+
+  // 19時以降 / 10時まで / 18時頃から
+  if (
+    /\d{1,2}(?::\d{2})?\s*時?\s*(?:以降|以後|から|まで|頃から|ごろから)/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'available_time_found'
+    };
+  }
+
+  // 午前 / 午後 / 朝 / 昼 / 夕方 / 夜
+  if (
+    /(?:午前中|午前|午後|朝|昼|夕方|夜|夜間)(?:なら|であれば|以降|頃|ごろ)?/.test(t) &&
+    !/[？?]/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'available_daypart_found'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'available_time_ambiguous'
+  };
+}
+
+
+// ======================================================
+// 下の名前
+// ======================================================
+
+function validateStructuredGivenName(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  function isGivenNameCandidate(value) {
+    const s =
+      String(value || '')
+        .replace(/[「」『』【】"'“”]/g, '')
+        .trim();
+
+    if (!s) return false;
+
+    if ([...s].length > 15) {
+      return false;
+    }
+
+    if (
+      !/^[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.\s]+$/.test(s)
+    ) {
+      return false;
+    }
+
+    const ngWords = [
+      '名前',
+      '苗字',
+      '名字',
+      '本名',
+      '必要',
+      'なんで',
+      'なぜ',
+      'どうして',
+      '個人情報',
+      '心配',
+      '不安',
+      '言いたく',
+      '教えたく',
+      '答えたく',
+      '大丈夫',
+      '構いません',
+      'よろしく',
+      'お願い',
+      '先生',
+      '鑑定'
+    ];
+
+    return !ngWords.some(word =>
+      s.includes(word)
+    );
+  }
+
+
+  // 下の名前は花子です
+  const explicitGivenName =
+    t.match(
+      /(?:下の名前|下のお名前|名前)\s*(?:は|:|：)\s*[「『"'“”]?([ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.]{1,15})/
+    );
+
+  if (
+    explicitGivenName &&
+    isGivenNameCandidate(
+      explicitGivenName[1]
+    )
+  ) {
+    return {
+      status: 'valid',
+      reason: 'explicit_given_name'
+    };
+  }
+
+
+  // 花子です / エリコです
+  const simpleGivenName =
+    t.match(
+      /(?:^|[。\n！？?])\s*([ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.]{1,15})です(?:[。\n！？?]|$)/
+    );
+
+  if (
+    simpleGivenName &&
+    isGivenNameCandidate(
+      simpleGivenName[1]
+    )
+  ) {
+    return {
+      status: 'valid',
+      reason: 'given_name_found'
+    };
+  }
+
+
+  // 名前だけ
+  if (
+    /^[ぁ-んァ-ヶー一-龠々A-Za-zＡ-Ｚａ-ｚ・.]{1,15}$/.test(t) &&
+    isGivenNameCandidate(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'plain_given_name'
+    };
+  }
+
+
+  return {
+    status: 'needs_ai',
+    reason: 'given_name_ambiguous'
+  };
+}
+
+
+// ======================================================
+// 疲労度 0〜100
+// ======================================================
+
+function validateStructuredFatiguePercent(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  // 数字を全部取得
+  const numbers =
+    (t.match(/\d{1,3}/g) || [])
+      .map(Number);
+
+  // 0〜100の値
+  const validNumbers =
+    numbers.filter(n =>
+      n >= 0 &&
+      n <= 100
+    );
+
+  // 101以上が明確に回答として出ている
+  if (
+    numbers.some(n => n > 100)
+  ) {
+    return {
+      status: 'needs_ai',
+      reason: 'fatigue_out_of_range'
+    };
+  }
+
+  // 35% / 35パーセント / 70くらい / 100のうち40
+  if (
+    validNumbers.length > 0 &&
+    (
+      /(?:%|％|パーセント)/.test(t) ||
+      /(?:くらい|ぐらい|程度|前後)/.test(t) ||
+      /100\s*(?:のうち|中で)/.test(t) ||
+      /^\s*\d{1,3}\s*$/.test(t)
+    )
+  ) {
+    return {
+      status: 'valid',
+      reason:
+        `fatigue_percent_found:${validNumbers[0]}`
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'fatigue_percent_ambiguous'
+  };
+}
+
+
+// ======================================================
 // type → validator
 // ======================================================
 const STRUCTURED_VALIDATORS = {
@@ -4059,7 +4289,16 @@ const STRUCTURED_VALIDATORS = {
     validateStructuredMoneyAmount,
 
   money_or_refusal:
-    validateStructuredMoneyOrRefusal
+    validateStructuredMoneyOrRefusal,
+
+  available_time:
+    validateStructuredAvailableTime,
+
+  given_name:
+    validateStructuredGivenName,
+
+  fatigue_percent:
+    validateStructuredFatiguePercent
 };
 
 
