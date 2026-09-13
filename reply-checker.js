@@ -5418,7 +5418,26 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
             ?.categories
             ?.[fallbackResult.category] || null;
 
+
+        // ======================================================
+        // AI救済：機械判定では拾えなかったが正常回答
+        // ======================================================
+
         if (
+          fallbackResult.category === 'valid_answer' &&
+          fallbackCfg?.action === 'continue_without_ai'
+        ) {
+          console.log(
+            `[STRUCTURED-FALLBACK] ${userName}: ` +
+            `AI判定で正常回答を確認 → 通常の次返信処理へ続行`
+          );
+
+
+        // ======================================================
+        // 該当カテゴリなし
+        // ======================================================
+
+        } else if (
           fallbackResult.category === 'other' ||
           !fallbackCfg
         ) {
@@ -5433,63 +5452,78 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           );
 
           continue;
-        }
 
 
         // ======================================================
-        // 同じfallbackテンプレートの使用回数チェック
+        // fallbackテンプレート対象
         // ======================================================
 
-        const maxAutoUse =
-          Number(
-            fallbackAi?.maxAutoUse ?? 1
-          );
+        } else {
 
-        const usedCount =
-          getStructuredFallbackUseCount(
-            uid,
-            kid,
-            latestCommentForStructured,
-            fallbackResult.category
-          );
+          const maxAutoUse =
+            Number(
+              fallbackAi?.maxAutoUse ?? 1
+            );
 
-        if (usedCount >= maxAutoUse) {
+          const usedCount =
+            getStructuredFallbackUseCount(
+              uid,
+              kid,
+              latestCommentForStructured,
+              fallbackResult.category
+            );
+
+          if (usedCount >= maxAutoUse) {
+            console.log(
+              `[STRUCTURED-FALLBACK] ${userName}: ` +
+              `同一テンプレート使用上限 ` +
+              `${usedCount}/${maxAutoUse} → 従来false処理`
+            );
+
+            recordSkip(
+              `自動返信対象外: 定型質問fallback使用済み ` +
+              `category=${fallbackResult.category}`
+            );
+
+            continue;
+          }
+
+
+          const templateText =
+            String(
+              fallbackCfg.template || ''
+            ).trim();
+
+          if (!templateText) {
+            console.log(
+              `[STRUCTURED-FALLBACK] ${userName}: ` +
+              `テンプレート本文が空 → 従来false処理`
+            );
+
+            recordSkip(
+              `自動返信対象外: 定型質問fallbackテンプレート空 ` +
+              `category=${fallbackResult.category}`
+            );
+
+            continue;
+          }
+
+
+          structuredFallbackReplyText =
+            templateText;
+
+          structuredFallbackComment =
+            latestCommentForStructured;
+
+          structuredFallbackCategory =
+            fallbackResult.category;
+
           console.log(
             `[STRUCTURED-FALLBACK] ${userName}: ` +
-            `同一テンプレート使用上限 ` +
-            `${usedCount}/${maxAutoUse} → 従来false処理`
+            `テンプレート採用 ` +
+            `category=${structuredFallbackCategory} ` +
+            `comment=${structuredFallbackComment}`
           );
-
-          recordSkip(
-            `自動返信対象外: 定型質問fallback使用済み ` +
-            `category=${fallbackResult.category}`
-          );
-
-          continue;
-        }
-
-
-        // ======================================================
-        // テンプレート本文を取得
-        // ======================================================
-
-        const templateText =
-          String(
-            fallbackCfg.template || ''
-          ).trim();
-
-        if (!templateText) {
-          console.log(
-            `[STRUCTURED-FALLBACK] ${userName}: ` +
-            `テンプレート本文が空 → 従来false処理`
-          );
-
-          recordSkip(
-            `自動返信対象外: 定型質問fallbackテンプレート空 ` +
-            `category=${fallbackResult.category}`
-          );
-
-          continue;
         }
 
 

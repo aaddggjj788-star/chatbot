@@ -7,10 +7,14 @@
     "requireExactCommentMatch": true
   },
   "fallbackProfiles": {
-    "name": {
+    "12689name": {
       "enabled": true,
       "maxAutoUse": 1,
       "categories": {
+        "valid_answer": {
+          "description": "ユーザーが名前、本名、ニックネーム、イニシャル、普段呼ばれている呼び名など、質問に対する有効な回答を実際に提示している",
+          "action": "continue_without_ai"
+        },
         "necessity_question": {
           "description": "名前や呼び名を教える必要性・理由を質問している",
           "template": "ご連絡確認しました。\n\n簡単に言えば思念が読みやすくなり鑑定回数を減らすことができます。\nこれは私自身が鑑定を行う上で扱う一つのツールとなる物ですので、どうしても伝えたくないという事であれば構いません。\nですがニックネームでもなんでも良いので、あなたが呼ばれている呼び名を教えてもらえると安定して鑑定を進めて行く事が出来ます。\n\nただニックネームと言っても今考え付いた物ではなく、あなた自身がよく呼ばれている物にして下さいね。\nそうでないと思念も乗りづらくはなってしまいますので。ではお待ちしていますね。",
@@ -34,10 +38,14 @@
       },
       "noTemplateAction": "existing_false_flow"
     },
-    "age": {
+    "12689age": {
       "enabled": true,
       "maxAutoUse": 1,
       "categories": {
+        "valid_answer": {
+          "description": "ユーザーが転機となった年齢、年代、おおよその年齢範囲など、質問に対する有効な回答を実際に提示している",
+          "action": "continue_without_ai"
+        },
         "unknown_age": {
           "description": "転機だった年齢を覚えていない、分からないと伝えている",
           "template": "ご連絡確認しましたよ。\n\n正確な年代が分からなければ、だいたいの範囲でも構いませんよ。\n\n何歳～何歳の頃。\n\nここで大事な事はピンポイントに「何歳」と特定するのでは無く、あなたにとっての「転機」と思えるタイミングを確認する事ですからね。\n\nだいたいの範囲で構いませんので、思い当たる年齢を教えてくださいね。\n\nではお待ちしています。",
@@ -66,10 +74,14 @@
       },
       "noTemplateAction": "existing_false_flow"
     },
-    "money": {
+    "12689money": {
       "enabled": true,
       "maxAutoUse": 1,
       "categories": {
+        "valid_answer": {
+          "description": "ユーザーが希望する具体的な金額を提示しており、その内容だけで質問に対する有効な回答として成立している",
+          "action": "continue_without_ai"
+        },
         "amount_guidance": {
           "description": "希望する金額をいくらにすればよいか、金額の目安や決め方を質問している",
           "template": "ご連絡確認しましたよ。\n\nこうしたお話しを急にされても、あなた自身の心の中では答えがまとまらないかも知れませんね。\n\nたまに「100兆円」とか言ってくる方もいるのですが、そういった方は論外です。\n\n鑑定って言うのは魔法や錬金術の様な物ではありません。\n\n「０」から「１００」を生み出すのでは無く、その人の持っている気質を高めて結果へと繋げていく。\n\nですから、まず自分自身が手に入れる事が出来る物を基準にして考えていかなければなりません。\n\nご自身で事業をやられている方などであれば、その先の発展などを考慮してみれば「100億円」とかそうした単位も視野には入るでしょう。\n\nですがそういう状況では無ければ一般的に大金が手に入る機会としては「宝くじ」や「公営のギャンブル」とかが有力な線にはなりますよね。\n\n無理に大きな金額を提示する必要はありません。ただあなたが今どれくらいのお金が欲しいか。\n\nどれくらいのお金があれば安心してこの先の人生を過ごしていく事が出来るのかをもう一度考えてみてくださいね。\n\nそしてそのお答えを私に伝えてください。\n\nではお待ちしていますね。",
@@ -98,7 +110,7 @@
     "12689mu1/sinko/1": {
       "enabled": true,
       "type": "name",
-      "fallbackProfile": "name",
+      "fallbackProfile": "12689name",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",
@@ -132,7 +144,7 @@
     "12689mu1/sinko/5": {
       "enabled": true,
       "type": "age",
-      "fallbackProfile": "age",
+      "fallbackProfile": "12689age",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",
@@ -178,7 +190,7 @@
     "12689mu1/sinko/6": {
       "enabled": true,
       "type": "money",
-      "fallbackProfile": "money",
+      "fallbackProfile": "12689money",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",
@@ -202,6 +214,40 @@
         "分からない",
         "特にない",
         "希望はない"
+      ],
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12689mu2/do/1": {
+      "enabled": true,
+      "type": "name",
+      "fallbackProfile": "12689name",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "answerPolicy": {
+        "allowNickname": true,
+        "allowInitials": true,
+        "allowFullName": true,
+        "allowHiragana": true,
+        "allowKatakana": true,
+        "allowKanji": true,
+        "allowLatin": true,
+        "requireKatakana": false
+      },
+      "questionPolicy": {
+        "questionMark": "allow_if_answer_exists",
+        "questionWords": "allow_if_answer_exists"
+      },
+      "rejectPatterns": [
+        "言いたくない",
+        "教えたくない",
+        "答えたくない"
       ],
       "result": {
         "valid": "continue_without_ai",
