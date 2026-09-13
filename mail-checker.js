@@ -119,8 +119,8 @@ async function connectImapWithRetry(imapConfig, maxRetries = 3) {
       return await imapSimple.connect(imapConfig);
     } catch (err) {
       console.error(`IMAP接続エラー (試行${attempt + 1}/${maxRetries + 1}回目):`, err.message);
-      if (attempt === maxRetries) throw err;
-      await sendLine('【警告】IMAP接続エラーが発生しました。再接続を試みます。');
+      if (attempt === maxRetries) throw err;  
+  //  await sendLine('【警告】IMAP接続エラーが発生しました。再接続を試みます。');
       await new Promise(resolve => setTimeout(resolve, 30000));
     }
   }
