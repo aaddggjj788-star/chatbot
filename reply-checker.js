@@ -5484,6 +5484,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     let structuredFallbackReplyText = '';
     let structuredFallbackComment = '';
     let structuredFallbackCategory = '';
+    let structuredFallbackProfileName = '';
 
     // 三段形式の特殊コメント検出（sinkoHo/noresHo/stop1等）
     const subActionComments = allComments.map(parseSubActionComment).filter(Boolean);
@@ -5997,6 +5998,9 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
 
           structuredFallbackCategory =
             fallbackResult.category;
+
+          structuredFallbackProfileName =
+            fallbackProfileName;
 
           console.log(
             `[STRUCTURED-FALLBACK] ${userName}: ` +
@@ -7234,7 +7238,13 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       autoSendResults.push({
         userName,
         uid,
-        kid
+        kid,
+
+        fallbackProfile:
+          structuredFallbackProfileName || '',
+
+        fallbackCategory:
+          structuredFallbackCategory || ''
       });
 
       autoSendCount++;
@@ -10356,10 +10366,22 @@ async function checkReplies(options = {}) {
 
       const sendResultLines =
         sendResults.length > 0
-          ? sendResults.map(
-              item =>
-                `・${item.uid}へ${item.kid}より送信しました`
-            )
+          ? sendResults.map(item => {
+
+              const fallbackInfo =
+                item.fallbackCategory
+                  ? (
+                      `\n  ※フォールバックテンプレート使用：` +
+                      `${item.fallbackProfile || '-'} / ` +
+                      `${item.fallbackCategory}`
+                    )
+                  : '';
+
+              return (
+                `・${item.uid}へ${item.kid}より送信しました` +
+                fallbackInfo
+              );
+            })
           : [
               '送信対象はありませんでした'
             ];
