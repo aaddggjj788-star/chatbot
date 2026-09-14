@@ -6362,10 +6362,12 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
             .replace(/<[^>]+>/g, '')
             .trim();
 
-          const aiCheck = await checkQuestionAnswerWithAI(
-            kanteishiQuestionText,
-            combinedUserText
-          );
+          const questionAiResult =
+            await checkQuestionAnswerWithAI(
+              questionText,
+              userTexts,
+              true
+            );
 
           console.log(
             `[AUTO-QUESTION] ${userName}: ` +
@@ -9611,7 +9613,7 @@ async function processLongSkippedAutoCandidates() {
   }
 }
 
-async function checkQuestionAnswerWithAI(kanteishiText, userText) {
+async function checkQuestionAnswerWithAI(kanteishiText, userText, strictMode = false) {
   try {
     const response = await openai.responses.create({
       model: 'gpt-5-mini',
@@ -9667,7 +9669,32 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText) {
                 '→ answered=false',
                 '',
                 '表現の完全一致は必要ありません。',
-                '数字、選択肢名、言い換え、文章での回答も意味が一致していれば回答として扱ってください。'
+                '数字、選択肢名、言い換え、文章での回答も意味が一致していれば回答として扱ってください。',
+
+                ...(strictMode
+                  ? [
+                      '',
+                      '【個別判定ルール未設定時の重要ルール】',
+                      'この質問には専用の回答判定ルールが設定されていません。',
+                      'そのため通常よりも保守的に判定してください。',
+                      '',
+                      '質問で要求されている情報そのものが、ユーザーの文章中にはっきり明示されている場合だけ回答成立としてください。',
+                      '',
+                      '以下の場合は回答成立にしてはいけません。',
+                      '・質問に関連する話題を話しているだけ',
+                      '・感想や事情説明だけをしている',
+                      '・回答を拒否している',
+                      '・分からない、覚えていない、判断できないと答えている',
+                      '・質問とは別の内容を話している',
+                      '・ユーザーが明言していない内容を推測しなければ回答と判断できない',
+                      '・複数の解釈が可能',
+                      '・回答として成立しているか少しでも迷う',
+                      '',
+                      '「おそらく答えている」「文脈上そうだろう」という推測は禁止です。',
+                      '少しでも曖昧な場合は answered=false または requiredAnswerProvided=false としてください。',
+                      ''
+                    ]
+                  : [])
               ].join('\n')
             }
           ]
