@@ -1,0 +1,18 @@
+{
+  "kid": "12690",
+  "routingPolicy": {
+    "baseProfile": "12690.json",
+    "phaseProfileRule": "最新コメントアウトを基準に選択する。無料は12690mu1/12690mu2、有料はyuN、特殊はyuXを使用する。",
+    "fallback": "同一境界内でのみフォールバックする。muとyuを跨がない。通常yuとyuXを相互変換しない。",
+    "doNotCrossBoundary": true
+  },
+  "specialMappings": {
+    "12690mu1": "12690mu1.json",
+    "12690mu2": "12690mu2.json",
+    "yu1": "12690yu1.json",
+    "yu2": "12690yu2.json",
+    "yu3": "12690yu3.json",
+    "yu4": "12690yu4.json",
+    "yuX": "12690yuX.json"
+  }
+}
