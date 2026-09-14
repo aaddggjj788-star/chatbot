@@ -85,6 +85,13 @@
                 "searchTarget": "12686yu9/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu15mu": {
+            "fileId": "12686yu15musinko",
+            "ho": {
+                "searchTarget": "12686yu15mu/sinko/1",
+                "useCurrentRow": true
+            }
         }
     }
 }

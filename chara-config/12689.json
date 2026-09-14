@@ -48,7 +48,7 @@
         },
         "yu1mu": {
             "fileId": "12689yu1musinko",
-            "activeUntil": "10:50",
+            "stopAfter": "10:50", 
             "ho": {
                 "searchTarget": "12689yu1mu/sinko/1",
                 "useCurrentRow": true
@@ -56,6 +56,7 @@
         },
         "yu1": {
             "fileId": "12689yu1sinko",
+            "activeFrom": "11:10",
             "ho": {
                 "searchTarget": "12689yu1/sinko/1",
                 "useCurrentRow": true
