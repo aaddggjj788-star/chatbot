@@ -1853,7 +1853,7 @@ async function checkSupport(
               '【問い合わせ受信】',
               `会員ID：${candidate.uid}`,
               `ユーザー：${candidate.userName}`,
-              `受信日時：${latestDatetime || '（不明）'}`,
+              `受信日時：${candidate.receivedAt || '（不明）'}`,
               '---',
               latestMessage,
               '---',
@@ -2000,7 +2000,6 @@ async function checkSupport(
             candidate.charaId ||
             '',
           receivedAt:
-            latestDatetime ||
             candidate.receivedAt ||
             '',
           userText:
@@ -2132,7 +2131,7 @@ async function checkSupport(
             '【問い合わせ受信】',
             `会員ID：${candidate.uid}`,
             `ユーザー：${candidate.userName}`,
-            `受信日時：${latestDatetime || '（不明）'}`,
+            `受信日時：${candidate.receivedAt || '（不明）'}`,
             '---',
             latestMessage,
             '---',
@@ -2190,7 +2189,6 @@ async function checkSupport(
             candidate.charaId ||
             '',
           receivedAt:
-            latestDatetime ||
             candidate.receivedAt ||
             '',
           userText:
@@ -2228,7 +2226,6 @@ async function checkSupport(
               '',
 
             receivedAt:
-              latestDatetime ||
               candidate.receivedAt ||
               '',
 
