@@ -10376,6 +10376,7 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
   await withSkippedTargetConversation(index, sendLine, async ({ supportPage, uid, userName }) => {
     // ── 最新の鑑定士コメントアウトを取得 ──
     const latestComment = await getLatestKanteishiComment(supportPage);
+    console.log(`[次行照会] STEP-E: latestComment取得完了="${latestComment}"`);
     if (!latestComment) {
       await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウトが取得できませんでした`);
       return;
@@ -10383,12 +10384,14 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
     // 複数コメントが ", " で結合されている場合は最後（最も進んだ）のものを対象にする
     const targetComment =
       latestComment.split(',').map(s => s.trim()).filter(Boolean).pop() || latestComment.trim();
+    console.log(`[次行照会] STEP-F: targetComment="${targetComment}" isHo判定前`);
 
     // ── コメントアウトからcharaIdを解析してCSVの次行文章を取得 ──
     // 最新コメントアウトがho系の場合、CSVにho自体の行が存在しないため
     // getReplyFromCSVByTarget では次行を取得できずエラーになる。
     // その場合は hoモード（processUsersの/ho処理）と同じロジックで解決する。
     const isHo = /\/[a-zA-Z]*[Hh]o\d*(?:\/\w+)*$/.test(targetComment);
+    console.log(`[次行照会] STEP-G: isHo=${isHo}`);
 
     let charaId;
     let replyData;
@@ -10398,6 +10401,7 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
     if (isHo) {
       let hoResult;
       try {
+        console.log(`[次行照会] STEP-H: resolveHoNextReplyForInquiry呼び出し開始`);
         hoResult = await resolveHoNextReplyForInquiry(supportPage, targetComment);
       } catch (e) {
         await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウト：${latestComment}\nho次行文章の取得に失敗しました\n${e.message}`);
