@@ -195,71 +195,129 @@ function needsMemberInfo(inquiryText) {
 }
 
 // ─── 会員基本情報（常時取得）─────────────────────────────────────────
-// 問い合わせ受信時に常にkyouseitaikaiページから会員の基本情報を取得し、
-// 通知用の行配列（【会員情報】ブロック）を返す。最終購入時間が本日日付と
-// 一致する場合のみ getBankHistory() で当日の購入金額合計も取得する。
-// 取得できない項目があっても例外は投げず、参照のみでポイントは変更しない。
-function isLastPurchaseToday(lastPurchase) {
-  if (!lastPurchase) return false;
-  const m = String(lastPurchase).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-  if (!m) return false;
-  const [jy, jmo, jd] = new Date()
-    .toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
-    .split('-').map(n => parseInt(n, 10));
-  return parseInt(m[1], 10) === jy && parseInt(m[2], 10) === jmo && parseInt(m[3], 10) === jd;
-}
-
+// 問い合わせ受信時は kyouseitaikai ページ内に表示されている情報だけ取得する。
+// ポイント増減履歴・入金履歴・お知らせメール等の別ページには移動しない。
+// 最終購入時間は input[name="update[kounyu_go]"] の value をそのまま使用する。
 async function collectMemberBasicInfo(page, uid) {
   const lines = ['【会員情報】'];
+
   if (!uid) {
-    lines.push('会員IDが取得できず、会員情報を取得できませんでした');
+    lines.push(
+      '会員IDが取得できず、会員情報を取得できませんでした'
+    );
     return lines;
   }
 
   let kyouseiPage = null;
-  let historyPage = null;
+
   try {
-    kyouseiPage = await openKyouseitaikai(page, uid);
-    if (!kyouseiPage.url().includes('mg_kyoseitaikai')) {
-      console.log(`[BASIC-INFO] uid=${uid}: 会員詳細ページへ遷移できず（URL=${kyouseiPage.url()}）`);
-      lines.push('会員詳細ページを開けず、会員情報を取得できませんでした');
+    kyouseiPage =
+      await openKyouseitaikai(page, uid);
+
+    if (
+      !kyouseiPage
+        .url()
+        .includes('mg_kyoseitaikai')
+    ) {
+      console.log(
+        `[BASIC-INFO] uid=${uid}: ` +
+        `会員詳細ページへ遷移できず` +
+        `（URL=${kyouseiPage.url()}）`
+      );
+
+      lines.push(
+        '会員詳細ページを開けず、' +
+        '会員情報を取得できませんでした'
+      );
+
       return lines;
     }
 
-    const info = await getMemberBasicInfo(kyouseiPage);
-    lines.push(`ニックネーム：${info.nickname || '不明'}`);
-    lines.push(`所持ポイント：${info.currentPoint ? `${info.currentPoint}pt` : '不明'}`);
-    lines.push(`会員レベル：${info.memberLevel || '不明'}`);
-    lines.push(`ポイントレベル：${info.pointLevel || '不明'}`);
-    lines.push(`プロフィール2：${info.profile2 || '不明'}`);
-    lines.push(`メモ：${info.memo || '（なし）'}`);
+    const info =
+      await getMemberBasicInfo(
+        kyouseiPage
+      );
 
-    // 最終購入時間が本日日付と一致する場合のみ当日購入金額合計を取得する
-    if (isLastPurchaseToday(info.lastPurchase)) {
-      // 既に会員詳細ページ（kyouseitaikai）を開いている状態のため、
-      // getBankHistory()にskipBack:trueを渡してwindow.history.back()を行わせない。
-      // （back()すると別ページに戻ってしまい「ポイント増減履歴」クリックが
-      //   タイムアウトすることがあるため）
-      // 念のため同URLを開き直し、会員詳細ページを確実にロードした状態にしてから
-      // 履歴取得へ進む。
-      await kyouseiPage.goto(kyouseiPage.url());
-      await kyouseiPage.waitForLoadState('networkidle');
+    lines.push(
+      `ニックネーム：` +
+      `${info.nickname || '不明'}`
+    );
 
-      const { paymentRows, historyPage: hp } = await getBankHistory(page, kyouseiPage, { skipBack: true });
-      historyPage = hp;
-      const todayAmount = paymentRows.reduce((sum, r) => sum + r.amount, 0);
-      console.log(`[BASIC-INFO] uid=${uid}: 当日購入 ${paymentRows.length}件 合計${todayAmount}円`);
-      lines.push(`当日購入金額：${todayAmount.toLocaleString('en-US')}円`);
-    } else {
-      console.log(`[BASIC-INFO] uid=${uid}: 最終購入時間=${info.lastPurchase || '（なし）'} は本日ではない → 当日購入金額の取得をスキップ`);
-    }
+    lines.push(
+      `所持ポイント：` +
+      `${
+        info.currentPoint !== ''
+          ? `${info.currentPoint}pt`
+          : '不明'
+      }`
+    );
+
+    lines.push(
+      `会員レベル：` +
+      `${info.memberLevel || '不明'}`
+    );
+
+    lines.push(
+      `ポイントレベル：` +
+      `${info.pointLevel || '不明'}`
+    );
+
+    lines.push(
+      `プロフィール2：` +
+      `${info.profile2 || '不明'}`
+    );
+
+    lines.push(
+      `メモ：` +
+      `${info.memo || '（なし）'}`
+    );
+
+    const lastPurchaseRaw =
+      String(
+        info.lastPurchase || ''
+      ).trim();
+
+    const lastPurchaseLabel =
+      lastPurchaseRaw ===
+      '0000-00-00 00:00:00'
+        ? '購入履歴なし'
+        : (
+            lastPurchaseRaw ||
+            '不明'
+          );
+
+    lines.push(
+      `最終購入時間：` +
+      `${lastPurchaseLabel}`
+    );
+
+    console.log(
+      `[BASIC-INFO] uid=${uid}: ` +
+      `kyouseitaikai基本情報取得完了 ` +
+      `最終購入時間=${lastPurchaseRaw || '不明'}`
+    );
+
   } catch (e) {
-    console.log(`[BASIC-INFO] uid=${uid}: 会員基本情報の取得に失敗: ${e.message}`);
-    lines.push('会員基本情報の取得に失敗しました');
+
+    console.log(
+      `[BASIC-INFO] uid=${uid}: ` +
+      `会員基本情報の取得に失敗: ` +
+      `${e.message}`
+    );
+
+    lines.push(
+      '会員基本情報の取得に失敗しました'
+    );
+
   } finally {
-    if (historyPage && historyPage !== kyouseiPage) await historyPage.close().catch(() => {});
-    if (kyouseiPage) await kyouseiPage.close().catch(() => {});
+
+    if (kyouseiPage) {
+      await kyouseiPage
+        .close()
+        .catch(() => {});
+    }
   }
+
   return lines;
 }
 
@@ -399,257 +457,30 @@ async function collectMemberInfo(page, uid) {
     // 決済前ポイント・決済後最大ポイント・実増ポイント
     // ------------------------------------------------------
 
-    if (
-      prePayment &&
-      prePayment.ok
-    ) {
-    const beforePoint =
-      prePayment.beforePoint;
+if (
+  prePayment &&
+  prePayment.ok
+) {
+  const beforePoint =
+    prePayment.beforePoint;
 
-    let maxPoint =
-      beforePoint;
+  const maxPoint =
+    prePayment.afterPoint;
 
-    let hasPostBalance = false;
+  const actualIncrease =
+    prePayment.actualIncrease;
 
-    // ------------------------------------------------------
-    // まず既存履歴内から、決済後に表示された残高の最大値を取得
-    // ------------------------------------------------------
-    for (
-      const row of prePayment.postRows || []
-    ) {
-      if (row.balance != null) {
-        hasPostBalance = true;
+  const diff =
+    actualIncrease - expectedPt;
 
-        if (row.balance > maxPoint) {
-          maxPoint =
-            row.balance;
-        }
-      }
-    }
-
-
-    // ------------------------------------------------------
-    // 決済後に残高表示行が1件も無い場合
-    // +1ptして残高表示用の手動操作履歴を発生させる
-    // ------------------------------------------------------
-    if (!hasPostBalance) {
-      console.log(
-        `[POINT-PROBE] uid=${uid}: ` +
-        '決済後の残高表示行なし → +1pt確認を実行'
-      );
-
-      let probePage = null;
-      let probeHistoryPage = null;
-      let probeAdded = false;
-
-      try {
-        // 会員詳細ページを新しく開く
-        probePage =
-          await openKyouseitaikai(page, uid);
-
-        if (
-          !probePage.url().includes('mg_kyoseitaikai')
-        ) {
-          throw new Error(
-            `+1確認用の会員詳細ページを開けませんでした URL=${probePage.url()}`
-          );
-        }
-
-        // +1する直前の現在ポイント
-        const probeBeforePoint =
-          await getCurrentPoint(probePage);
-
-        if (
-          probeBeforePoint === null ||
-          Number.isNaN(probeBeforePoint)
-        ) {
-          throw new Error(
-            '+1確認前の所持ポイントを取得できませんでした'
-          );
-        }
-
-        console.log(
-          `[POINT-PROBE] uid=${uid}: ` +
-          `+1前=${probeBeforePoint}pt`
-        );
-
-        // --------------------------------------------------
-        // +1pt
-        // --------------------------------------------------
-        await adjustPoint(
-          probePage,
-          1,
-          '+'
-        );
-
-        probeAdded = true;
-
-        const probeAfterPoint =
-          await getCurrentPoint(probePage);
-
-        console.log(
-          `[POINT-PROBE] uid=${uid}: ` +
-          `+1後=${probeAfterPoint}pt`
-        );
-
-        // --------------------------------------------------
-        // +1で発生した履歴を再取得
-        // --------------------------------------------------
-        const probeHistory =
-          await getBankHistory(
-            page,
-            probePage,
-            {
-              resolvePrePayment: false,
-              skipBack: true
-            }
-          );
-
-        probeHistoryPage =
-          probeHistory.historyPage;
-
-        // "21,482" → 21482
-        const parsePointValue = value => {
-          const m =
-            String(value || '')
-              .match(/[\d,]+/);
-
-          return m
-            ? parseInt(
-                m[0].replace(/,/g, ''),
-                10
-              )
-            : null;
-        };
-
-        // --------------------------------------------------
-        // 今回作った +1pt の手動操作履歴を探す
-        //
-        // 5列目(before) = +1する直前のポイント
-        // 6列目(after)  = +1された後のポイント
-        // --------------------------------------------------
-        const probeRow =
-          (probeHistory.manualRows || [])
-            .find(row => {
-              const before =
-                parsePointValue(row.before);
-
-              const after =
-                parsePointValue(row.after);
-
-              return (
-                row.pointChange === 1 &&
-                before === probeBeforePoint &&
-                after === probeBeforePoint + 1
-              );
-            });
-
-        if (probeRow) {
-          const detectedBefore =
-            parsePointValue(probeRow.before);
-
-          // +1操作の「操作前ポイント」を
-          // 決済後ポイントとして採用する
-          maxPoint =
-            detectedBefore;
-
-          console.log(
-            `[POINT-PROBE] uid=${uid}: ` +
-            `+1履歴を確認 ` +
-            `before=${probeRow.before} ` +
-            `after=${probeRow.after} ` +
-            `→ 決済後ポイント=${maxPoint}pt`
-          );
-
-        } else {
-          // 履歴行が見つからなかった場合でも
-          // +1直前に会員詳細から取得した現在ポイントを使用
-          maxPoint =
-            probeBeforePoint;
-
-          console.log(
-            `[POINT-PROBE] uid=${uid}: ` +
-            '+1履歴行を特定できませんでした ' +
-            `→ +1直前ポイント=${maxPoint}pt を使用`
-          );
-        }
-
-      } catch (probeErr) {
-        console.log(
-          `[POINT-PROBE] uid=${uid}: ` +
-          `+1確認失敗: ${probeErr.message}`
-        );
-
-      } finally {
-
-        // --------------------------------------------------
-        // +1した場合は必ず -1して元へ戻す
-        // --------------------------------------------------
-        if (probeAdded) {
-          let rollbackPage = null;
-
-          try {
-            rollbackPage =
-              await openKyouseitaikai(
-                page,
-                uid
-              );
-
-            await adjustPoint(
-              rollbackPage,
-              1,
-              '-'
-            );
-
-            const restoredPoint =
-              await getCurrentPoint(
-                rollbackPage
-              );
-
-            console.log(
-              `[POINT-PROBE] uid=${uid}: ` +
-              `+1確認分を-1して復元完了 ` +
-              `現在=${restoredPoint}pt`
-            );
-
-          } catch (rollbackErr) {
-            console.error(
-              `[POINT-PROBE] uid=${uid}: ` +
-              `【重要】+1確認分の復元に失敗しました: ` +
-              rollbackErr.message
-            );
-
-          } finally {
-            if (rollbackPage) {
-              await rollbackPage
-                .close()
-                .catch(() => {});
-            }
-          }
-        }
-
-        if (
-          probeHistoryPage &&
-          probeHistoryPage !== probePage
-        ) {
-          await probeHistoryPage
-            .close()
-            .catch(() => {});
-        }
-
-        if (probePage) {
-          await probePage
-            .close()
-            .catch(() => {});
-        }
-      }
-    }
-
-      const actualIncrease =
-        maxPoint - beforePoint;
-
-      const diff =
-        actualIncrease - expectedPt;
+  console.log(
+    `[POINT-CHECK] uid=${uid}: ` +
+    `決済前=${beforePoint}pt ` +
+    `決済後=${maxPoint}pt ` +
+    `実増=${actualIncrease}pt ` +
+    `期待=${expectedPt}pt ` +
+    `差異=${diff}pt`
+  );
 
       lines.push(
         `決済前ポイント：${beforePoint}pt`
@@ -1980,19 +1811,24 @@ async function checkSupport(
       if (!isPointRelatedInquiry(latestMessage)) {
         console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせではない → 処理コマンドを待つ`);
 
-        // ─── 問い合わせ内容を表示し、処理コマンドを待つ ─────────────
-        // 照会コマンド（メール確認/決済確認）実行後はコマンド待ちに戻る
-        const latestDatetime = await getLatestUserDatetime(page);
-        // 会員基本情報（【会員情報】）は常時取得する。
-        // ポイント関連の問い合わせのみポイント照合（【ポイント照合】）も取得する。
-        const basicInfoLines = await collectMemberBasicInfo(page, candidate.uid);
-        let memberInfoLines = [];
-        if (needsMemberInfo(latestMessage)) {
-          memberInfoLines = await collectMemberInfo(page, candidate.uid);
-        } else {
-          console.log(`[MEMBER-INFO] ${candidate.userName}: ポイント関連キーワードなし → ポイント照合の取得をスキップ`);
-        }
-        let cmd;
+      // 初回問い合わせ取得時は kyouseitaikai の基本情報だけ取得する。
+      // ポイント履歴・入金履歴・お知らせメール等はここでは取得しない。
+      const basicInfoLines =
+        await collectMemberBasicInfo(
+          page,
+          candidate.uid
+        );
+
+      // 後段の既存処理との互換性のため配列自体は残す。
+      // 必要な追加情報は問い合わせ内容を判定した後で取得する。
+      const memberInfoLines = [];
+
+      console.log(
+        `[MEMBER-INFO] ${candidate.userName}: ` +
+        `初回取得はkyouseitaikai基本情報のみ`
+      );
+
+      let cmd;
 
         if (autoGenerate) {
           console.log(
@@ -2254,18 +2090,23 @@ async function checkSupport(
 
       console.log(`[STEP3] ${candidate.userName}: ポイント関連の問い合わせと判定`);
 
-      // ─── 問い合わせ内容を表示し、処理コマンドを待つ ─────────────────
-      // 照会コマンド（メール確認/決済確認）実行後はコマンド待ちに戻る
-      const latestDatetime = await getLatestUserDatetime(page);
-      // 会員基本情報（【会員情報】）は常時取得する。
-      // ポイント関連の問い合わせのみポイント照合（【ポイント照合】）も取得する。
-      const basicInfoLines = await collectMemberBasicInfo(page, candidate.uid);
-      let memberInfoLines = [];
-      if (needsMemberInfo(latestMessage)) {
-        memberInfoLines = await collectMemberInfo(page, candidate.uid);
-      } else {
-        console.log(`[MEMBER-INFO] ${candidate.userName}: ポイント関連キーワードなし → ポイント照合の取得をスキップ`);
-      }
+      // 初回問い合わせ取得時は kyouseitaikai の基本情報だけ取得する。
+      // ポイント履歴・入金履歴・お知らせメール等はここでは取得しない。
+      const basicInfoLines =
+        await collectMemberBasicInfo(
+          page,
+          candidate.uid
+        );
+
+      // 後段の既存処理との互換性のため配列自体は残す。
+      // 必要な追加情報は問い合わせ内容を判定した後で取得する。
+      const memberInfoLines = [];
+
+      console.log(
+        `[MEMBER-INFO] ${candidate.userName}: ` +
+        `初回取得はkyouseitaikai基本情報のみ`
+      );
+
       let cmd;
 
       if (autoGenerate) {
@@ -2450,8 +2291,24 @@ async function checkSupport(
         manual: manualMatch,
         template: templateNum
       } = cmd;
+
       const startReply = cmd.reply;
 
+
+      // ─── 「手動対応」 ─────────────────────────────────────────────
+      if (manualMatch) {
+        console.log(
+          `[MANUAL] ${candidate.userName}: ` +
+          `手動対応コマンド → 自動処理せず次のユーザーへ`
+        );
+
+        await notifyManual(
+          candidate.userName,
+          candidate.uid
+        );
+
+        continue;
+      }
 
 
       // ─── 「テンプレート{番号}」指定時は共通テンプレートで返答 ─────────────
@@ -2531,13 +2388,6 @@ async function checkSupport(
           );
         }
 
-        continue;
-      }
-
-      // 3. 「手動対応」：LINEへ手動対応を通知して次の候補へ
-      if (manualMatch) {
-        console.log(`[MANUAL] ${candidate.userName}: 手動対応コマンド → 通知して次のユーザーへ`);
-        await notifyManual(candidate.userName, candidate.uid);
         continue;
       }
 

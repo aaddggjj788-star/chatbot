@@ -416,9 +416,111 @@
         }
       },
       "noTemplateAction": "existing_false_flow"
+    },
+    "12690wish_expectation": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "ユーザーが、①一番早く叶えたいこと・望みと、②蔵馬太蔵の鑑定に求めること・してほしいことの両方を、同一メッセージまたは最新鑑定士メッセージ以降の複数メッセージを通して明確に提示している。完全一致語は不要。例：『お金の不安をなくしたい。どうすれば流れを変えられるか見てほしい』。片方しか答えていない場合はvalid_answerにしない。",
+          "action": "continue_without_ai"
+        },
+        "missing_wish": {
+          "description": "鑑定に求めること・見てほしいことは答えているが、『一番早く叶えたいこと』が明確に示されていない。",
+          "template": "見てほしいことは分かったよ。もう一つだけ、一番早く叶えたいことを聞かせてくだされ。大きなことでも小さなことでも構わんよ。",
+          "commentPolicy": "same"
+        },
+        "missing_expectation": {
+          "description": "叶えたいこと・望みは答えているが、『この鑑定に何を求めるか／何をしてほしいか』が明確に示されていない。",
+          "template": "一番早く叶えたいことは分かったよ。ではもう一つ、わしの鑑定に何を求めておるのか、そこも聞かせてくだされ。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "『鑑定に求めることってどういう意味？』『何を書けばいい？』など、今回の二つの質問の意味・答え方・目的を聞いている。",
+          "template": "難しく考えんでよいよ。一つは『今、一番早く叶えたいこと』。もう一つは『この鑑定で、わしに何を見てほしいか・どうなりたいか』じゃ。答えられる範囲で、その二つを聞かせてくだされ。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "答えたい意思はあるが、『何を一番にしたらいいか分からない』『求めることが思いつかない』など、回答を決めきれず迷っている。",
+          "template": "今すぐ綺麗にまとめられんでも大丈夫じゃよ。今の時点で一番気になっていることと、わしに見てもらえたら助かると思うことを、そのまま聞かせてくだされ。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "今回求められている『叶えたいこと』『鑑定に求めること』について、答えたくない・話したくないと明確に拒否している。",
+          "template": "無理に細かく話す必要はないよ。ただ、何も分からんまま決めつけて進めることはしたくないんじゃ。話せる範囲で、一番叶えたいことと、鑑定に求めることを聞かせてくだされ。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12690inner_concerns": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "ユーザーが、自分の胸の内にある不満・不安・悩み・苦しみ・愚痴・心当たり・過去の出来事などを少なくとも一つ具体的に明示している。長文である必要はない。例：『将来のお金が不安です』『家族との関係でずっと悩んでいます』『仕事がうまくいかず自信をなくしています』。単に『あります』『不安です』『いろいろあります』だけでは成立しない。",
+          "action": "continue_without_ai"
+        },
+        "too_vague": {
+          "description": "『あります』『不安です』『いろいろあります』『つらいです』など、感情や存在だけは示しているが、何についての不満・不安・悩みなのかが全く分からない。",
+          "template": "何か抱えておることは伝わったよ。全部を長く書かんでもよいから、何についてそう感じておるのか、話せるところを一つだけでも聞かせてくだされ。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "『何を話せばいい？』『なぜ話す必要がある？』『どこまで言えばいい？』など、胸の内を話す質問の意味・範囲・目的を尋ねている。",
+          "template": "難しい話を求めておるわけではないよ。今あなたが抱えている不満、不安、悩み、気になっていることを、話せる範囲で聞かせてもらえればよいんじゃ。愚痴になっても構わんよ。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "『何から話せばいいか分からない』『自分でもよく分からない』など、話す意思はあるが整理できず答え方に迷っている。",
+          "template": "順番にまとめる必要はないよ。今いちばん頭に浮かぶことからで構わん。短くてもよいから、そのまま聞かせてくだされ。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "今回求められている悩み・不満・過去の出来事そのものについて、どこまで話してよいか、知られたくない等のプライバシー上の懸念を示している。",
+          "template": "話したくないことまで無理に書く必要はないよ。細かな名前や事情を伏せても構わんから、話せる範囲で何に悩んでおるのかだけ聞かせてくだされ。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "今回求められている胸の内・悩み・不安について、話したくない、答えたくないと明確に拒否している。",
+          "template": "無理に全部を話せとは言わんよ。ただ、何も分からんまま先へ進めるのも違うからの。話せる範囲で、一つだけでも胸の内を聞かせてくだされ。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
     }
   },
   "rules": {
+    "12690mu1/sinko/1": {
+      "enabled": true,
+      "type": "wish_and_expectation",
+      "fallbackProfile": "12690wish_expectation",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "aggregate_requirements",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12690mu1/sinko/3": {
+      "enabled": true,
+      "type": "inner_concern_disclosure",
+      "fallbackProfile": "12690inner_concerns",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
     "12689mu1/sinko/1": {
       "enabled": true,
       "type": "name",

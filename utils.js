@@ -589,38 +589,58 @@ const HISTORY_SEARCH = {
   daysBack:   parseInt(process.env.HISTORY_DAYS_BACK || '5', 10), // 最大何日前まで遡るか
 };
 
-// 履歴行が表示している「会員ポイント残高（その行の時点での残高）」を取り出す。
-// ※重要: cells[2] は「増減ポイント（変動量）」であり残高ではない。
-//   メッセージ開封等では cells[2] が 0 になるため、cells[2] を残高として参照すると
-//   誤った決済前ポイントになる（本バグの原因）。よって cells[2] は残高に使わない。
-//   時刻(c0)・種別(c1)・変動量(c2)の列を除いた右側のセルから、符号なし整数
-//   （例: "1,756" / "5056"）を右詰めで探し、最初に見つかった値を残高とする。
-//   決済金額（"…円"）・符号付きの変動量・時刻表記は残高から除外する。無ければ null。
-function historyRowBalance(r) {
-  const cells = r.cells || [];
+// 履歴表のポイント残高を読む。
+// 5列目(index=4) = 操作前
+// 6列目(index=5) = 結果
+//
+// 増減ポイント(index=2)は「変動量」なので、
+// 決済前後の残高判定には絶対に使用しない。
 
-  // 決済行には「処理後ポイント残高」が表示されない。
-  // 5列目(index=4)は決済額、
-  // 6列目(index=5)は備考、
-  // 7列目(index=6)は参考値なので残高として使用しない。
-  if (r.type === 'payment') {
-    return null;
-  }
-
-  // 行動履歴・手動操作では
-  // 6列目(index=5)がその操作後のポイント残高。
-  const raw = String(cells[5] || '').trim();
+function parseHistoryBalanceCell(value) {
+  const raw = String(value || '').trim();
 
   if (!raw) return null;
 
-  // "21,482" / "21482" の形式だけ許可
-  if (!/^\d{1,3}(?:,\d{3})+$|^\d+$/.test(raw)) {
+  // 残高として扱うのは純粋な正の整数表記のみ。
+  // 「決済金額: 5,000円」や「-120」などは除外する。
+  if (
+    !/^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(raw)
+  ) {
     return null;
   }
 
-  return parseInt(
-    raw.replace(/,/g, ''),
-    10
+  const num =
+    parseInt(
+      raw.replace(/,/g, ''),
+      10
+    );
+
+  return Number.isNaN(num)
+    ? null
+    : num;
+}
+
+
+// 5列目「操作前」
+function historyRowBeforeBalance(r) {
+  if (!r || r.type === 'payment') {
+    return null;
+  }
+
+  return parseHistoryBalanceCell(
+    r.cells?.[4]
+  );
+}
+
+
+// 6列目「結果（備考）」
+function historyRowResultBalance(r) {
+  if (!r || r.type === 'payment') {
+    return null;
+  }
+
+  return parseHistoryBalanceCell(
+    r.cells?.[5]
   );
 }
 // 当日(JST)の年月日を取得する
@@ -667,115 +687,362 @@ async function loadHistoryRange(pg, startDate, scrapeRows) {
   return scrapeRows(pg);
 }
 
-// ─── 「追加ポイント確認」用: 決済前ポイントの解決 ─────────────────────
-// 1. 当日の最初の決済行(payment)を探す
-// 2. 決済行より前の時刻の履歴(action/manual)のうち、決済行に一番近いものの
-//    「直後の残高」を決済前ポイントとする（manualはafter値、それ以外は直近manual
-//    のafterから以降の増減を積み上げて算出）
-// 3. 当日に決済前履歴が無い場合は日付検索で始点を遡らせ（最大 daysBack 日前まで）
-//    範囲取得し、決済行より前の履歴から同様に決済前ポイントを求める
-//    見つからなければ ok:false を返す
-// 戻り値: { ok:true, beforePoint, sourceDate, postRows } | { ok:false, reason } | null(決済なし)
-async function resolvePrePaymentBalance(historyPage, todayRawRows, scrapeRows) {
-  const today = jstToday();
-  const tsOf = (r) => historyRowTs(r, today);
-  const isToday = (ts) => {
-    const d = new Date(ts);
-    return d.getFullYear() === today.y && (d.getMonth() + 1) === today.mo && d.getDate() === today.d;
+// ─── 決済前後ポイントの解決 ──────────────────────────────────────
+//
+// 履歴は時系列昇順へ正規化して判定する。
+//
+// 決済前:
+//   当日の最初の決済より「前」にある行のうち、
+//   最も決済に近い行の6列目「結果」を使用。
+//
+// 決済後:
+//   当日の最初の決済以降にある行について、
+//   5列目「操作前」と6列目「結果」を両方確認し、
+//   その中で最も大きい残高を使用。
+//
+// 増減ポイント列(cells[2])は残高判定には使用しない。
+async function resolvePrePaymentBalance(
+  historyPage,
+  initialRows,
+  scrapeRows
+) {
+  const today =
+    jstToday();
+
+  const tsOf = r =>
+    historyRowTs(
+      r,
+      today
+    );
+
+  const isToday = ts => {
+    const d =
+      new Date(ts);
+
+    return (
+      d.getFullYear() === today.y &&
+      d.getMonth() + 1 === today.mo &&
+      d.getDate() === today.d
+    );
   };
 
-  // 当日の最初の決済行を rows から取り出す
+
+  // 当日最初の決済
   function firstPaymentToday(rows) {
-    return rows
-      .filter(r => r.type === 'payment' && isToday(tsOf(r)))
-      .sort((a, b) => tsOf(a) - tsOf(b))[0] || null;
+    return [...rows]
+      .filter(
+        r =>
+          r.type === 'payment' &&
+          isToday(tsOf(r))
+      )
+      .sort(
+        (a, b) =>
+          tsOf(a) - tsOf(b)
+      )[0] || null;
   }
 
-  // firstPayment 直前（時刻が最も近い過去）で「残高が表示されている行」を探し、
-  // その行の会員ポイント残高を決済前ポイントとする。
-  // ※ 変動量(cells[2])の積み上げは行わず、表示されている残高を直接読む。
-  //   orderedAsc は時系列昇順（降順表示ページも正規化済み）である前提。
-  function findBeforePoint(orderedAsc, fpTs) {
-    for (let i = orderedAsc.length - 1; i >= 0; i--) {
-      const r = orderedAsc[i];
-      if (tsOf(r) >= fpTs) continue;       // 決済以降は対象外
-      if (r.type === 'payment') continue;  // 決済行自体は残高列を持たない
-      const bal = historyRowBalance(r);
-      if (bal != null) return { before: bal, row: r };
-    }
-    return null;
-  }
 
-  function buildResult(beforePoint, sourceDate, ordered, firstPayment) {
-    const fpTs = tsOf(firstPayment);
-
-    const targetRows = ordered
-      .filter(r => tsOf(r) >= fpTs);
-
-    const postRows = targetRows.map((r, index) => {
-      const balance = historyRowBalance(r);
-
-      console.log(
-        `[POINT-ROW-DEBUG] index=${index} ` +
-        `type=${r.type} ` +
-        `time="${r.time}" ` +
-        `balance=${balance} ` +
-        `cells=${JSON.stringify(r.cells || [])}`
+  function resolveFrom(
+    rows,
+    firstPayment
+  ) {
+    const ordered =
+      [...rows].sort(
+        (a, b) =>
+          tsOf(a) - tsOf(b)
       );
 
+    const paymentTs =
+      tsOf(firstPayment);
+
+    // ─────────────────────────────
+    // 決済前
+    // ─────────────────────────────
+    //
+    // 決済より前の履歴を、
+    // 決済に近い方から逆向きに確認。
+    //
+    // 必ず6列目「結果」だけを見る。
+    let beforePoint = null;
+    let beforeRow = null;
+
+    for (
+      let i = ordered.length - 1;
+      i >= 0;
+      i--
+    ) {
+      const row =
+        ordered[i];
+
+      if (
+        tsOf(row) >= paymentTs
+      ) {
+        continue;
+      }
+
+      if (
+        row.type === 'payment'
+      ) {
+        continue;
+      }
+
+      const resultBalance =
+        historyRowResultBalance(
+          row
+        );
+
+      if (
+        resultBalance !== null
+      ) {
+        beforePoint =
+          resultBalance;
+
+        beforeRow =
+          row;
+
+        break;
+      }
+    }
+
+    if (
+      beforePoint === null
+    ) {
+      return null;
+    }
+
+
+    // ─────────────────────────────
+    // 決済後
+    // ─────────────────────────────
+    //
+    // 決済以降の履歴について、
+    //
+    // 5列目 操作前
+    // 6列目 結果
+    //
+    // の両方を参照し、
+    // 最大の残高を採用する。
+    //
+    // 決済行そのものは5列目が決済金額なので除外。
+    const afterCandidates = [];
+
+    for (
+      const row of ordered
+    ) {
+      if (
+        tsOf(row) < paymentTs
+      ) {
+        continue;
+      }
+
+      if (
+        row.type === 'payment'
+      ) {
+        continue;
+      }
+
+      const beforeBalance =
+        historyRowBeforeBalance(
+          row
+        );
+
+      const resultBalance =
+        historyRowResultBalance(
+          row
+        );
+
+      if (
+        beforeBalance !== null
+      ) {
+        afterCandidates.push({
+          value:
+            beforeBalance,
+          source:
+            '操作前',
+          row
+        });
+      }
+
+      if (
+        resultBalance !== null
+      ) {
+        afterCandidates.push({
+          value:
+            resultBalance,
+          source:
+            '結果',
+          row
+        });
+      }
+    }
+
+    if (
+      afterCandidates.length === 0
+    ) {
       return {
-        type: r.type,
-        time: r.time,
-        balance
+        ok: false,
+        reason:
+          'post-payment-balance-not-found'
       };
-    });
+    }
+
+    const maxAfter =
+      afterCandidates.reduce(
+        (best, current) =>
+          current.value >
+          best.value
+            ? current
+            : best
+      );
+
+
+    const beforeDate =
+      isToday(
+        tsOf(beforeRow)
+      )
+        ? '当日'
+        : fmtHistoryDate(
+            new Date(
+              tsOf(beforeRow)
+            )
+          );
+
+
+    console.log(
+      `[UTILS] 決済前ポイント: ` +
+      `${beforePoint}pt ` +
+      `参照列=結果 ` +
+      `time="${beforeRow.time}" ` +
+      `cells=${JSON.stringify(
+        beforeRow.cells || []
+      )}`
+    );
+
+    console.log(
+      `[UTILS] 決済後最大ポイント: ` +
+      `${maxAfter.value}pt ` +
+      `参照列=${maxAfter.source} ` +
+      `time="${maxAfter.row.time}" ` +
+      `cells=${JSON.stringify(
+        maxAfter.row.cells || []
+      )}`
+    );
+
 
     return {
       ok: true,
+
       beforePoint,
-      sourceDate,
-      postRows
+
+      afterPoint:
+        maxAfter.value,
+
+      actualIncrease:
+        maxAfter.value -
+        beforePoint,
+
+      sourceDate:
+        beforeDate
     };
   }
 
-  // rows を時系列昇順に整列し、firstPayment 直前の残高表示行から決済前ポイントを求める
-  function resolveFrom(rows, firstPayment) {
-    const ordered = [...rows].sort((a, b) => tsOf(a) - tsOf(b)); // 降順ページもここで昇順に正規化
-    const fpTs = tsOf(firstPayment);
-    const hit = findBeforePoint(ordered, fpTs);
-    if (!hit) return null;
-    const sourceDate = isToday(tsOf(hit.row)) ? '当日' : fmtHistoryDate(new Date(tsOf(hit.row)));
-    console.log(`[UTILS] 決済前ポイント: 参照行 time="${hit.row.time}" type=${hit.row.type} 残高=${hit.before} cells="${(hit.row.cells || []).join(' | ')}"`);
-    return buildResult(hit.before, sourceDate, ordered, firstPayment);
+
+  const firstPayment =
+    firstPaymentToday(
+      initialRows
+    );
+
+  if (!firstPayment) {
+    return null;
   }
 
-  const fpToday = firstPaymentToday(todayRawRows);
-  if (!fpToday) return null; // 当日決済なし
 
-  // 1) 当日の履歴だけで解決を試みる
-  const r1 = resolveFrom(todayRawRows, fpToday);
-  if (r1) return r1;
+  // 最初から渡された履歴で解決を試みる
+  const firstResult =
+    resolveFrom(
+      initialRows,
+      firstPayment
+    );
 
-  // 2) 解決できない → 始点を遡らせて範囲取得（終点=当日のまま）し、再度解決を試みる
-  if (!(await dateSearchAvailable(historyPage))) {
-    console.log('[UTILS] 決済前ポイント: 当日内で解決できず、日付検索フォームも未対応 → 取得失敗');
-    return { ok: false, reason: 'date-search-unavailable' };
+  if (
+    firstResult?.ok
+  ) {
+    return firstResult;
   }
-  const start = new Date(today.y, today.mo - 1, today.d);
-  start.setDate(start.getDate() - HISTORY_SEARCH.daysBack);
+
+
+  // 前日分でも決済前残高を取得できない場合は
+  // 既存の daysBack 分までさらに検索範囲を広げる。
+  if (
+    !(await dateSearchAvailable(
+      historyPage
+    ))
+  ) {
+    return (
+      firstResult || {
+        ok: false,
+        reason:
+          'date-search-unavailable'
+      }
+    );
+  }
+
+  const start =
+    new Date(
+      today.y,
+      today.mo - 1,
+      today.d
+    );
+
+  start.setDate(
+    start.getDate() -
+    HISTORY_SEARCH.daysBack
+  );
+
   let extended = [];
+
   try {
-    extended = await loadHistoryRange(historyPage, start, scrapeRows);
+
+    extended =
+      await loadHistoryRange(
+        historyPage,
+        start,
+        scrapeRows
+      );
+
   } catch (e) {
-    console.log(`[UTILS] 過去履歴の範囲取得に失敗: ${e.message}`);
+
+    console.log(
+      `[UTILS] 過去履歴の範囲取得に失敗: ` +
+      `${e.message}`
+    );
   }
-  if (extended && extended.length) {
-    // 範囲取得後の集合から当日の最初の決済行を取り直す（無ければ当日分を流用）
-    const fpExt = firstPaymentToday(extended) || fpToday;
-    const r2 = resolveFrom(extended, fpExt);
-    if (r2) return r2;
+
+  if (
+    extended.length > 0
+  ) {
+    const extendedPayment =
+      firstPaymentToday(
+        extended
+      ) ||
+      firstPayment;
+
+    const result =
+      resolveFrom(
+        extended,
+        extendedPayment
+      );
+
+    if (result) {
+      return result;
+    }
   }
-  return { ok: false, reason: 'no-history-5days' };
+
+  return {
+    ok: false,
+    reason:
+      'balance-not-found'
+  };
 }
 
 async function getBankHistory(topPage, target, options = {}) {
@@ -851,11 +1118,62 @@ async function getBankHistory(topPage, target, options = {}) {
     });
   }
 
-  console.log('[UTILS] 「表示」ボタンをクリック');
-  await historyPage.click('input[name="search"][value="表示"]');
-  await new Promise(r => setTimeout(r, 3000));
+  // 初回表示から「前日 00:00 ～ 今日」を取得する。
+  // これにより、決済しか存在しない場合でも
+  // 決済前の残高行を探しやすくする。
+  const todayForHistory =
+    jstToday();
 
-  const allRows = await scrapeRows(historyPage);
+  const initialStartDate =
+    new Date(
+      todayForHistory.y,
+      todayForHistory.mo - 1,
+      todayForHistory.d
+    );
+
+  initialStartDate.setDate(
+    initialStartDate.getDate() - 1
+  );
+
+  let allRows = [];
+
+  if (
+    await dateSearchAvailable(
+      historyPage
+    )
+  ) {
+
+    console.log(
+      `[UTILS] ポイント履歴 初回検索: ` +
+      `${fmtHistoryDate(initialStartDate)} 00:00 ～ 当日`
+    );
+
+    allRows =
+      await loadHistoryRange(
+        historyPage,
+        initialStartDate,
+        scrapeRows
+      );
+
+  } else {
+
+    console.log(
+      '[UTILS] 日付検索フォーム未検出 → 現在設定の期間で表示'
+    );
+
+    await historyPage.click(
+      HISTORY_SEARCH.showButton
+    );
+
+    await new Promise(
+      r => setTimeout(r, 3000)
+    );
+
+    allRows =
+      await scrapeRows(
+        historyPage
+      );
+  }
 
   // 「+1,115」「-500」などの符号付き数値文字列を整数へ変換する
   function parseSignedInt(s) {
@@ -978,15 +1296,18 @@ async function checkPointDiff(campaigns, paymentRows, sendLine, waitForLineReply
   }
 
   // 決済前ポイントが解決できた → 決済後の最大ポイントとの差で「実際に増えたポイント」を算出
-  if (prePayment && prePayment.ok) {
-    const beforePoint = prePayment.beforePoint;
-    // 決済後の最大ポイント = 決済行以降の当日行に表示されている残高の最大値。
-    // ※ 変動量の積み上げではなく、各行が表示している残高(balance)をそのまま使う。
-    let maxPoint = beforePoint;
-    for (const r of prePayment.postRows || []) {
-      if (r.balance != null && r.balance > maxPoint) maxPoint = r.balance;
-    }
-    const actualIncrease = maxPoint - beforePoint;
+  if (
+    prePayment &&
+    prePayment.ok
+  ) {
+    const beforePoint =
+      prePayment.beforePoint;
+
+    const maxPoint =
+      prePayment.afterPoint;
+
+    const actualIncrease =
+      prePayment.actualIncrease;
     const addDiff = actualIncrease - grandTotal; // 実際に増えたポイント − 期待ポイント
     console.log(`[UTILS] 追加ポイント確認: 決済前=${beforePoint}pt(${prePayment.sourceDate}) 決済後最大=${maxPoint}pt 実増=${actualIncrease}pt 期待=${grandTotal}pt 差異=${addDiff}pt`);
 
