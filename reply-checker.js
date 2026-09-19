@@ -4258,6 +4258,135 @@ function validateStructuredFatiguePercent(text, rule) {
   };
 }
 
+function validateStructuredConcreteWish(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  if (
+    /(答えたくない|言いたくない|話したくない|教えたくない)/.test(t)
+  ) {
+    return {
+      status: 'needs_ai',
+      reason: 'possible_refusal'
+    };
+  }
+
+  if (
+    /(どういう意味|何を書けば|何を答えれば|どう答えれば|何を言えば|どのくらい具体的)/.test(t)
+  ) {
+    return {
+      status: 'needs_ai',
+      reason: 'meaning_question'
+    };
+  }
+
+  if (
+    /(分からない|わからない|決められない|選べない|一番が分からない|一つに決められない)/.test(t)
+  ) {
+    return {
+      status: 'needs_ai',
+      reason: 'uncertain_answer'
+    };
+  }
+
+  const vagueOnly =
+    /^(?:幸せになりたい|幸福になりたい|良くなりたい|よくなりたい|人生を変えたい|人生を良くしたい|今より良くなりたい|運を良くしたい|運気を上げたい)(?:です)?[。.!！?？\s]*$/;
+
+  if (vagueOnly.test(t)) {
+    return {
+      status: 'needs_ai',
+      reason: 'too_vague'
+    };
+  }
+
+  const target =
+    /(お金|金銭|借金|収入|生活費|貯金|仕事|就職|転職|昇進|事業|売上|家族|夫婦|夫|妻|子供|恋人|好きな人|結婚|復縁|人間関係|職場関係|友人|健康|病気|体調|痛み|生活|住まい|将来|老後)/;
+
+  const desiredState =
+    /(困らない|なくしたい|無くしたい|返したい|増やしたい|安定させたい|改善したい|良くしたい|よくしたい|成功させたい|うまくいかせたい|上手くいかせたい|治したい|元気になりたい|健康になりたい|結婚したい|復縁したい|仲良くしたい|関係を良くしたい|解決したい|安心して暮らしたい|普通に生活したい|働きたい|転職したい|就職したい|収入を得たい|収入を増やしたい|貯金したい|自立したい)/;
+
+  if (
+    target.test(t) &&
+    desiredState.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'concrete_wish_present'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'natural_language_or_unclear'
+  };
+}
+
+
+function validateStructuredInnerConcernDisclosure(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  if (
+    /(話したくない|言いたくない|答えたくない|教えたくない)/.test(t)
+  ) {
+    return {
+      status: 'needs_ai',
+      reason: 'possible_refusal'
+    };
+  }
+
+  if (
+    /(何を話せば|何を書けば|なぜ.*話|どうして.*話|どこまで.*話|何から話)/.test(t)
+  ) {
+    return {
+      status: 'needs_ai',
+      reason: 'meaning_question'
+    };
+  }
+
+  if (
+    /^(?:あります|ある|不安です|不安|つらいです|辛いです|いろいろあります|色々あります|分かりません|わかりません)[。.!！?？\s]*$/.test(t)
+  ) {
+    return {
+      status: 'needs_ai',
+      reason: 'too_vague'
+    };
+  }
+
+  const concernWord =
+    /(不安|不満|悩|つら|辛|苦し|怖|心配|嫌|困|寂|孤独|怒|腹が立|うまくいか|疲れ|自信がない|後悔|ストレス|関係が悪|お金|借金|仕事|職場|家族|夫|妻|子供|恋愛|結婚|健康|病気|将来|生活|人間関係)/;
+
+  const disclosureVerb =
+    /(です|ます|している|してます|感じる|感じて|思う|思って|困って|悩んで|不安で|心配で|つらく|苦しく|嫌で|怖く|うまくいか)/;
+
+  if (
+    t.length >= 8 &&
+    concernWord.test(t) &&
+    disclosureVerb.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'specific_concern_disclosed'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'natural_language_or_unclear'
+  };
+}
 
 // ======================================================
 // type → validator
@@ -4298,7 +4427,13 @@ const STRUCTURED_VALIDATORS = {
     validateStructuredGivenName,
 
   fatigue_percent:
-    validateStructuredFatiguePercent
+    validateStructuredFatiguePercent,
+
+  concrete_wish:
+    validateStructuredConcreteWish,
+
+  inner_concern_disclosure:
+    validateStructuredInnerConcernDisclosure
 };
 
 
