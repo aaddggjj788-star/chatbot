@@ -10381,10 +10381,20 @@ async function inquireNextLine(index, sendLine, waitForLineReply, DRY_RUN = fals
       await sendLine(`【次行照会】会員ID：${uid}\n最新コメントアウトが取得できませんでした`);
       return;
     }
-    // 複数コメントが ", " で結合されている場合は最後（最も進んだ）のものを対象にする
+    // 複数コメントが ", " で結合されている場合の対象コメント抽出。
+    // 「asa」「hiru」「yoru」「yugata」等の時間帯マーカーは送信対象コメントでは
+    // ないため除外し、実際の ho/sinko/his 形式のコメントを優先して取得する。
+    // 例: "12687yu17/ho, asa" → 末尾の "asa" ではなく "12687yu17/ho" を対象にする。
+    // ※ reverse() は破壊的なため [...parts] で複製してから反転し、
+    //   全要素が時間帯マーカーだった場合のフォールバック parts[0] が
+    //   本来の先頭要素を指すようにする。
+    const timeMarkers = ['asa', 'hiru', 'yoru', 'yugata'];
+    const parts = latestComment.split(',').map(s => s.trim()).filter(Boolean);
     const targetComment =
-      latestComment.split(',').map(s => s.trim()).filter(Boolean).pop() || latestComment.trim();
-    console.log(`[次行照会] STEP-F: targetComment="${targetComment}" isHo判定前`);
+      [...parts].reverse().find(p => !timeMarkers.includes(p)) ||
+      parts[0] ||
+      latestComment.trim();
+    console.log(`[次行照会] STEP-F: targetComment="${targetComment}" isHo判定前 (parts=${JSON.stringify(parts)})`);
 
     // ── コメントアウトからcharaIdを解析してCSVの次行文章を取得 ──
     // 最新コメントアウトがho系の場合、CSVにho自体の行が存在しないため
