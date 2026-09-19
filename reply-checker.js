@@ -4356,6 +4356,12 @@ function validateStructuredInnerConcernDisclosure(text, rule) {
     };
   }
 
+  const questionLike =
+    /[?？]$|(?:ですか|ますか|でしょうか|なんですか|なのですか|いくら|いつまで|どうすれば|どうしたら|必要ですか|かかりますか|かかるんですか|無料ですか)/;
+  if (questionLike.test(t)) {
+    return { status: "needs_ai", reason: "question_not_disclosure" };
+  }  
+
   if (
     /^(?:あります|ある|不安です|不安|つらいです|辛いです|いろいろあります|色々あります|分かりません|わかりません)[。.!！?？\s]*$/.test(t)
   ) {
@@ -4370,6 +4376,9 @@ function validateStructuredInnerConcernDisclosure(text, rule) {
 
   const disclosureVerb =
     /(です|ます|している|してます|感じる|感じて|思う|思って|困って|悩んで|不安で|心配で|つらく|苦しく|嫌で|怖く|うまくいか)/;
+
+  const selfContext =
+    /(私は|わたしは|自分は|自分が|私が|わたしが|今|ずっと|昔から|最近|これまで)/;
 
   if (
     t.length >= 8 &&
