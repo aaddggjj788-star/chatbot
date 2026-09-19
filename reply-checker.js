@@ -7712,38 +7712,82 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
 // 抽出して返す。target判定に依存せず、返信済み等の対象外ユーザーでも取得できる。
 // 複数コメントがある場合は ", " で結合。鑑定士メッセージ/コメントが無ければ ''。
 async function getLatestKanteishiComment(page) {
-  const mainFrame = page.frame({ name: 'ope_main' });
-  if (!mainFrame) return '';
-  return await mainFrame.evaluate(() => {
-    function normStyle(el) {
-      return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
-    }
-    for (const trEl of document.querySelectorAll('tr')) {
-      const trBg = normStyle(trEl);
-      const tdBg = Array.from(trEl.querySelectorAll('td')).map(td => normStyle(td)).join('');
-      const bg = trBg + tdBg;
-      if (!(bg.includes('90ee90') || bg.includes('144,238,144'))) continue;
+  console.log('[GET-LATEST-COMMENT] STEP1: 関数開始');
 
-      // 最新（DOM最上位）の鑑定士メッセージを発見 → 本文を取得
-      const bodyInput = trEl.querySelector('input[type="hidden"][id^="body_"]');
-      let bodyText;
-      if (bodyInput) {
-        bodyText = bodyInput.value;
-      } else {
-        const bodyNaibuEl = trEl.querySelector('div.bodyNaibu');
-        bodyText = bodyNaibuEl ? (bodyNaibuEl.textContent || '') : '';
-      }
-      const decodedBody = bodyText
-        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-        .replace(/\x3C/g, '<').replace(/\x3E/g, '>');
-      const comments = [];
-      const cre = /<!--([^>]+)-->/g;
-      let cm;
-      while ((cm = cre.exec(decodedBody)) !== null) comments.push(cm[1].trim());
-      return comments.length > 0 ? comments.join(', ') : '';
-    }
-    return ''; // 鑑定士メッセージなし
-  });
+  // ── ope_mainフレームの取得（同期・待機なし。無ければ即空文字を返す）──
+  const mainFrame = page.frame({ name: 'ope_main' });
+  if (!mainFrame) {
+    console.log('[GET-LATEST-COMMENT] STEP2: ope_mainフレームが取得できません → 空文字を返す');
+    return '';
+  }
+  console.log('[GET-LATEST-COMMENT] STEP2: ope_mainフレーム取得OK');
+
+  // ── DOM走査（evaluate）──
+  // form.submit直後などフレームがナビゲーション中／detachedだと evaluate が
+  // 応答を返さず無限に待ち続ける（＝フリーズ）ことがあるため、
+  // Promise.race でタイムアウトを設け、ハング時は原因をログに出して復帰する。
+  console.log('[GET-LATEST-COMMENT] STEP3: mainFrame.evaluate 開始（緑背景tr走査）');
+  const EVAL_TIMEOUT_MS = 10000;
+  let result;
+  try {
+    result = await Promise.race([
+      mainFrame.evaluate(() => {
+        function normStyle(el) {
+          return (el.getAttribute('style') || '').replace(/\s/g, '').toLowerCase();
+        }
+        const trList = document.querySelectorAll('tr');
+        for (const trEl of trList) {
+          const trBg = normStyle(trEl);
+          const tdBg = Array.from(trEl.querySelectorAll('td')).map(td => normStyle(td)).join('');
+          const bg = trBg + tdBg;
+          if (!(bg.includes('90ee90') || bg.includes('144,238,144'))) continue;
+
+          // 最新（DOM最上位）の鑑定士メッセージを発見 → 本文を取得
+          const bodyInput = trEl.querySelector('input[type="hidden"][id^="body_"]');
+          let bodyText;
+          if (bodyInput) {
+            bodyText = bodyInput.value;
+          } else {
+            const bodyNaibuEl = trEl.querySelector('div.bodyNaibu');
+            bodyText = bodyNaibuEl ? (bodyNaibuEl.textContent || '') : '';
+          }
+          const decodedBody = bodyText
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+            .replace(/\x3C/g, '<').replace(/\x3E/g, '>');
+          const comments = [];
+          const cre = /<!--([^>]+)-->/g;
+          let cm;
+          while ((cm = cre.exec(decodedBody)) !== null) comments.push(cm[1].trim());
+          return {
+            trCount: trList.length,
+            foundKanteishi: true,
+            comment: comments.length > 0 ? comments.join(', ') : ''
+          };
+        }
+        // 鑑定士メッセージなし
+        return { trCount: trList.length, foundKanteishi: false, comment: '' };
+      }),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`evaluate timeout (${EVAL_TIMEOUT_MS}ms)`)),
+          EVAL_TIMEOUT_MS
+        )
+      ),
+    ]);
+  } catch (e) {
+    console.log(
+      `[GET-LATEST-COMMENT] STEP3-ERROR: DOM走査に失敗またはタイムアウト → 空文字を返す: ${e.message}`
+    );
+    return '';
+  }
+
+  console.log(
+    `[GET-LATEST-COMMENT] STEP4: DOM走査完了 ` +
+    `tr件数=${result.trCount} 鑑定士メッセージ=${result.foundKanteishi} ` +
+    `comment="${String(result.comment).slice(0, 60)}"`
+  );
+  console.log('[GET-LATEST-COMMENT] STEP5: 関数終了');
+  return result.comment;
 }
 
 // 最新コメントアウトから「次のコメントアウト」を計算する。
@@ -8223,6 +8267,7 @@ async function withTargetConversationByUidKid(uid, kid, sendLine, fn, label = '�
     }
 
     // 前候補の内容を残さない
+    console.log('[TARGET-CONVERSATION] STEP-A: #bodyKakunin クリア開始');
     await mainFrame.evaluate(() => {
       const el =
         document.querySelector('#bodyKakunin');
@@ -8231,8 +8276,10 @@ async function withTargetConversationByUidKid(uid, kid, sendLine, fn, label = '�
         el.innerHTML = '';
       }
     });
+    console.log('[TARGET-CONVERSATION] STEP-A: #bodyKakunin クリア完了');
 
     // 対象ユーザーを表示
+    console.log(`[TARGET-CONVERSATION] STEP-B: form.submit 開始 stringID=${stringID}`);
     await menuFrame.evaluate((sid) => {
       const form =
         document.getElementById(sid);
@@ -8245,11 +8292,13 @@ async function withTargetConversationByUidKid(uid, kid, sendLine, fn, label = '�
 
       form.submit();
     }, stringID);
+    console.log('[TARGET-CONVERSATION] STEP-B: form.submit 完了');
 
     await new Promise(
       r => setTimeout(r, 500)
     );
 
+    console.log('[TARGET-CONVERSATION] STEP-C: #bodyKakunin 読み込み待機開始（最大15秒）');
     try {
       await mainFrame.waitForFunction(() => {
         const el =
@@ -8266,13 +8315,15 @@ async function withTargetConversationByUidKid(uid, kid, sendLine, fn, label = '�
       }, {
         timeout: 15000
       });
+      console.log('[TARGET-CONVERSATION] STEP-C: #bodyKakunin 読み込み完了');
     } catch (_) {
       console.log(
-        `[TARGET-CONVERSATION] ${userName}: ` +
+        `[TARGET-CONVERSATION] STEP-C: ${userName}: ` +
         '#bodyKakunin のタイムアウト（続行）'
       );
     }
 
+    console.log('[TARGET-CONVERSATION] STEP-D: fn() 呼び出し（会話操作へ）');
     await fn({
       supportPage,
       target,
