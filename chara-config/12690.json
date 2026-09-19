@@ -13,6 +13,10 @@
             "do1": {
                 "searchTarget": "12690mu1/sinko/1",
                 "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1700": 30,
+                "after1700": 20
             }
         },
         "mu2": {
