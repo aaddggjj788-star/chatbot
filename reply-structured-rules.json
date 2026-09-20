@@ -501,7 +501,67 @@
         "rejected": "use_existing_ai"
       }
     },
+    "12690mu2/his/1": {
+      "enabled": true,
+      "type": "concrete_wish",
+      "fallbackProfile": "12690wish_expectation",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12690mu2/ho/5": {
+      "enabled": true,
+      "type": "concrete_wish",
+      "fallbackProfile": "12690wish_expectation",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
     "12690mu1/sinko/3": {
+      "enabled": true,
+      "type": "inner_concern_disclosure",
+      "fallbackProfile": "12690inner_concerns",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12690mu2/his/3": {
+      "enabled": true,
+      "type": "inner_concern_disclosure",
+      "fallbackProfile": "12690inner_concerns",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12690mu2/ho/3": {
       "enabled": true,
       "type": "inner_concern_disclosure",
       "fallbackProfile": "12690inner_concerns",
