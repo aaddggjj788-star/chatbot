@@ -2740,20 +2740,44 @@ function normalizeMatchText(text) {
 function splitWordAndReading(rawWord) {
   const text = String(rawWord || '').trim();
 
-  const m = text.match(
+  // --------------------------------------------------
+  // ① 通常形式
+  // 幸響心(こうきょうしん)
+  // 幸響心（こうきょうしん）
+  // --------------------------------------------------
+  const bracketMatch = text.match(
     /^(.+?)[（(]([ぁ-んァ-ヶー・･\s]+)[）)]$/
   );
 
-  if (!m) {
+  if (bracketMatch) {
     return {
-      word: text,
-      reading: ''
+      word: bracketMatch[1].trim(),
+      reading: bracketMatch[2].trim()
     };
   }
 
+
+  // --------------------------------------------------
+  // ② スペース区切り形式
+  // 幸響心 こうきょうしん
+  // 心安結 しんあんけつ
+  // --------------------------------------------------
+  const spaceMatch = text.match(
+    /^(\S+?)\s+([ぁ-んァ-ヶー・･]+)$/
+  );
+
+  if (spaceMatch) {
+    return {
+      word: spaceMatch[1].trim(),
+      reading: spaceMatch[2].trim()
+    };
+  }
+
+
+  // 読み仮名なし
   return {
-    word: m[1].trim(),
-    reading: m[2].trim()
+    word: text,
+    reading: ''
   };
 }
 
