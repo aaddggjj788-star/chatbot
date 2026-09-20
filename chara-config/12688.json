@@ -111,6 +111,12 @@
             "ho": {
                 "searchTarget": "12688yu14mu/sinko/1",
                 "useCurrentRow": true
+            },
+                        "sinko14": {
+                "useHistorySearch": true,
+                "historyCharaId": "12688yu2",
+                "replaceHeader": "素晴らしいです。\n\n最後の反応は、私も驚くほど強く出ていました。\n\nこの状態をしっかり維持していきましょう。\n\n明日こそ、明日にこそ。\n\n今はそこに向けて可能な限り取り組んで行きます。\n\nでは次です。\n\n",
+                "fallbackSearch": "12688yu2/sinko/3"
             }
         },
         "yu21mu": {
@@ -118,6 +124,12 @@
             "ho": {
                 "searchTarget": "12688yu21mu/sinko/1",
                 "useCurrentRow": true
+            },
+                        "sinko14": {
+                "useHistorySearch": true,
+                "historyCharaId": "12688yu2",
+                "replaceHeader": "確認しましたよ。\n\nここからの取り組みも非常に重要となります。\n\n再度気を引き締め直して、進めましょう。\n\nあなたの輝かしい未来の為ですからね。\n\nこちらをお願いします。\n\n",
+                "fallbackSearch": "12688yu2/sinko/3"
             }
         }
     }
