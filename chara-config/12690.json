@@ -53,9 +53,13 @@
                 "fileId": "12690mu2hissinko",
                 "searchTarget": "12690mu2/his/2",
                 "useCurrentRow": true
-            },
-            "his": {
-                "fileId": "12690mu2hissinko"
+            }
+        },
+        "mu2his": {
+            "fileId": "12690mu2hissinko",
+            "minElapsedMinutes": {
+                "before1700": 30,
+                "after1700": 20
             }
         },
         "yu1": {
