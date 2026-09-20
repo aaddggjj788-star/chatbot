@@ -132,23 +132,23 @@ function waitForLineReply() {
 }
 
 // ─── 処理コマンド解析 ─────────────────────────────────────────────
-// 「開始」「開始#補足」「テンプレート{番号}」「手動対応」「スキップ」「〇pt追加」「〇pt減算」「レベル変更:〇」
+// 「生成」「生成#補足」「テンプレート{番号}」「手動対応」「スキップ」「〇pt追加」「〇pt減算」「レベル変更:〇」
 // 「メール確認」「決済確認」「絆変更:{キャラID}:{value}」「{uid} {金額}円 入金」
-// および上記の組み合わせ（例:「メール確認 決済確認 開始」）に対応する。
+// および上記の組み合わせ（例:「メール確認 決済確認 生成」）に対応する。
 // 各コマンドは末尾に来る組み合わせもあるためincludesで判定する。
 // ポイント操作は「ポイント」の接頭辞を省略でき、追加/減算のどちらも指定できる
 // （point: { amount, sign } / signは追加なら '+'、減算なら '-'）
 function parseCommand(reply) {
   const text = reply || '';
-  // 補足（開始#〜）は末尾まで自由入力のため、補足内の文言を他コマンドと
+  // 補足（生成#〜）は末尾まで自由入力のため、補足内の文言を他コマンドと
   // 誤認しないよう、コマンド判定は補足を除いた部分に対して行う
-  const body = text.replace(/開始#[\s\S]+/, '開始');
+  const body = text.replace(/生成#[\s\S]+/, '生成');
   return {
     point:      (m => (m ? { amount: m[1], sign: m[2] === '減算' ? '-' : '+' } : null))(body.match(/(?:ポイント)?(\d+)pt(追加|減算)/)),
     rentpoint: (m => (m ? { amount: m[1] } : null))(body.match(/レンタルポイント(\d+)pt追加/)),
     level:      body.match(/レベル変更:(\d+)/)?.[1] ?? null,
-    start:      body.includes('開始'),
-    supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
+    start:      body.includes('生成'),
+    supplement: text.match(/生成#([\s\S]+)/)?.[1]?.trim() || null,
     manual:     body.includes('手動対応'),
     template:   (m => (m ? parseInt(m[1], 10) : null))(body.match(/テンプレート(\d+)/)),
     payment:    (m => (m ? { uid: m[1], amount: parseInt(m[2].replace(/,/g, ''), 10) } : null))(body.match(/(\d+)\s+([\d,]+)円\s*入金/)),
@@ -553,11 +553,11 @@ if (
 }
 
 // 処理コマンド待ちでLINEに表示するコマンド一覧
-// startLabel: 「開始」の説明（ポイント関連の問い合わせか否かで文言が異なる）
+// startLabel: 「生成」の説明（ポイント関連の問い合わせか否かで文言が異なる）
 function commandHelpLines(startLabel) {
   return [
-    `「開始」：${startLabel}`,
-    '「開始#補足」：補足を踏まえて実行',
+    `「生成」：${startLabel}`,
+    '「生成#補足」：補足を踏まえて実行',
     '「テンプレート{番号}」：指定番号のテンプレートで返答',
     '「手動対応」：手動対応を通知して次のユーザーへ',
     '「スキップ」：通知なしで次のユーザーへ',
@@ -567,12 +567,12 @@ function commandHelpLines(startLabel) {
     '「決済確認」：当日決済履歴を通知',
     '「絆変更:{キャラID}:{value}」：絆レベル変更のみ',
     '「{uid} {金額}円 入金」：手動で入金処理を実行',
-    '（例）「メール確認 決済確認 開始」',
+    '（例）「メール確認 決済確認 生成」',
   ];
 }
 
 // ─── 1コマンド分の照会・更新系処理をまとめて実行する ─────────────────
-// 「開始」「手動対応」「スキップ」以外のコマンド（メール確認/決済確認/絆変更/
+// 「生成」「手動対応」「スキップ」以外のコマンド（メール確認/決済確認/絆変更/
 // ポイント追加/レベル変更）を処理する
 async function runSubCommands(page, uid, cmd) {
   if (cmd.mail) await notifyTodayMails(page, uid);
@@ -663,10 +663,36 @@ async function waitForCommand(page, candidate, headerLines, startLabel) {
 
     const parsed = parseCommand(reply);
 
+    const hasKnownCommand =
+      parsed.point ||
+      parsed.rentpoint ||
+      parsed.level ||
+      parsed.start ||
+      parsed.manual ||
+      parsed.template ||
+      parsed.payment ||
+      parsed.mail ||
+      parsed.bank ||
+      parsed.skip ||
+      parsed.love;
+
+    // 既知コマンドではない普通の文章
+    // → そのまま手動返信として扱う
+    if (
+      !hasKnownCommand &&
+      String(reply || '').trim()
+    ) {
+      return {
+        ...parsed,
+        manualText: String(reply).trim(),
+        reply
+      };
+    }
+
     // 照会・更新系コマンド（メール確認/決済確認/絆変更/ポイント/レベル）を実行
     await runSubCommands(page, candidate.uid, parsed);
 
-    // 照会・入金コマンドが含まれ、かつ「開始」「手動対応」「スキップ」の指示が
+    // 照会・入金コマンドが含まれ、かつ「生成」「手動対応」「スキップ」の指示が
     // なければ、結果を確認したうえで次のコマンドを入力できるようコマンド待ちに戻る
     if ((parsed.mail || parsed.bank || parsed.payment) && !parsed.start && !parsed.manual && !parsed.skip) {
       console.log(`[CMD] ${candidate.userName}: 照会/入金コマンドのみ → 再度コマンド待ちへ`);
@@ -1876,7 +1902,24 @@ async function checkSupport(
         } = cmd;
         const cmdReply = cmd.reply;
 
-        // 3. 「手動対応」：LINEへ手動対応を通知して次のユーザーへ
+        // 普通の文章が入力された場合
+        // → その文章をそのままユーザーへ返信
+        if (manualText) {
+          console.log(
+            `[MANUAL-REPLY] ${candidate.userName}: ` +
+            `LINE入力文をそのまま返信`
+          );
+
+          await sendSupportReplyText(
+            page,
+            candidate.userName,
+            manualText
+          );
+
+          continue;
+        }
+
+        // 「手動対応」コマンド
         if (manualMatch) {
           console.log(`[MANUAL] ${candidate.userName}: 手動対応コマンド → 通知して次のユーザーへ`);
           await notifyManual(candidate.userName, candidate.uid);
@@ -1965,9 +2008,9 @@ async function checkSupport(
         }
 
 
-        // 4. 「開始」がなければ（スキップ・ポイント/レベル操作のみ含む）通知なしで次のユーザーへ
+        // 4. 「生成」がなければ（スキップ・ポイント/レベル操作のみ含む）通知なしで次のユーザーへ
         if (!startMatch) {
-          console.log(`[SKIP] ${candidate.userName}: 開始コマンドなし（reply="${cmdReply}"）→ 次のユーザーへ`);
+          console.log(`[SKIP] ${candidate.userName}: 生成コマンドなし（reply="${cmdReply}"）→ 次のユーザーへ`);
           continue;
         }
 
@@ -2289,10 +2332,26 @@ async function checkSupport(
         template: templateNum
       } = cmd;
 
-      const startReply = cmd.reply;
+      const cmdReply = cmd.reply;
 
+      // 普通の文章が入力された場合
+      // → その文章をそのままユーザーへ返信
+      if (manualText) {
+        console.log(
+          `[MANUAL-REPLY] ${candidate.userName}: ` +
+          `LINE入力文をそのまま返信`
+        );
 
-      // ─── 「手動対応」 ─────────────────────────────────────────────
+        await sendSupportReplyText(
+          page,
+          candidate.userName,
+          manualText
+        );
+
+        continue;
+      }
+
+      // 「手動対応」コマンド
       if (manualMatch) {
         console.log(
           `[MANUAL] ${candidate.userName}: ` +
@@ -2388,9 +2447,9 @@ async function checkSupport(
         continue;
       }
 
-      // 4. 「開始」がなければ（スキップ・ポイント/レベル操作のみ含む）通知なしで次の候補へ
+      // 4. 「生成」がなければ（スキップ・ポイント/レベル操作のみ含む）通知なしで次の候補へ
       if (!startMatch) {
-        console.log(`[SKIP] ${candidate.userName}: 開始コマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
+        console.log(`[SKIP] ${candidate.userName}: 生成コマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
         continue;
       }
       // サポートの対象処理はキャンペーン・ポイント照合であり返答生成(Claude)を

@@ -26,11 +26,11 @@
  *   STEP4.6: 返答方法はコマンドで明示的に指定する（テンプレート自動照合は廃止）。
  *          「テンプレート{番号}」→ contact-templates.json の該当番号の
  *            テンプレートを使用（送信確認後に送信）
- *          「開始」→ STEP4.5で実施した割引率・ポイント調整の内容を
+ *          「生成」→ STEP4.5で実施した割引率・ポイント調整の内容を
  *            プロンプトに含めた上でClaude APIで返答文を自動生成しLINEで確認。
  *            「送信」でそのまま送信、「差し替え#文章」で内容を変更して送信、
  *            それ以外は手動対応フローへ
- *          「開始#補足」→ 補足を踏まえてClaude APIで返答文を自動生成
+ *          「生成#補足」→ 補足を踏まえてClaude APIで返答文を自動生成
  *   STEP5: LINEに問い合わせ内容を通知し、返答内容の入力を依頼
  *   STEP6: LINEからの返答を受け取る（5分タイムアウト、「スキップ」で次へ）
  *   STEP7: テンプレートに差し込んだ送信内容をLINEで確認
@@ -152,24 +152,24 @@ function waitForLineReply() {
 }
 
 // ─── 処理コマンド解析 ─────────────────────────────────────────────
-// 「開始」「開始#補足」「テンプレート{番号}」「スキップ」「〇pt追加」「〇pt減算」
+// 「生成」「生成#補足」「テンプレート{番号}」「スキップ」「〇pt追加」「〇pt減算」
 // 「レベル変更:〇」「メール確認」「決済確認」「絆変更:{キャラID}:{value}」
 // 「{uid} {金額}円 入金」および上記の組み合わせ
-// （例:「メール確認 決済確認 開始」）に対応する。
+// （例:「メール確認 決済確認 生成」）に対応する。
 // 各コマンドは末尾に来る組み合わせもあるためincludesで判定する。
 // ポイント操作は「ポイント」の接頭辞を省略でき、追加/減算のどちらも指定できる
 // （point: { amount, sign } / signは追加なら '+'、減算なら '-'）
 function parseCommand(reply) {
   const text = reply || '';
-  // 補足（開始#〜）は末尾まで自由入力のため、補足内の文言を他コマンドと
+  // 補足（生成#〜）は末尾まで自由入力のため、補足内の文言を他コマンドと
   // 誤認しないよう、コマンド判定は補足を除いた部分に対して行う
-  const body = text.replace(/開始#[\s\S]+/, '開始');
+  const body = text.replace(/生成#[\s\S]+/, '生成');
   return {
     point:      (m => (m ? { amount: m[1], sign: m[2] === '減算' ? '-' : '+' } : null))(body.match(/(?:ポイント)?(\d+)pt(追加|減算)/)),
     rentpoint: (m => (m ? { amount: m[1] } : null))(body.match(/レンタルポイント(\d+)pt追加/)),
     level:      body.match(/レベル変更:(\d+)/)?.[1] ?? null,
-    start:      body.includes('開始'),
-    supplement: text.match(/開始#([\s\S]+)/)?.[1]?.trim() || null,
+    start:      body.includes('生成'),
+    supplement: text.match(/生成#([\s\S]+)/)?.[1]?.trim() || null,
     manual:     body.includes('手動対応'),
     template:   (m => (m ? parseInt(m[1], 10) : null))(body.match(/テンプレート(\d+)/)),
     payment:    (m => (m ? { uid: m[1], amount: parseInt(m[2].replace(/,/g, ''), 10) } : null))(body.match(/(\d+)\s+([\d,]+)円\s*入金/)),
@@ -428,8 +428,8 @@ async function collectMemberInfo(page, uid) {
 
 // 処理コマンド待ちでLINEに表示するコマンド一覧
 const COMMAND_HELP_LINES = [
-  '「開始」：AIで返答を自動生成',
-  '「開始#補足」：補足を踏まえてAIで返答を自動生成',
+  '「生成」：AIで返答を自動生成',
+  '「生成#補足」：補足を踏まえてAIで返答を自動生成',
   '「テンプレート{番号}」：指定番号のテンプレートで返答',
   '「スキップ」：このユーザーをスキップ',
   '「{数値}pt追加」「{数値}pt減算」：ポイント増減のみ',
@@ -438,7 +438,7 @@ const COMMAND_HELP_LINES = [
   '「決済確認」：当日決済履歴を通知',
   '「絆変更:{キャラID}:{value}」：絆レベル変更のみ',
   '「{uid} {金額}円 入金」：手動で入金処理を実行',
-  '（例）「メール確認 決済確認 開始」',
+  '（例）「メール確認 決済確認 生成」',
 ];
 
 // contact-templates.json のテンプレート一覧を「番号: id」形式で返す
@@ -562,7 +562,7 @@ async function notifyBankHistory(page, uid) {
 }
 
 // ─── 1コマンド分の照会・更新系処理をまとめて実行する ─────────────────
-// 「開始」「スキップ」以外のコマンド（メール確認/決済確認/絆変更/
+// 「生成」「スキップ」以外のコマンド（メール確認/決済確認/絆変更/
 // ポイント追加/レベル変更）を受け取った順序どおりに処理する
 async function runSubCommands(page, uid, cmd) {
   if (cmd.mail) await notifyTodayMails(page, uid);
@@ -1489,6 +1489,31 @@ async function processContacts(
           const parsed =
             parseCommand(reply);
 
+          // --------------------------------------------------
+          // 既知コマンドではない普通の文章
+          // → そのまま手動返信文として扱う
+          // --------------------------------------------------
+          const hasKnownCommand =
+            parsed.point ||
+            parsed.rentpoint ||
+            parsed.level ||
+            parsed.start ||
+            parsed.manual ||
+            parsed.template ||
+            parsed.payment ||
+            parsed.mail ||
+            parsed.bank ||
+            parsed.skip ||
+            parsed.love;
+
+          if (
+            !hasKnownCommand &&
+            String(reply || '').trim()
+          ) {
+            parsed.manualText =
+              String(reply).trim();
+          }
+
           // 照会・更新系コマンド
           await runSubCommands(
             page,
@@ -1532,12 +1557,30 @@ async function processContacts(
       const {
         start: startMatch,
         supplement,
+        manual: manualMatch,
         template: templateNum,
-        manual: manualMatch
+        manualText
       } = cmd;
 
       const startReply = cmd.reply;
 
+      // 普通の文章が入力された場合
+      // → その文章をそのままコンタクト返信
+      if (manualText) {
+        console.log(
+          `[MANUAL-REPLY] uid=${contact.uid}: ` +
+          `LINE入力文をそのまま返信`
+        );
+
+        await submitContactReply(
+          threadPage,
+          manualText,
+          contact.uid,
+          '手動返信'
+        );
+
+        continue;
+      }
 
       // ─── 「手動対応」 ─────────────────────────────────────────────
       // AI返信生成・自動返信は行わず、この問い合わせを担当者対応へ回す。
@@ -1593,9 +1636,9 @@ async function processContacts(
         continue;
       }
 
-      // 3. 「開始」がなければ（スキップ含む）次のユーザーへ
+      // 3. 「生成」がなければ（スキップ含む）次のユーザーへ
       if (!startMatch) {
-        console.log(`[SKIP] uid=${contact.uid}: 開始/テンプレートコマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
+        console.log(`[SKIP] uid=${contact.uid}: 生成/テンプレートコマンドなし（reply="${startReply}"）→ 次のユーザーへ`);
         continue;
       }
 
@@ -1665,8 +1708,8 @@ async function processContacts(
         );
       }
 
-      // ─── STEP4.6b: 「開始」→ OpenAIで返答文を自動生成 ─────────
-      // テンプレート自動照合は廃止したため、開始コマンドは常にAI生成を行う。
+      // ─── STEP4.6b: 「生成」→ OpenAIで返答文を自動生成 ─────────
+      // テンプレート自動照合は廃止したため、生成コマンドは常にAI生成を行う。
       // 手動時はSTEP4.5で実施した調整内容、自動時は取得済み情報をプロンプトへ反映する。
       // 同一問い合わせですでに返信案を生成済みなら、
       // OpenAIを呼ばず次の問い合わせへ進む
