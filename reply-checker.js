@@ -10553,30 +10553,10 @@ async function batchSearchAndReply(searchComment, sendLine, waitForLineReply, DR
     return;
   }
 
-  // コメントアウトからcharaIdを解析（例:「12684yu12/sinko/1」→「12684yu12」）
-  const parsedComment = parseCommentStr(searchComment);
-  if (!parsedComment) {
-    await sendLine(`【エラー】一括送信: コメントアウトの形式が不正です\n指定値：${searchComment}`);
-    return;
-  }
-  const charaId = parsedComment.baseId + parsedComment.typeNum;
-
-  // ── 送信予定の文章をCSVから取得（指定コメントアウトの「次の行」）──
-  // ※コメントアウト文字列ではなく、実際に送信する文章内容を取得する
-  let replyData;
-  try {
-    replyData = getReplyFromCSVByTarget(charaId, searchComment, false);
-  } catch (e) {
-    await sendLine(`【エラー】一括送信: 送信文章の取得に失敗しました\nコメントアウト：${searchComment}\n${e.message}`);
-    return;
-  }
-  if (!replyData || !replyData.replyText) {
-    await sendLine(`【エラー】一括送信: 送信文章が空です\nコメントアウト：${searchComment}`);
-    return;
-  }
-  const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
-  // 実際に送信する全文（返信文 + 次のコメントアウトを末尾に追記）
-  const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
+  // ── 送信予定文章（charaId/replyData）の解決は openSupportPage 後（try内）で行う ──
+  // ho系コメント（例:「12690mu2/ho/0」）は CSVから直接 searchTarget を検索できず、
+  // resolveHoNextReplyForInquiry（次行照会と共通のhoモード解決ロジック）が必要になる。
+  // この関数は page（ope_mainフレーム）を引数に取るため、supportPage 取得後に解決する。
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({
@@ -10637,6 +10617,51 @@ async function batchSearchAndReply(searchComment, sendLine, waitForLineReply, DR
     const page = await context.newPage();
     await login(page);
     const supportPage = await openSupportPage(page);
+
+    // ── 0. 送信予定の文章（charaId/replyData）を解決 ──
+    // ho系コメントは CSVに ho自体の行が存在しないため getReplyFromCSVByTarget で
+    // 直接検索するとエラーになる。次行照会（inquireNextLine）と同じ
+    // resolveHoNextReplyForInquiry を再利用してhoモードのロジックで解決する。
+    // sinko/his系は従来通り parseCommentStr + getReplyFromCSVByTarget で処理する。
+    const isHo = /\/[a-zA-Z]*[Hh]o\d*(?:\/\w+)*$/.test(searchComment);
+    let charaId;
+    let replyData;
+
+    if (isHo) {
+      console.log(`[BATCH-SEARCH] ho系コメント検出 → resolveHoNextReplyForInquiry で解決 searchComment="${searchComment}"`);
+      const hoResult = await resolveHoNextReplyForInquiry(supportPage, searchComment);
+      if (hoResult.error) {
+        await sendLine(`【エラー】一括送信: ${hoResult.error}`);
+        return;
+      }
+      charaId = hoResult.charaId;
+      replyData = hoResult.replyData;
+    } else {
+      // コメントアウトからcharaIdを解析（例:「12684yu12/sinko/1」→「12684yu12」）
+      const parsedComment = parseCommentStr(searchComment);
+      if (!parsedComment) {
+        await sendLine(`【エラー】一括送信: コメントアウトの形式が不正です\n指定値：${searchComment}`);
+        return;
+      }
+      charaId = parsedComment.baseId + parsedComment.typeNum;
+
+      // ── 送信予定の文章をCSVから取得（指定コメントアウトの「次の行」）──
+      // ※コメントアウト文字列ではなく、実際に送信する文章内容を取得する
+      try {
+        replyData = getReplyFromCSVByTarget(charaId, searchComment, false);
+      } catch (e) {
+        await sendLine(`【エラー】一括送信: 送信文章の取得に失敗しました\nコメントアウト：${searchComment}\n${e.message}`);
+        return;
+      }
+    }
+
+    if (!replyData || !replyData.replyText) {
+      await sendLine(`【エラー】一括送信: 送信文章が空です\nコメントアウト：${searchComment}`);
+      return;
+    }
+    const displayReplyText = replyData.replyText.replace(/\\n/g, '\n');
+    // 実際に送信する全文（返信文 + 次のコメントアウトを末尾に追記）
+    const textToSend = replyData.replyText.replace(/\\n/g, '\n').trim() + '\n' + replyData.nextComment;
 
     // ── 1. 対象ユーザーを走査し、最新コメントアウトが完全一致する会員を抽出 ──
     console.log('[AI-REPLY-DEBUG] getTargetUsers開始');
