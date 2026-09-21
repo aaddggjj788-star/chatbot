@@ -2414,7 +2414,7 @@ function extractNickname(userTexts) {
       return givenName;
     }
 
-    
+
     if (!isLikelyNicknameFinal(candidate)) {
       return null;
     }
@@ -2460,6 +2460,51 @@ function extractNickname(userTexts) {
   ];  
 
   const rawLines = text.split('\n').map(l => l.trim());
+
+  // ======================================================
+  // 1行目が「ひらがな / カタカナだけの長い氏名候補」で、
+  // 後続に生年月日・血液型らしい情報がある場合
+  // → 氏名候補として保持するが、nicknameは機械確定しない
+  // ======================================================
+
+  if (rawLines.length >= 2) {
+    const firstLine =
+      rawLines[0]
+        .normalize('NFKC')
+        .trim();
+
+    const followingText =
+      rawLines
+        .slice(1, 4)
+        .join(' ')
+        .normalize('NFKC');
+
+    const isLongKanaName =
+      (
+        /^[ぁ-んー]{5,12}$/.test(firstLine) ||
+        /^[ァ-ヶー]{5,12}$/.test(firstLine)
+      );
+
+    const hasProfileContext =
+      (
+        /\d/.test(followingText) ||
+        /生まれ|生年月日|血液型|A型|B型|O型|AB型/.test(
+          followingText
+        )
+      );
+
+    if (
+      isLongKanaName &&
+      hasProfileContext
+    ) {
+      return {
+        nickname: null,
+        needsConfirmation: true,
+        source: 'ambiguous_kana_fullname',
+        fullNameCandidate: firstLine
+      };
+    }
+  }
 
   // ======================================================
   // 氏名回答の高確信度パターンを先に処理
@@ -2935,9 +2980,325 @@ async function saveMemo1(frame, userText, dryRun) {
   console.log('[SPECIAL] saveMemo1: 保存完了');
 }
 
+
+// ======================================================
+// ニックネーム抽出 AI fallback
+// ======================================================
+
+async function extractNicknameWithAI(
+  userText,
+  machineResult = null
+) {
+  try {
+    const machineCandidate =
+      String(
+        machineResult?.fullNameCandidate ||
+        ''
+      ).trim();
+
+    const response =
+      await openai.responses.create({
+        model: 'gpt-5-mini',
+
+        input: [
+          {
+            role: 'system',
+            content: [
+              {
+                type: 'input_text',
+                text: [
+                  'あなたはユーザー本文から呼び名を抽出する判定AIです。',
+                  '',
+                  '目的は、今後ユーザーを呼びかける際に使用する「名（下の名前）」だけを取得することです。',
+                  '',
+                  '【絶対ルール】',
+                  '・姓ではなく名（下の名前）を返す',
+                  '・フルネームをそのままgivenNameにしない',
+                  '・さん、様、ちゃん等の敬称を含めない',
+                  '・本文に存在しない名前を創作しない',
+                  '・姓名の区切りが明示されていなくても、日本人名として十分明確なら名を抽出してよい',
+                  '・例: とよたあきこ → あきこ',
+                  '・例: ナガタマスミ → マスミ',
+                  '・例: 山本圭子 → 圭子',
+                  '・例: タカニシ ケンジ → ケンジ',
+                  '・名前なのか判断できない場合は found=false にする',
+                  '・単なる挨拶、文章中の人物名、鑑定士名をユーザー名として採用しない',
+                  '・ユーザー本人の氏名・名前として書かれているものだけを対象にする',
+                  '',
+                  'confidenceは次の基準で返す',
+                  'high: ユーザー本人の名前と判断でき、名も十分明確',
+                  'medium: 名前候補だが姓名分離などに若干不確実性がある',
+                  'low: 推測が大きい',
+                  '',
+                  '自動保存に使うため、迷う場合は必ずmediumまたはlowにしてください。'
+                ].join('\n')
+              }
+            ]
+          },
+
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text: [
+                  '【機械判定で取得した氏名候補】',
+                  machineCandidate || 'なし',
+                  '',
+                  '【ユーザー本文】',
+                  String(userText || ''),
+                  '',
+                  'ユーザー本人の名（下の名前）を判定してください。'
+                ].join('\n')
+              }
+            ]
+          }
+        ],
+
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'nickname_extraction',
+            strict: true,
+
+            schema: {
+              type: 'object',
+
+              properties: {
+                found: {
+                  type: 'boolean'
+                },
+
+                fullName: {
+                  type: 'string'
+                },
+
+                givenName: {
+                  type: 'string'
+                },
+
+                confidence: {
+                  type: 'string',
+                  enum: [
+                    'high',
+                    'medium',
+                    'low'
+                  ]
+                },
+
+                reason: {
+                  type: 'string'
+                }
+              },
+
+              required: [
+                'found',
+                'fullName',
+                'givenName',
+                'confidence',
+                'reason'
+              ],
+
+              additionalProperties: false
+            }
+          }
+        }
+      });
+
+    const result =
+      JSON.parse(
+        response.output_text
+      );
+
+    const givenName =
+      String(
+        result.givenName || ''
+      )
+        .trim()
+        .replace(
+          /(?:さん|様|ちゃん|くん|君)$/,
+          ''
+        )
+        .trim();
+
+    // ------------------------------
+    // AIが取得失敗
+    // ------------------------------
+
+    if (
+      result.found !== true ||
+      !givenName
+    ) {
+      return {
+        nickname: null,
+        fullName:
+          String(
+            result.fullName || ''
+          ).trim(),
+
+        confidence:
+          result.confidence || 'low',
+
+        reason:
+          String(
+            result.reason || ''
+          ),
+
+        source: 'ai_not_found'
+      };
+    }
+
+    // ------------------------------
+    // high以外は自動採用しない
+    // ------------------------------
+
+    if (
+      result.confidence !== 'high'
+    ) {
+      return {
+        nickname: null,
+        fullName:
+          String(
+            result.fullName || ''
+          ).trim(),
+
+        candidateNickname:
+          givenName,
+
+        confidence:
+          result.confidence,
+
+        reason:
+          String(
+            result.reason || ''
+          ),
+
+        source: 'ai_uncertain'
+      };
+    }
+
+    // ------------------------------
+    // 最低限の文字チェック
+    // ------------------------------
+
+    if (
+      !/^[一-龥々ぁ-んァ-ヶーA-Za-z・･]{1,12}$/.test(
+        givenName
+      )
+    ) {
+      return {
+        nickname: null,
+        fullName:
+          String(
+            result.fullName || ''
+          ).trim(),
+
+        candidateNickname:
+          givenName,
+
+        confidence:
+          'low',
+
+        reason:
+          'AI抽出結果が名前として許容する文字形式ではありません',
+
+        source: 'ai_invalid_format'
+      };
+    }
+
+    return {
+      nickname:
+        givenName,
+
+      fullName:
+        String(
+          result.fullName || ''
+        ).trim(),
+
+      confidence:
+        'high',
+
+      reason:
+        String(
+          result.reason || ''
+        ),
+
+      source:
+        'ai_fallback'
+    };
+
+  } catch (err) {
+    console.error(
+      '[SPECIAL] nickname AI判定エラー:',
+      err.message
+    );
+
+    return {
+      nickname: null,
+      fullName: '',
+      confidence: 'low',
+      reason:
+        `AI判定エラー: ${err.message}`,
+      source: 'ai_error'
+    };
+  }
+}
+
 // saveNickname: ope_mainフレーム内のあだ名欄にニックネームを保存（最新1件のみ）
 async function saveNickname(frame, userText, dryRun, sendLine, waitForLineReply,autoMode = false) {
-  let { nickname } = extractNickname([userText]);
+  const machineResult =
+    extractNickname([
+      userText
+    ]);
+
+  let nickname =
+    machineResult.nickname;
+
+
+  // ======================================================
+  // 機械判定で取れなかった場合のみAI fallback
+  // ======================================================
+
+  if (!nickname) {
+    console.log(
+      '[SPECIAL] saveNickname: ' +
+      '機械判定で未確定 → AI fallback'
+    );
+
+    console.log(
+      '[SPECIAL] machineResult:',
+      JSON.stringify(
+        machineResult
+      )
+    );
+
+    const aiResult =
+      await extractNicknameWithAI(
+        userText,
+        machineResult
+      );
+
+    console.log(
+      '[SPECIAL] nickname AI結果:',
+      JSON.stringify(
+        aiResult
+      )
+    );
+
+    if (
+      aiResult.nickname &&
+      aiResult.confidence === 'high'
+    ) {
+      nickname =
+        aiResult.nickname;
+
+      console.log(
+        `[SPECIAL] saveNickname: ` +
+        `AI fallback採用="${nickname}"`
+      );
+    }
+  }
+
 
   if (!nickname) {
 
@@ -3001,43 +3362,107 @@ async function saveNickname(frame, userText, dryRun, sendLine, waitForLineReply,
 
 }
 
-function testSpecialProcess(
+async function testSpecialProcess(
   processName,
   userText
 ) {
   const text =
     String(userText || '');
 
-
   if (
-    processName === 'saveNickname'
+    processName ===
+    'saveNickname'
   ) {
-    const result =
-      extractNickname([text]);
+    const machineResult =
+      extractNickname([
+        text
+      ]);
+
+    // 機械判定成功
+    if (
+      machineResult?.nickname
+    ) {
+      return {
+        processName,
+
+        matched: true,
+
+        nickname:
+          machineResult.nickname,
+
+        source:
+          'machine',
+
+        machineResult,
+
+        aiResult: null
+      };
+    }
+
+
+    // --------------------------------
+    // 機械判定失敗
+    // → AI fallback
+    // --------------------------------
+
+    const aiResult =
+      await extractNicknameWithAI(
+        text,
+        machineResult
+      );
+
+
+    if (
+      aiResult?.nickname &&
+      aiResult.confidence ===
+        'high'
+    ) {
+      return {
+        processName,
+
+        matched: true,
+
+        nickname:
+          aiResult.nickname,
+
+        source:
+          'ai_fallback',
+
+        machineResult,
+
+        aiResult
+      };
+    }
+
 
     return {
       processName,
 
-      matched:
-        Boolean(result?.nickname),
+      matched: false,
 
-      nickname:
-        result?.nickname || '',
+      nickname: '',
 
-      rawResult:
-        result || null
+      source:
+        'not_confirmed',
+
+      machineResult,
+
+      aiResult
     };
   }
 
 
   if (
-    processName === 'saveMemo1'
+    processName ===
+    'saveMemo1'
   ) {
     return {
       processName,
 
       matched:
-        Boolean(text.trim()),
+        Boolean(
+          text.trim()
+        ),
 
       memoText:
         text.trim()
