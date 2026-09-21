@@ -1898,7 +1898,8 @@ async function checkSupport(
           start: startMatch,
           supplement,
           manual: manualMatch,
-          template: templateNum
+          template: templateNum,
+          manualText
         } = cmd;
         const cmdReply = cmd.reply;
 
@@ -2329,7 +2330,8 @@ async function checkSupport(
         start: startMatch,
         supplement,
         manual: manualMatch,
-        template: templateNum
+        template: templateNum,
+        manualText
       } = cmd;
 
       const cmdReply = cmd.reply;
