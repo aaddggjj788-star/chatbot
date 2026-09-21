@@ -2283,6 +2283,76 @@ function extractNickname(userTexts) {
   const MALE_KANJI   = '郎太介助男雄史人輔吾平之彦紀信義和一二三樹也典明';
   const FEMALE_KANJI = '子美香奈菜花恵代江葉衣里紗咲愛優心結莉麻希絵';
 
+  // ======================================================
+  // 長文中から明示的な氏名候補を取得
+  // ======================================================
+
+  function extractExplicitNameCandidate(sourceText) {
+    const source =
+      String(sourceText || '')
+        .normalize('NFKC')
+        .replace(/\r/g, '');
+
+
+    const patterns = [
+
+      // --------------------------------------------
+      // 氏名山本圭子
+      // 氏名：山本圭子
+      // お名前：山本圭子
+      // 名前は山本圭子
+      // --------------------------------------------
+      /(?:氏名|お名前|名前)\s*[：:]?\s*[【\[]?\s*([一-龠々ぁ-んァ-ヶー・･\s　]{2,15})/,
+
+      // --------------------------------------------
+      // 小松 顕子(コマツ アキコ)と申します
+      // 小松顕子と申します
+      // --------------------------------------------
+      /([一-龠々ぁ-んァ-ヶー・･\s　]{2,15})(?:\([^)]*\))?\s*と申します/,
+
+      // --------------------------------------------
+      // 【1】大森法子デス
+      // 【1】大森法子です
+      // --------------------------------------------
+      /【\s*1\s*】\s*([一-龠々ぁ-んァ-ヶー・･\s　]{2,15}?)(?:です|デス|[。\n]|$)/,
+
+      // --------------------------------------------
+      // 【うえはま・のぶこ】
+      // 「名前を教えて下さい」の直後の【】
+      // --------------------------------------------
+      /(?:名前|お名前)[^。\n]{0,30}教えて下さ[いぃ][^【\[]*[【\[]\s*([一-龠々ぁ-んァ-ヶー・･\s　]{2,15})\s*[】\]]/,
+
+      // --------------------------------------------
+      // 山下幸代。1958...
+      // 冒頭が氏名 + 直後に日付・生年月日情報
+      // --------------------------------------------
+      /^([一-龠々]{3,6})[。．.\s　]+(?=\d{2,4}[./年月])/
+    ];
+
+
+    for (const re of patterns) {
+      const match =
+        source.match(re);
+
+      if (!match) continue;
+
+      let candidate =
+        String(match[1] || '')
+          .trim()
+          .replace(/^[【\[「『]+/, '')
+          .replace(/[】\]」』]+$/, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      if (candidate) {
+        return candidate;
+      }
+    }
+
+
+    return null;
+  }  
+
   // 候補文字列をニックネームに解決（フルネームを苗字/名前に分割して男女判定）
   function resolveNickname(candidate) {
     candidate = (candidate || '').trim();
@@ -2294,21 +2364,35 @@ function extractNickname(userTexts) {
     ) {
       return null;
     }
-    // ひらがなのみ → そのまま使用（例: たろう→たろう）
-    if (/^[ぁ-んー]+$/.test(candidate)) return candidate;
-    // カタカナのみ → そのまま使用（例: タロウ→タロウ）
-    if (/^[ァ-ヶー]+$/.test(candidate)) return candidate;
+    // ひらがな単独名
+    // 4文字程度までなら呼び名としてそのまま採用。
+    // 5文字以上は「姓+名」の可能性があるので機械確定しない。
+    if (/^[ぁ-んー]+$/.test(candidate)) {
+      return [...candidate].length <= 4
+        ? candidate
+        : null;
+    }
+
+    // カタカナ単独名
+    // 4文字程度までなら採用。
+    // 長いものはフルネームの可能性があるので機械確定しない。
+    if (/^[ァ-ヶー]+$/.test(candidate)) {
+      return [...candidate].length <= 4
+        ? candidate
+        : null;
+    }
 
     // スペース区切りフルネーム（例: 田中 花子→花子、佐々木 小次郎→佐々木）
     // 苗字+名前が分かれている場合は名前部分のみを抽出（男性名は苗字呼びのため苗字を採用）
     const spaceMatch = candidate.match(/^([^\s　]{1,6})[\s　]+([^\s　]{1,6})$/);
     if (spaceMatch) {
-      const [, surname, givenName] = spaceMatch;
-      const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
-      const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
-      if (hasMale)   return surname;
-      if (hasFemale) return givenName;
-      return givenName; // 不明時も名前部分（後半）を採用
+      const [, surname, givenName] =
+        spaceMatch;
+
+      // フルネームが明確に
+      // 「姓 名」で分かれている場合は、
+      // 男女を問わず下の名前だけをnicknameにする。
+      return givenName;
     }
 
     // 漢字+ひらがな/カタカナのスペースなしフルネーム（例: 田中たろう→たろう、桐林みよこ→みよこ）
@@ -2471,6 +2555,40 @@ function extractNickname(userTexts) {
       };
     }
   }  
+
+  // ======================================================
+  // まず長文中の明示的な氏名を探す
+  // ======================================================
+
+  const explicitCandidate =
+    extractExplicitNameCandidate(text);
+
+  if (explicitCandidate) {
+    const nick =
+      resolveNickname(
+        explicitCandidate
+      );
+
+    if (nick) {
+      return {
+        nickname: nick,
+        needsConfirmation: false,
+        source: 'explicit_name',
+        fullNameCandidate:
+          explicitCandidate
+      };
+    }
+
+    // 名前らしい部分までは取れたが
+    // 姓名の境界が機械判定できない
+    return {
+      nickname: null,
+      needsConfirmation: true,
+      source: 'explicit_name_ambiguous',
+      fullNameCandidate:
+        explicitCandidate
+    };
+  }
 
   // 【最優先】1行目（空行スキップ）が名前パターンなら即採用
   const firstLine = rawLines.find(l => l.length > 0) || '';
