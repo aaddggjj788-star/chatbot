@@ -2407,8 +2407,17 @@ function extractNickname(userTexts) {
       const [, surname, givenName] = kanjiOnlyMatch;
       const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
       const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
-      if (hasMale)   return surname;
-      if (hasFemale) return givenName;
+      const kanjiOnlyMatch =
+        candidate.match(
+          /^([一-龥々]{2,3})([一-龥々]{2,3})$/
+        );
+
+      if (kanjiOnlyMatch) {
+        const [, surname, givenName] =
+          kanjiOnlyMatch;
+
+        return givenName;
+      }
       return givenName; // 不明時も名前部分（後半）を採用
     }
     if (!isLikelyNicknameFinal(candidate)) {
@@ -2456,6 +2465,206 @@ function extractNickname(userTexts) {
   ];  
 
   const rawLines = text.split('\n').map(l => l.trim());
+
+  // ======================================================
+  // 氏名回答の高確信度パターンを先に処理
+  // ======================================================
+
+  function resolveExplicitFullName(candidate) {
+    let value =
+      String(candidate || '')
+        .normalize('NFKC')
+        .trim()
+        .replace(/^[【\[「『]+/, '')
+        .replace(/[】\]」』]+$/, '')
+        .replace(/[・･]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!value) {
+      return null;
+    }
+
+    return resolveNickname(value);
+  }
+
+
+  // ------------------------------------------------------
+  // 1. 「お名前を教えて下さい。【うえはま・のぶこ】」
+  // ------------------------------------------------------
+
+  {
+    const m = text
+      .normalize('NFKC')
+      .match(
+        /(?:お名前|名前)[^。\n]{0,40}?教えて下さ[いぃ][^【\[\n]{0,10}[【\[]\s*([一-龥々ぁ-んァ-ヶー・･\s　]{2,20}?)\s*[】\]]/
+      );
+
+    if (m) {
+      const nick =
+        resolveExplicitFullName(m[1]);
+
+      if (nick) {
+        return {
+          nickname: nick,
+          needsConfirmation: false,
+          source: 'name_answer_bracket',
+          fullNameCandidate:
+            m[1].trim()
+        };
+      }
+    }
+  }
+
+
+  // ------------------------------------------------------
+  // 2. 「氏名山本圭子」
+  //    「氏名：山本圭子」
+  // ------------------------------------------------------
+
+  {
+    const m = text
+      .normalize('NFKC')
+      .match(
+        /(?:^|[\[\]【】\s])氏名\s*[：:]?\s*([一-龥々ぁ-んァ-ヶー・･\s　]{2,20}?)(?=[\[\]【】。、\n]|生年月日|血液型|$)/
+      );
+
+    if (m) {
+      const nick =
+        resolveExplicitFullName(m[1]);
+
+      if (nick) {
+        return {
+          nickname: nick,
+          needsConfirmation: false,
+          source: 'explicit_fullname',
+          fullNameCandidate:
+            m[1].trim()
+        };
+      }
+    }
+  }
+
+
+  // ------------------------------------------------------
+  // 3. 「小松 顕子(コマツ アキコ)と申します」
+  // ------------------------------------------------------
+
+  {
+    const m = text
+      .normalize('NFKC')
+      .match(
+        /([一-龥々ぁ-んァ-ヶー・･]+(?:[\s　]+[一-龥々ぁ-んァ-ヶー・･]+)?)(?:\s*\([^)]*\))?\s*と申します/
+      );
+
+    if (m) {
+      const nick =
+        resolveExplicitFullName(m[1]);
+
+      if (nick) {
+        return {
+          nickname: nick,
+          needsConfirmation: false,
+          source: 'self_introduction',
+          fullNameCandidate:
+            m[1].trim()
+        };
+      }
+    }
+  }
+
+
+  // ------------------------------------------------------
+  // 4. 「【1】大森法子デス」
+  // ------------------------------------------------------
+
+  {
+    const m = text
+      .normalize('NFKC')
+      .match(
+        /【\s*1\s*】\s*([一-龥々ぁ-んァ-ヶー・･\s　]{2,20}?)(?:です|デス|[。、\n]|$)/
+      );
+
+    if (m) {
+      const nick =
+        resolveExplicitFullName(m[1]);
+
+      if (nick) {
+        return {
+          nickname: nick,
+          needsConfirmation: false,
+          source: 'numbered_name_answer',
+          fullNameCandidate:
+            m[1].trim()
+        };
+      }
+    }
+  }
+
+
+  // ------------------------------------------------------
+  // 5. 1行目が「姓 名」
+  //    例：タカニシ　ケンジ
+  // ------------------------------------------------------
+
+  if (rawLines.length > 0) {
+    const firstLine =
+      rawLines[0]
+        .normalize('NFKC')
+        .trim();
+
+    if (
+      /^[一-龥々ぁ-んァ-ヶー]{1,8}[\s　]+[一-龥々ぁ-んァ-ヶー]{1,8}$/.test(
+        firstLine
+      )
+    ) {
+      const nick =
+        resolveExplicitFullName(
+          firstLine
+        );
+
+      if (nick) {
+        return {
+          nickname: nick,
+          needsConfirmation: false,
+          source: 'first_line_fullname',
+          fullNameCandidate:
+            firstLine
+        };
+      }
+    }
+  }
+
+
+  // ------------------------------------------------------
+  // 6. 冒頭の漢字姓名 + 生年月日
+  //    例：山下幸代。1958.9.18生まれ。
+  // ------------------------------------------------------
+
+  {
+    const normalized =
+      text.normalize('NFKC');
+
+    const m =
+      normalized.match(
+        /^([一-龥々]{4,6})[。．.\s　]*(?=\d{2,4}[./年月])/
+      );
+
+    if (m) {
+      const nick =
+        resolveExplicitFullName(m[1]);
+
+      if (nick) {
+        return {
+          nickname: nick,
+          needsConfirmation: false,
+          source: 'first_name_before_birthdate',
+          fullNameCandidate:
+            m[1]
+        };
+      }
+    }
+  }
 
   // ======================================================
   // 明示的な呼び名・ニックネーム指定を最優先で抽出
