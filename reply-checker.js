@@ -2402,24 +2402,19 @@ function extractNickname(userTexts) {
 
     // 漢字のみスペースなしフルネーム（例: 佐藤花子→花子、佐々木小次郎→佐々木）
     // 苗字2-3文字 + 名前2-3文字 で分割し、名前部分のみを抽出（男性名は苗字呼び）
-    const kanjiOnlyMatch = candidate.match(/^([一-龥々]{2,3})([一-龥々]{2,3})$/);
+    const kanjiOnlyMatch =
+      candidate.match(
+        /^([一-龥々]{2,3})([一-龥々]{2,3})$/
+      );
+
     if (kanjiOnlyMatch) {
-      const [, surname, givenName] = kanjiOnlyMatch;
-      const hasMale   = [...givenName].some(c => MALE_KANJI.includes(c));
-      const hasFemale = [...givenName].some(c => FEMALE_KANJI.includes(c));
-      const kanjiOnlyMatch =
-        candidate.match(
-          /^([一-龥々]{2,3})([一-龥々]{2,3})$/
-        );
+      const [, surname, givenName] =
+        kanjiOnlyMatch;
 
-      if (kanjiOnlyMatch) {
-        const [, surname, givenName] =
-          kanjiOnlyMatch;
-
-        return givenName;
-      }
-      return givenName; // 不明時も名前部分（後半）を採用
+      return givenName;
     }
+
+    
     if (!isLikelyNicknameFinal(candidate)) {
       return null;
     }
