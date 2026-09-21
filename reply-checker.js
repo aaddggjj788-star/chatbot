@@ -2888,15 +2888,6 @@ function extractNickname(userTexts) {
     }
   }
 
-  // 【優先度2】パターン1: 「○○と言います/と申します/です」（名乗りパターン）
-  const selfM = text.match(
-    /([一-龥々ぁ-んァ-ヶーa-zA-Z0-9]{2,6})(?:と言います|と申します|といいます)/
-  );
-  if (selfM) {
-    const nick = resolveNickname(selfM[1]);
-    if (nick) return { nickname: nick, needsConfirmation: false };
-  }
-
  // 「○○です」は行全体が名前だけの場合に限定して許可
   for (const line of rawLines) {
     const simpleNameM = line.match(
