@@ -1290,37 +1290,234 @@ ${actionLines.join('\n')}
 // STEP8 / 自動返答で共通の送信処理（本文を入力してgotoHeavenをクリック）
 // 件名は本文の1行目が自動的に使われるため、件名欄への入力は行わない
 // 成功時はtrue、失敗時はfalseを返す
-async function submitContactReply(threadPage, bodyText, uid, label) {
+async function submitContactReply(
+  threadPage,
+  bodyText,
+  uid,
+  label
+) {
   if (DRY_RUN) {
-    console.log(`[DRY RUN] ${label}送信をスキップ: uid=${uid}`);
-    await sendLine(`【DRY RUN】uid=${uid}への${label}送信をスキップしました`);
+    console.log(
+      `[DRY RUN] ${label}送信をスキップ: uid=${uid}`
+    );
+
+    await sendLine(
+      `【DRY RUN】uid=${uid}への${label}送信をスキップしました`
+    );
+
     return true;
   }
 
-  console.log('[DEBUG] 送信前URL:', threadPage.url());
+  console.log(
+    '[DEBUG] 送信前URL:',
+    threadPage.url()
+  );
 
-  // mg_contact_edit.phpはiframe構成で、返信フォーム（messTempBody /
-  // gotoHeaven）とメッセージ履歴（#aaaaff）が別々のiframeにある。
-  // threadPage直下には無いため、フォームを持つiframeを探して操作する
-  const frames = threadPage.frames();
+
+  // ======================================================
+  // 返信フォームを持つiframeを探す
+  // ======================================================
+
+  const frames =
+    threadPage.frames();
+
   let formFrame = null;
+
   for (const frame of frames) {
-    const hasForm = await frame.locator('textarea#messTempBody').count().catch(() => 0);
+    const hasForm =
+      await frame
+        .locator(
+          'textarea#messTempBody'
+        )
+        .count()
+        .catch(() => 0);
+
     if (hasForm > 0) {
       formFrame = frame;
       break;
     }
   }
+
+
   if (!formFrame) {
-    throw new Error('返信フォームのiframeが見つかりません');
+    throw new Error(
+      '返信フォームのiframeが見つかりません'
+    );
   }
 
-  await formFrame.fill('textarea#messTempBody', bodyText);
-  await formFrame.click('input#gotoHeaven');
-  await threadPage.waitForLoadState('networkidle').catch(() => {});
-  console.log(`[SEND] uid=${uid} ${label}送信完了`);
-  await sendLine(`【送信完了】uid=${uid}へ${label}を送信しました`);
-  return true;
+
+  console.log(
+    '[CONTACT-SEND] formFrame URL:',
+    formFrame.url()
+  );
+
+
+  // ======================================================
+  // gotoHeaven の構造を確認
+  // ======================================================
+
+  const buttonInfo =
+    await formFrame.evaluate(() => {
+      const button =
+        document.querySelector(
+          'input#gotoHeaven'
+        );
+
+      if (!button) {
+        return null;
+      }
+
+      const form =
+        button.closest('form');
+
+      return {
+        type:
+          button.getAttribute('type') || '',
+
+        name:
+          button.getAttribute('name') || '',
+
+        value:
+          button.getAttribute('value') || '',
+
+        onclick:
+          button.getAttribute('onclick') || '',
+
+        formAction:
+          form?.getAttribute('action') || '',
+
+        formMethod:
+          form?.getAttribute('method') || ''
+      };
+    });
+
+
+  console.log(
+    '[CONTACT-SEND] gotoHeaven:',
+    JSON.stringify(buttonInfo)
+  );
+
+
+  if (!buttonInfo) {
+    throw new Error(
+      '送信ボタン #gotoHeaven が見つかりません'
+    );
+  }
+
+
+  // ======================================================
+  // confirm / alert 等が出た場合は承認
+  // ======================================================
+
+  const dialogHandler =
+    async dialog => {
+      console.log(
+        `[CONTACT-SEND] dialog type=${dialog.type()} ` +
+        `message="${dialog.message()}"`
+      );
+
+      await dialog
+        .accept()
+        .catch(() => {});
+    };
+
+
+  threadPage.on(
+    'dialog',
+    dialogHandler
+  );
+
+
+  try {
+
+    // ====================================================
+    // 本文入力
+    // ====================================================
+
+    await formFrame.fill(
+      'textarea#messTempBody',
+      bodyText
+    );
+
+
+    const beforeValue =
+      await formFrame.inputValue(
+        'textarea#messTempBody'
+      );
+
+
+    console.log(
+      '[CONTACT-SEND] 入力確認:',
+      JSON.stringify(beforeValue)
+    );
+
+
+    // ====================================================
+    // 送信クリック
+    // ====================================================
+
+    await formFrame.click(
+      'input#gotoHeaven'
+    );
+
+
+    // iframe側の処理を待つ
+    await new Promise(
+      r => setTimeout(r, 1500)
+    );
+
+
+    await formFrame
+      .waitForLoadState(
+        'networkidle'
+      )
+      .catch(() => {});
+
+
+    // ====================================================
+    // 送信後状態
+    // ====================================================
+
+    let afterValue = null;
+
+    try {
+      afterValue =
+        await formFrame.inputValue(
+          'textarea#messTempBody'
+        );
+    } catch (_) {
+      // iframeが再読み込みされた場合など
+      afterValue = null;
+    }
+
+
+    console.log(
+      '[CONTACT-SEND] 送信後textarea:',
+      JSON.stringify(afterValue)
+    );
+
+
+    console.log(
+      `[CONTACT-SEND] uid=${uid} ${label} ` +
+      '送信操作完了'
+    );
+
+
+    await sendLine(
+      `【送信操作完了】uid=${uid} ${label}`
+    );
+
+
+    return true;
+
+  } finally {
+
+    threadPage.off(
+      'dialog',
+      dialogHandler
+    );
+
+  }
 }
 
 // ─── コンタクト処理メインループ ───────────────────────────────────
