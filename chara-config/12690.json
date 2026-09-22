@@ -69,13 +69,6 @@
                 "useCurrentRow": true
             }
         },
-        "yu2": {
-            "fileId": "12690yu2sinko",
-            "ho": {
-                "searchTarget": "12690yu2/sinko/1",
-                "useCurrentRow": true
-            }
-        },
         "yu3": {
             "fileId": "12690yu3sinko",
             "ho": {
@@ -84,12 +77,14 @@
             }
         },
         "yu4am": {
-            "fileId": "12690yu3sinko"
+            "ho": {
+                "fileId": "12690yu3sinko"
+            }
         },
         "yu4pm": {
-            "fileId": "12690yu4pmsinko",
+            "fileId": "12690yu4sinko",
             "ho": {
-                "searchTarget": "12690yu4pm/sinko/1",
+                "searchTarget": "12690yu4/sinko/1",
                 "useCurrentRow": true
             }
         },
