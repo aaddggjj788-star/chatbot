@@ -1352,6 +1352,108 @@ async function submitContactReply(
   );
 
 
+  const textareaInfo =
+  await formFrame.evaluate(() => {
+    const textarea =
+      document.querySelector(
+        'textarea#messTempBody'
+      );
+
+    if (!textarea) {
+      return null;
+    }
+
+    const form =
+      textarea.closest('form');
+
+    return {
+      id:
+        textarea.id || '',
+
+      name:
+        textarea.getAttribute('name') || '',
+
+      value:
+        textarea.value || '',
+
+      disabled:
+        textarea.disabled === true,
+
+      readOnly:
+        textarea.readOnly === true,
+
+      formId:
+        form?.id || '',
+
+      formName:
+        form?.getAttribute('name') || '',
+
+      formAction:
+        form?.getAttribute('action') || '',
+
+      formMethod:
+        form?.getAttribute('method') || ''
+    };
+  });
+
+
+console.log(
+  '[CONTACT-SEND] textarea:',
+  JSON.stringify(textareaInfo)
+);
+
+
+const formInfo =
+  await formFrame.evaluate(() => {
+    const textarea =
+      document.querySelector(
+        'textarea#messTempBody'
+      );
+
+    const button =
+      document.querySelector(
+        'input#gotoHeaven'
+      );
+
+    const textareaForm =
+      textarea?.closest('form');
+
+    const buttonForm =
+      button?.closest('form');
+
+    return {
+      sameForm:
+        Boolean(
+          textareaForm &&
+          buttonForm &&
+          textareaForm === buttonForm
+        ),
+
+      textareaFormHTML:
+        textareaForm
+          ? textareaForm.outerHTML.slice(
+              0,
+              3000
+            )
+          : '',
+
+      buttonFormHTML:
+        buttonForm
+          ? buttonForm.outerHTML.slice(
+              0,
+              3000
+            )
+          : ''
+    };
+  });
+
+
+console.log(
+  '[CONTACT-SEND] form構造:',
+  JSON.stringify(formInfo)
+);
+
+
   // ======================================================
   // gotoHeaven の構造を確認
   // ======================================================
