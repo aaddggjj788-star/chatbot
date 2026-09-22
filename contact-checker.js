@@ -1497,6 +1497,84 @@ async function submitContactReply(
     );
 
 
+    // ======================================================
+    // 送信後の全iframe状態を確認
+    // ======================================================
+
+    const afterFrames =
+      threadPage.frames();
+
+    console.log(
+      `[CONTACT-SEND] 送信後frame数=${afterFrames.length}`
+    );
+
+    for (
+      let i = 0;
+      i < afterFrames.length;
+      i++
+    ) {
+      const frame =
+        afterFrames[i];
+
+      let info;
+
+      try {
+        info =
+          await frame.evaluate(() => {
+            return {
+              url:
+                location.href,
+
+              title:
+                document.title || '',
+
+              hasTextarea:
+                Boolean(
+                  document.querySelector(
+                    'textarea#messTempBody'
+                  )
+                ),
+
+              hasGotoHeaven:
+                Boolean(
+                  document.querySelector(
+                    '#gotoHeaven'
+                  )
+                ),
+
+              hasHistory:
+                Boolean(
+                  document.querySelector(
+                    '[style*="aaaaff"], #aaaaff'
+                  )
+                ),
+
+              bodyText:
+                (
+                  document.body
+                    ?.innerText || ''
+                )
+                  .slice(-1000)
+            };
+          });
+
+      } catch (err) {
+        info = {
+          url:
+            frame.url(),
+
+          error:
+            err.message
+        };
+      }
+
+
+      console.log(
+        `[CONTACT-SEND] AFTER FRAME ${i}:`,
+        JSON.stringify(info)
+      );
+    }
+
     console.log(
       `[CONTACT-SEND] uid=${uid} ${label} ` +
       '送信操作完了'
