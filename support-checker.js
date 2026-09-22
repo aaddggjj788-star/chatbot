@@ -1598,25 +1598,303 @@ async function matchTemplate(inquiryText, charaId = null) {
     return text || null;
   }
 
+
+function buildSupportManualReply(manualText) {
+  const body =
+    String(manualText || '').trim();
+
+  return [
+    '%charaname%です。',
+    '',
+    body,
+    '',
+    'その他、ご不明な点がありましたらお気軽にお問合せ下さい。',
+    '',
+    '-------------------------------'
+  ].join('\n');
+}
+
+async function confirmSupportManualReply(
+  userName,
+  manualText
+) {
+  const finalText =
+    buildSupportManualReply(
+      manualText
+    );
+
+  await sendLine([
+    '【手動返信確認】',
+    `ユーザー：${userName}`,
+    '',
+    '--- 送信予定本文 ---',
+    finalText,
+    '--------------------',
+    '',
+    'この内容で送信しますか？',
+    '',
+    '「送信」：この内容で送信',
+    '「スキップ」：送信しない'
+  ].join('\n'));
+
+  let reply;
+
+  try {
+    reply =
+      await waitForLineReply();
+  } catch (err) {
+    console.log(
+      `[MANUAL-REPLY] ${userName}: ` +
+      '送信確認タイムアウト'
+    );
+
+    return {
+      send: false,
+      reason: 'timeout'
+    };
+  }
+
+  const answer =
+    String(reply || '').trim();
+
+  if (answer !== '送信') {
+    console.log(
+      `[MANUAL-REPLY] ${userName}: ` +
+      `送信キャンセル reply="${answer}"`
+    );
+
+    return {
+      send: false,
+      reason: answer || 'cancel'
+    };
+  }
+
+  return {
+    send: true,
+    text: finalText
+  };
+}
+
 // テンプレート自動返答の送信処理（reply-checker.js の sendReplyText と同じ
 // ロジック: ope_mainフレーム内の textarea#mess_body に入力して #chara_mail_send をクリック）
 async function sendSupportReplyText(page, userName, textToSend) {
-  console.log(`[SEND-TEXT] 送信内容: "${textToSend.slice(0, 80)}..."`);
+  console.log(
+    `[SEND-TEXT] 送信内容: "${textToSend.slice(0, 80)}..."`
+  );
+
   if (DRY_RUN) {
-    console.log(`[DRY RUN] 送信をスキップ: ${userName}`);
-    await sendLine(`【DRY RUN】${userName}への自動返答送信をスキップしました`);
-    return;
+    console.log(
+      `[DRY RUN] 送信をスキップ: ${userName}`
+    );
+
+    await sendLine(
+      `【DRY RUN】${userName}への自動返答送信をスキップしました`
+    );
+
+    return false;
   }
-  const sendFrame = page.frame({ name: 'ope_main' });
+
+
+  const sendFrame =
+    page.frame({
+      name: 'ope_main'
+    });
+
+
   if (!sendFrame) {
-    console.log(`[WARN] ${userName}: 送信時にope_mainフレームが取得できません`);
-    return;
+    console.log(
+      `[WARN] ${userName}: ` +
+      '送信時にope_mainフレームが取得できません'
+    );
+
+    return false;
   }
-  await sendFrame.fill('textarea#mess_body', textToSend);
-  await sendFrame.click('#chara_mail_send');
-  await sendFrame.waitForLoadState('networkidle').catch(() => {});
-  console.log(`[SEND] ${userName} 自動返答送信完了`);
-  await sendLine(`【送信完了】${userName}へ自動返答を送信しました`);
+
+
+  // ======================================================
+  // 送信前チェック
+  // ======================================================
+
+  const beforeInfo =
+    await sendFrame.evaluate(() => {
+      const textarea =
+        document.querySelector(
+          'textarea#mess_body'
+        );
+
+      const button =
+        document.querySelector(
+          '#chara_mail_send'
+        );
+
+      const form =
+        button?.closest('form');
+
+      return {
+        textareaExists:
+          Boolean(textarea),
+
+        buttonExists:
+          Boolean(button),
+
+        buttonTag:
+          button?.tagName || '',
+
+        buttonType:
+          button?.getAttribute(
+            'type'
+          ) || '',
+
+        buttonValue:
+          button?.getAttribute(
+            'value'
+          ) || '',
+
+        buttonName:
+          button?.getAttribute(
+            'name'
+          ) || '',
+
+        formAction:
+          form?.getAttribute(
+            'action'
+          ) || '',
+
+        formMethod:
+          form?.getAttribute(
+            'method'
+          ) || ''
+      };
+    });
+
+
+  console.log(
+    '[SEND-DEBUG] 送信前DOM:',
+    JSON.stringify(
+      beforeInfo
+    )
+  );
+
+
+  if (
+    !beforeInfo.textareaExists ||
+    !beforeInfo.buttonExists
+  ) {
+    console.log(
+      `[SEND-ERROR] ${userName}: ` +
+      '返信フォームまたは送信ボタンがありません'
+    );
+
+    return false;
+  }
+
+
+  // ======================================================
+  // 本文入力
+  // ======================================================
+
+  await sendFrame.fill(
+    'textarea#mess_body',
+    textToSend
+  );
+
+
+  const filledText =
+    await sendFrame.inputValue(
+      'textarea#mess_body'
+    );
+
+
+  console.log(
+    '[SEND-DEBUG] 入力確認:',
+    JSON.stringify(
+      filledText
+    )
+  );
+
+
+  // ======================================================
+  // 送信
+  // ======================================================
+
+  await sendFrame.click(
+    '#chara_mail_send'
+  );
+
+
+  await new Promise(
+    r => setTimeout(r, 1500)
+  );
+
+
+  await sendFrame
+    .waitForLoadState(
+      'networkidle'
+    )
+    .catch(() => {});
+
+
+  // ======================================================
+  // 送信後チェック
+  // ======================================================
+
+  const afterInfo =
+    await sendFrame.evaluate(() => {
+      const textarea =
+        document.querySelector(
+          'textarea#mess_body'
+        );
+
+      const bodyKakunin =
+        document.querySelector(
+          '#bodyKakunin'
+        );
+
+      return {
+        textareaExists:
+          Boolean(textarea),
+
+        textareaValue:
+          textarea?.value || '',
+
+        bodyLength:
+          bodyKakunin
+            ?.innerHTML
+            ?.length || 0,
+
+        bodyTextTail:
+          (
+            bodyKakunin
+              ?.innerText || ''
+          )
+            .slice(-500)
+      };
+    });
+
+
+  console.log(
+    '[SEND-DEBUG] 送信後DOM:',
+    JSON.stringify(
+      afterInfo
+    )
+  );
+
+
+  // ここではまだ「成功」と断定しない
+  console.log(
+    `[SEND-CHECK] ${userName}: ` +
+    '送信ボタンクリック完了。結果確認が必要'
+  );
+
+
+  await sendLine(
+    `【送信操作実行】${userName}\n` +
+    `送信ボタンのクリックまでは完了しました。\n` +
+    `現在、実際の送信反映を確認中です。`
+  );
+
+
+  return true;
 }
 
 // ─── ope_mainフレーム内のユーザー名リンクをクリックし会員詳細へ ─────
@@ -1908,13 +2186,28 @@ async function checkSupport(
         if (manualText) {
           console.log(
             `[MANUAL-REPLY] ${candidate.userName}: ` +
-            `LINE入力文をそのまま返信`
+            '手動返信テンプレートを作成'
           );
+
+          const confirmation =
+            await confirmSupportManualReply(
+              candidate.userName,
+              manualText
+            );
+
+          if (!confirmation.send) {
+            console.log(
+              `[MANUAL-REPLY] ${candidate.userName}: ` +
+              '送信せず次へ'
+            );
+
+            continue;
+          }
 
           await sendSupportReplyText(
             page,
             candidate.userName,
-            manualText
+            confirmation.text
           );
 
           continue;
@@ -2341,13 +2634,28 @@ async function checkSupport(
       if (manualText) {
         console.log(
           `[MANUAL-REPLY] ${candidate.userName}: ` +
-          `LINE入力文をそのまま返信`
+          '手動返信テンプレートを作成'
         );
+
+        const confirmation =
+          await confirmSupportManualReply(
+            candidate.userName,
+            manualText
+          );
+
+        if (!confirmation.send) {
+          console.log(
+            `[MANUAL-REPLY] ${candidate.userName}: ` +
+            '送信せず次へ'
+          );
+
+          continue;
+        }
 
         await sendSupportReplyText(
           page,
           candidate.userName,
-          manualText
+          confirmation.text
         );
 
         continue;
