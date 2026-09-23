@@ -1287,6 +1287,84 @@ ${actionLines.join('\n')}
     return text || null;
 }
 
+
+function buildContactManualReply(manualText) {
+  const body =
+    String(manualText || '').trim();
+
+  return [
+    '{getUserData(siteOriginal[site_name])}お問い合わせ窓口で御座います。',
+    '',
+    body,
+    '',
+    'その他、ご不明な点がございましたらお気軽にお問い合わせ下さい。',
+    '{getUserData(siteOriginal[site_name])}サポートセンター'
+  ].join('\n');
+}
+
+
+async function confirmContactManualReply(
+  uid,
+  manualText
+) {
+  const finalText =
+    buildContactManualReply(
+      manualText
+    );
+
+  await sendLine([
+    '【手動返信確認】',
+    `会員ID：${uid}`,
+    '',
+    '--- 送信予定本文 ---',
+    finalText,
+    '--------------------',
+    '',
+    'この内容で送信しますか？',
+    '',
+    '「送信」：この内容で送信',
+    '「スキップ」：送信しない'
+  ].join('\n'));
+
+  let reply;
+
+  try {
+    reply =
+      await waitForLineReply();
+
+  } catch (err) {
+    console.log(
+      `[MANUAL-REPLY] uid=${uid}: ` +
+      '送信確認タイムアウト'
+    );
+
+    return {
+      send: false,
+      reason: 'timeout'
+    };
+  }
+
+  const answer =
+    String(reply || '').trim();
+
+  if (answer !== '送信') {
+    console.log(
+      `[MANUAL-REPLY] uid=${uid}: ` +
+      `送信キャンセル reply="${answer}"`
+    );
+
+    return {
+      send: false,
+      reason: answer || 'cancel'
+    };
+  }
+
+  return {
+    send: true,
+    text: finalText
+  };
+}
+
 // STEP8 / 自動返答で共通の送信処理（本文を入力してgotoHeavenをクリック）
 // 件名は本文の1行目が自動的に使われるため、件名欄への入力は行わない
 // 成功時はtrue、失敗時はfalseを返す
@@ -1558,9 +1636,58 @@ console.log(
     // 送信クリック
     // ====================================================
 
+    // ======================================================
+    // 実際に送信されるPOST内容を捕捉
+    // ======================================================
+
+    const requestPromise =
+      threadPage.waitForRequest(
+        request => {
+          return (
+            request.method() === 'POST' &&
+            request.url().includes(
+              'mg_mail_contact.php'
+            )
+          );
+        },
+        {
+          timeout: 10000
+        }
+      ).catch(() => null);
+
+
     await formFrame.click(
       'input#gotoHeaven'
     );
+
+
+    const postRequest =
+      await requestPromise;
+
+
+    if (postRequest) {
+      console.log(
+        '[CONTACT-SEND] POST URL:',
+        postRequest.url()
+      );
+
+      console.log(
+        '[CONTACT-SEND] POST DATA:',
+        postRequest.postData()
+      );
+
+      console.log(
+        '[CONTACT-SEND] POST PARAMS:',
+        JSON.stringify(
+          postRequest.postDataJSON?.() || null
+        )
+      );
+
+    } else {
+      console.log(
+        '[CONTACT-SEND] POSTリクエストを捕捉できませんでした'
+      );
+    }
 
 
     // iframe側の処理を待つ
@@ -1949,16 +2076,37 @@ async function processContacts(
           `LINE入力文をそのまま返信`
         );
 
-        await submitContactReply(
-          threadPage,
-          manualText,
-          contact.uid,
-          '手動返信'
-        );
+        if (cmd.manualText) {
+          console.log(
+            `[MANUAL-REPLY] uid=${contact.uid}: ` +
+            '手動返信テンプレートを作成'
+          );
 
-        continue;
-      }
+          const confirmation =
+            await confirmContactManualReply(
+              contact.uid,
+              cmd.manualText
+            );
 
+          if (!confirmation.send) {
+            console.log(
+              `[MANUAL-REPLY] uid=${contact.uid}: ` +
+              '手動返信を送信せず次へ'
+            );
+
+            continue;
+          }
+
+          await submitContactReply(
+            threadPage,
+            confirmation.text,
+            contact.uid,
+            '手動返信'
+          );
+
+          continue;
+        }
+　　　　}
       // ─── 「手動対応」 ─────────────────────────────────────────────
       // AI返信生成・自動返信は行わず、この問い合わせを担当者対応へ回す。
       if (manualMatch) {
