@@ -2106,7 +2106,7 @@ async function processContacts(
 
           continue;
         }
-　　　　}
+　　　}
       // ─── 「手動対応」 ─────────────────────────────────────────────
       // AI返信生成・自動返信は行わず、この問い合わせを担当者対応へ回す。
       if (manualMatch) {
