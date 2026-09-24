@@ -48,7 +48,7 @@
         },
         "yu1mu": {
             "fileId": "12689yu1musinko",
-            "stopAfter": "10:50", 
+            "stopAfter": "10:50",
             "ho": {
                 "searchTarget": "12689yu1mu/sinko/1",
                 "useCurrentRow": true
@@ -117,6 +117,15 @@
                 "searchTarget": "12689yu9/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu11": {
+            "fileId": "12689yu9sinko"
+        },
+        "yu14": {
+            "fileId": "12689yu9sinko"
+        },
+        "yu21": {
+            "fileId": "12689yu9sinko"
         },
         "yu4mu": {
             "fileId": "12689yu4musinko",
