@@ -1610,7 +1610,6 @@ function buildSupportManualReply(manualText) {
     '',
     'その他、ご不明な点がありましたらお気軽にお問合せ下さい。',
     '',
-    '-------------------------------'
   ].join('\n');
 }
 
@@ -1888,9 +1887,8 @@ async function sendSupportReplyText(page, userName, textToSend) {
 
 
   await sendLine(
-    `【送信操作実行】${userName}\n` +
-    `送信ボタンのクリックまでは完了しました。\n` +
-    `現在、実際の送信反映を確認中です。`
+    `【送信実行】${userName}\n` +
+    `入力された内容を送信しました。`
   );
 
 
