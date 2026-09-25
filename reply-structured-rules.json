@@ -483,6 +483,119 @@
         }
       },
       "noTemplateAction": "existing_false_flow"
+    },
+    "12691birthdate_strokes": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "生年月日と名前の画数の両方が、意味として明確に提示されている。生年月日は西暦の年月日として特定でき、画数は数値として特定できる。",
+          "action": "continue_without_ai"
+        },
+        "birthdate_missing": {
+          "description": "名前の画数は回答しているが、生年月日の回答が無い、または年月日として特定できない。",
+          "template": "画数の方は確認出来ました。もう一つ、生年月日も必要となりますので、西暦で年月日までお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "stroke_count_missing": {
+          "description": "生年月日は回答しているが、名前の画数が無い、または画数として特定できない。",
+          "template": "生年月日の方は確認出来ました。もう一つ、貴方のお名前の画数も必要となりますので、数字でお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "生年月日や名前の画数を何のために聞くのか、なぜ必要なのかを質問している。",
+          "template": "どちらもこれから鑑定を組み立てるための大事な資料として確認しています。ここでは、生年月日を西暦で年月日まで、そしてお名前の画数をそれぞれお教え下さい。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "今回求められている生年月日または名前の画数そのものについて、個人情報・プライバシー上の不安を示している。",
+          "template": "ご不安がある点は理解しています。ただ、ここで確認したいのは鑑定に必要な生年月日とお名前の画数の二点です。お答え頂ける範囲で構いませんので、まずはこの二点をお知らせ下さい。",
+          "commentPolicy": "same"
+        },
+        "unknown_stroke_count": {
+          "description": "名前の画数を答えたい意思はあるが、画数が分からない・把握していないと明示している。",
+          "template": "画数がまだ分からないのですね。生年月日だけで先へ進める質問ではありませんので、お名前の画数も確認した上で、二点を揃えてお送り下さいね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "生年月日または名前の画数について、答えたくない・教えたくないと明確に拒否している。",
+          "template": "この二点は今後の鑑定に使う資料として確認しているものです。無理に別の内容をお聞きすることはありませんので、鑑定を進める場合は生年月日とお名前の画数をお知らせ下さい。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12691money_amount": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "本人が必要とする金額を、円・万円・億円など金額として明確に特定できる形で提示している。『3000万円くらい』『1億円』『500万円』など幅を多少含んでも金額が特定できれば成立。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "なぜ必要金額を聞くのか、何に使うのか、金額を答える意味を質問している。",
+          "template": "貴方が求める金額そのものが、これから鑑定を進める上での素材になります。高く見積もって構いませんので、今の貴方が必要だと思う金額をそのまま数字でお教え下さい。",
+          "commentPolicy": "same"
+        },
+        "uncertain_amount": {
+          "description": "答える意思はあるが、『いくらにすればいいか分からない』『決められない』など、具体的な金額をまだ提示していない。",
+          "template": "正解の金額を決める質問ではありません。今の貴方が必要だと思う金額で構いませんので、高く見積もっても気にせず、具体的な金額を一つお教え下さい。",
+          "commentPolicy": "same"
+        },
+        "multiple_amounts_question": {
+          "description": "複数の金額候補を挙げた上で、どれを答えればよいか質問している。",
+          "template": "複数浮かんでいる場合は、その中で今もっとも必要だと感じる金額を一つ選んで下さい。高く見積もって構いませんので、選んだ金額をそのままお送り下さい。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "必要金額を答えたくない、金額を言いたくないと明確に拒否している。",
+          "template": "ここで伺っている金額は、今後の鑑定に必要な素材として確認するものです。鑑定を進める場合は、貴方が必要だと思う金額を一つお教え下さい。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12691kanji_pair_gold": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "漢字『金』の前または後ろに、別の漢字一文字を加えた二文字の回答を明確に提示している。例：金運、黄金、金福、財金。説明文を伴っていても二文字の回答が特定できれば成立。",
+          "action": "continue_without_ai"
+        },
+        "single_kanji_only": {
+          "description": "『金』以外の漢字一文字だけを回答しており、金と組み合わせた二文字としてはまだ提示していない。",
+          "template": "浮かんだ一文字は確認出来ました。その文字を『金』の前か後ろへ付け加え、二文字の形にしてそのままお送り下さいね。",
+          "commentPolicy": "same"
+        },
+        "gold_only": {
+          "description": "『金』一文字だけを回答しており、追加する漢字一文字が無い。",
+          "template": "『金』は最初から使う文字ですので、そこへ直感で漢字をもう一文字だけ加えて下さい。『金○』または『○金』の二文字にしてお送り下さいね。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "なぜ『金』へ一文字足すのか、意味のある言葉にする必要があるのか等、この質問の意図ややり方を質問している。",
+          "template": "意味の通った熟語を作ることが目的ではありません。『金』の前か後ろへ、最初に浮かんだ漢字を一文字だけ加え、その二文字をそのまま教えて下さい。",
+          "commentPolicy": "same"
+        },
+        "multiple_answers": {
+          "description": "複数の二文字候補を提示し、どれを選べばよいか迷っている、または複数回答している。",
+          "template": "今回は一つだけで構いません。考え込まず、最初に浮かんだものを一つ選び、『金』を含む二文字だけをお送り下さい。",
+          "commentPolicy": "same"
+        },
+        "non_kanji_answer": {
+          "description": "ひらがな・カタカナ・数字・記号などを付けており、漢字一文字を加える条件を満たしていない。",
+          "template": "今回は漢字を使います。『金』の前か後ろへ漢字を一文字だけ加え、二文字の形でお送り下さいね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "この二文字回答そのものを答えたくない、選びたくないと明確に拒否している。",
+          "template": "難しい意味を考える必要はありません。直感で浮かんだ漢字を一文字だけ『金』へ加え、その二文字をお送り下さい。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
     }
   },
   "rules": {
@@ -893,6 +1006,51 @@
       "enabled": true,
       "type": "fatigue_percent",
       "fallbackProfile": "12689fatigue_percent",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12691mu1/sinko/1": {
+      "enabled": true,
+      "type": "birthdate_and_stroke_count",
+      "fallbackProfile": "12691birthdate_strokes",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12691mu1/sinko/3": {
+      "enabled": true,
+      "type": "money_amount",
+      "fallbackProfile": "12691money_amount",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12691mu1/sinko/9": {
+      "enabled": true,
+      "type": "kanji_pair_with_gold",
+      "fallbackProfile": "12691kanji_pair_gold",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",

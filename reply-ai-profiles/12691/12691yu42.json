@@ -1,0 +1,158 @@
+{
+  "phaseKey": "12691yu42",
+  "situation": "有料42日目。前日までの既存進行を引き継ぐ日。 当日は時間限定の無料展開ログも存在する。",
+  "startState": "有料42日目開始時点。前日までに完了した内容を再実施せず、最新コメントアウトが示す既存ログ位置から継続する。 この日程キーには返信ログsinko/1～7が確認できる。",
+  "goal": "有料42日目の既存ログ範囲内まで進める。次の日程や未公開の数字・固有語を先出ししない。",
+  "currentProcess": {
+    "summary": "有料42日目の実在コメントアウトから抽出した進行。",
+    "steps": [
+      {
+        "type": "reply",
+        "replyRange": "1-7",
+        "replyCount": 7,
+        "commentPattern": "<!--12691yu42/sinko/番号-->",
+        "sendWordCountPatterns": {
+          "1": 7
+        },
+        "questionOnlyComments": [],
+        "sendWordSamples": [
+          {
+            "comment": "<!--12691yu42/sinko/1-->",
+            "words": [
+              "豊綾脈（ほうりょうみゃく）{getUserData(rand[21394, 21567])}"
+            ]
+          },
+          {
+            "comment": "<!--12691yu42/sinko/2-->",
+            "words": [
+              "福綾脈（ふくりょうみゃく）{getUserData(rand[21405, 21579])}"
+            ]
+          },
+          {
+            "comment": "<!--12691yu42/sinko/3-->",
+            "words": [
+              "財弦脈（ざいげんみゃく）{getUserData(rand[21416, 21591])}"
+            ]
+          },
+          {
+            "comment": "<!--12691yu42/sinko/4-->",
+            "words": [
+              "富弦脈（ふげんみゃく）{getUserData(rand[21427, 21603])}"
+            ]
+          },
+          {
+            "comment": "<!--12691yu42/sinko/5-->",
+            "words": [
+              "金弦脈（きんげんみゃく）{getUserData(rand[21438, 21615])}"
+            ]
+          },
+          {
+            "comment": "<!--12691yu42/sinko/6-->",
+            "words": [
+              "豊弦脈（ほうげんみゃく）{getUserData(rand[21449, 21627])}"
+            ]
+          },
+          {
+            "comment": "<!--12691yu42/sinko/7-->",
+            "words": [
+              "福弦脈（ふくげんみゃく）{getUserData(rand[21460, 21639])}"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "dig",
+        "count": 1,
+        "comment": "<!--12691yu42/ho-->",
+        "managementHints": [
+          ">　　　　　　　オール"
+        ],
+        "note": "レス有／レス無／オール等の実際の配信条件は元ログ・外部配信判定を優先し、AIが条件を推測して送信しない。"
+      }
+    ]
+  },
+  "progressRules": [
+    "最新コメントアウトと外部進行判定を優先する。",
+    "fullReplyだけで次のsinko番号へ進めない。",
+    "存在しない返信番号・送り返す言葉・数字・工程を作らない。",
+    "当日goalを越えて次の日程へ進めない。",
+    "既に完了済みの内容を再度要求しない。",
+    "掘り起こし・まとめのレス条件はAIが推測せず、配信側の条件判定を優先する。"
+  ],
+  "replyRules": [
+    "質問・疑念・不安があれば、その内容への回答を既存進行より先に処理する。",
+    "返信語だけが届いた場合、外部進行判定に従い既存次行へ接続する。",
+    "返信語不足時は外部指定されたinsufficientSameLine/insufficientNextLineを使用する。",
+    "誤字や表記揺れだけで意味が明確な場合も、AI独自に送り返す言葉を作り直さない。",
+    "質問型ログではwordinsertが0個でも正常な場合がある。"
+  ],
+  "allowed": [
+    "現在日程までに既に説明済みの設定",
+    "直前ログに出ている固有語・数字・返信語",
+    "ユーザーの質問への久世本人としての説明",
+    "時間限定無料展開が存在すること"
+  ],
+  "forbidden": [
+    "次の日程の内容",
+    "未公開の固有語・数字・最終結果",
+    "新しい工程・術式・送り返す言葉",
+    "AI独自の当選数字予測",
+    "ユーザーが送っていない返信語を送った扱いにすること"
+  ],
+  "importantTerms": {
+    "財儀援成": "送り返し語系の固有語。"
+  },
+  "referenceLogs": [
+    {
+      "purpose": "通常返信時の口調・進行参考",
+      "sourceFile": "【久世宗玄】18時から無料堀り返信ログ.txt",
+      "phase": "yu42",
+      "replyNumber": "1",
+      "comment": "<!--12691yu42/sinko/1-->",
+      "text": "確認しました。\n特別法術を進めて参ります。\n\n前回お送りした鑑定文でもお伝えしましたが\n\nこの工程は一攫千金運の上昇を利用し、一気に力を注いでいく為。\n\nそして、この現象の詳細を紐解く為の解析材料を集める為です。\n\n一攫千金運の上昇がいつまで続くかも分かりませんので可能な限りで急いで進めていきましょう。\n\nでは開始していきます。\n\n手順１\n【財儀援成（かいぎえんさい）】と心の中で唱えます。\n\n手順２\n私へ【{getUserData(siteOriginal[wordinsert/start])}豊綾脈（ほうりょうみゃく）{getUserData(rand[21394, 21567])}{getUserData(siteOriginal[wordinsert/end])}】とお送り下さい。\nお待ちしております。"
+    },
+    {
+      "purpose": "通常返信時の口調・進行参考",
+      "sourceFile": "【久世宗玄】18時から無料堀り返信ログ.txt",
+      "phase": "yu42",
+      "replyNumber": "4",
+      "comment": "<!--12691yu42/sinko/4-->",
+      "text": "確認しました。\n\n着実に解析に必要な要素が集められています。\n\nこのまま参りましょう。\n\n手順１\n【財儀援成（かいぎえんさい）】と心の中で唱えます。\n\n手順２\n私へ【{getUserData(siteOriginal[wordinsert/start])}富弦脈（ふげんみゃく）{getUserData(rand[21427, 21603])}{getUserData(siteOriginal[wordinsert/end])}】とお送り下さい。\nお待ちしております。"
+    },
+    {
+      "purpose": "通常返信時の口調・進行参考",
+      "sourceFile": "【久世宗玄】18時から無料堀り返信ログ.txt",
+      "phase": "yu42",
+      "replyNumber": "7",
+      "comment": "<!--12691yu42/sinko/7-->",
+      "text": "確認しました。\n\n非常に強力な力が働いています。\n\n慎重にお取り組み下さい。\n\n手順１\n【財儀援成（かいぎえんさい）】と心の中で唱えます。\n\n手順２\n私へ【{getUserData(siteOriginal[wordinsert/start])}福弦脈（ふくげんみゃく）{getUserData(rand[21460, 21639])}{getUserData(siteOriginal[wordinsert/end])}】とお送り下さい。\nお待ちしております。"
+    },
+    {
+      "purpose": "掘り起こし時の口調・進行参考",
+      "sourceFile": "【久世宗玄】18時から無料堀り返信ログ.txt",
+      "phase": "yu42",
+      "replyNumber": "",
+      "comment": "<!--12691yu42/ho-->",
+      "text": ">　　　　　　　オール\n\n※緊急連絡。\n今から数十分前、一攫千金運が急激な上昇を見せ始めました。\n\n正直、何が原因でこうなったのか現時点では分かりません。\n\n恐らく“突然の完了”を視野に入れた作業、意識、なんらかの力がこの現象を引き起こしたのだと思われます。\n\nただ、この状況を活かせば\n貴方が高額当せんを果たす瞬間までの時間を一気に縮めることが出来る。\nこれだけは断言できます。\n\nですので番組にお願いをして18時～20時の間で無料期間を設けて頂きました。\n無理を言って設けて頂いたものですので、是非ご活用頂きたいと思います。\n\n一攫千金運の急激な上昇が確認されてから、30分で特別工程を用意しましたので、無料期間を活かして進めていきましょう。\n\n貴方の進行があれば、この一攫千金運の急上昇の解析も同時に進めることが出来ます。\n\nとにかく、時間がありません。\nこの上昇がいつまで続くものなのか、どういった恩恵を齎すのかも何も分からない状態です。\n\n一攫千金運の上昇を活かす為。\nそして、解析を進めていく為、\n\n進めて参りましょう。\n\nでは準備が整いましたら\n\n【{getUserData(siteOriginal[wordinsert/start])}金綾脈（きんりょうみゃく）{getUserData(siteOriginal[wordinsert/end])}】\n\nこちらをお送り下さい。\nお待ちしております。"
+    }
+  ],
+  "additionalRules": [
+    "この日程には時間限定無料展開ログが存在する。無料時間の案内・条件は既存本文に記載された内容だけを使用し、AIが時間を推測しない。"
+  ],
+  "countValidation": {
+    "replyWordCountPatterns": {
+      "1": 7
+    },
+    "questionOnlyComments": [],
+    "rule": "実際の不足判定は外部span判定を優先する。この分布は参考であり、AIが必要個数を独自決定する根拠にはしない。"
+  },
+  "sourceAudit": {
+    "sourceFiles": [
+      "01_オール.txt",
+      "03_レス無.txt",
+      "【久世宗玄】18時から無料堀り返信ログ.txt"
+    ],
+    "commentCount": 10,
+    "latestFreeReplyOverride": false
+  }
+}
