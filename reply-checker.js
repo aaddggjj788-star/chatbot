@@ -7306,48 +7306,35 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
             .replace(/<[^>]+>/g, '')
             .trim();
 
+          const combinedUserText =
+            Array.isArray(userTexts)
+              ? userTexts.join('\n\n')
+              : String(userTexts || '');
+
           const questionAiResult =
             await checkQuestionAnswerWithAI(
-              questionText,
-              userTexts,
+              kanteishiQuestionText,
+              combinedUserText,
               true
             );
 
           console.log(
             `[AUTO-QUESTION] ${userName}: ` +
-            `answered=${aiCheck.answered} ` +
-            `relevant=${aiCheck.relevant} ` +
-            `hasFollowupQuestion=${aiCheck.hasFollowupQuestion} ` +
-            `safety=${aiCheck.safety} ` +
-            `reason="${aiCheck.reason}"`
+            `answered=${questionAiResult.answered} ` +
+            `relevant=${questionAiResult.relevant} ` +
+            `hasFollowupQuestion=${questionAiResult.hasFollowupQuestion} ` +
+            `requiredAnswerProvided=${questionAiResult.requiredAnswerProvided} ` +
+            `safety=${questionAiResult.safety} ` +
+            `reason="${questionAiResult.reason}"`
           );
 
           if (
-              !aiCheck.answered ||
-              !aiCheck.relevant ||
-              !aiCheck.requiredAnswerProvided
-            ) {
-            recordSkip(
-              `自動返信対象外: 質問への回答不十分 (${aiCheck.reason})`
-            );
-
-            continue;
-          }
-
-          if (aiCheck.hasFollowupQuestion) {
-            recordSkip(
-              `自動返信対象外: ユーザーから追加質問あり (${aiCheck.reason})`
-            );
-
-            continue;
-          }
-
-          if (
-            aiCheck.safety === 'ambiguous' ||
-            aiCheck.safety === 'urgent'
+            !questionAiResult.answered ||
+            !questionAiResult.relevant ||
+            !questionAiResult.requiredAnswerProvided
           ) {
             recordSkip(
-              `自動返信対象外: 要確認 safety=${aiCheck.safety} (${aiCheck.reason})`
+              `自動返信対象外: 質問への回答不十分 (${questionAiResult.reason})`
             );
 
             continue;

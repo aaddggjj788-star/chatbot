@@ -19,7 +19,8 @@
       "fileId": "12541mu2sinko",
       "sinko0": {
         "specialProcess": ["saveMemo1", "saveNickname"],
-        "searchTarget": "12541mu2/sinko/0"
+        "searchTarget": "12541mu2/sinko/1",
+        "useCurrentRow": true
       },
       "ho": {
         "searchTarget": "12541mu2/sinko/0",
