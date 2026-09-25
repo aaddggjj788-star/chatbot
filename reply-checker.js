@@ -7326,61 +7326,63 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
       }
 
-  // ======================================================
-  // 質問型コメント：OpenAIで回答内容を確認
-  // ======================================================
-          if (
-            !structuredResult &&
-            isQuestionComment
-          ) {
-          const kanteishiQuestionText = String(
-            analysis.kanteishiBodyText || ''
-          )
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<[^>]+>/g, '')
-            .trim();
+      // ======================================================
+      // 質問型コメント：OpenAIで回答内容を確認
+      // ======================================================
+      if (
+        !structuredResult &&
+        isQuestionComment
+      ) {
+        const kanteishiQuestionText = String(
+          analysis.kanteishiBodyText || ''
+        )
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .trim();
 
-          const combinedUserText =
-            Array.isArray(userTexts)
-              ? userTexts.join('\n\n')
-              : String(userTexts || '');
+        const combinedUserText =
+          Array.isArray(userTextsForAuto)
+            ? userTextsForAuto
+                .map(text => String(text || '').trim())
+                .filter(Boolean)
+                .join('\n\n')
+            : String(userTextsForAuto || '');
 
-          const questionAiResult =
-            await checkQuestionAnswerWithAI(
-              kanteishiQuestionText,
-              combinedUserText,
-              true
-            );
-
-          console.log(
-            `[AUTO-QUESTION] ${userName}: ` +
-            `answered=${questionAiResult.answered} ` +
-            `relevant=${questionAiResult.relevant} ` +
-            `hasFollowupQuestion=${questionAiResult.hasFollowupQuestion} ` +
-            `requiredAnswerProvided=${questionAiResult.requiredAnswerProvided} ` +
-            `safety=${questionAiResult.safety} ` +
-            `reason="${questionAiResult.reason}"`
+        const questionAiResult =
+          await checkQuestionAnswerWithAI(
+            kanteishiQuestionText,
+            combinedUserText,
+            true
           );
 
-          if (
-            !questionAiResult.answered ||
-            !questionAiResult.relevant ||
-            !questionAiResult.requiredAnswerProvided
-          ) {
-            recordSkip(
-              `自動返信対象外: 質問への回答不十分 (${questionAiResult.reason})`
-            );
+        console.log(
+          `[AUTO-QUESTION] ${userName}: ` +
+          `answered=${questionAiResult.answered} ` +
+          `relevant=${questionAiResult.relevant} ` +
+          `hasFollowupQuestion=${questionAiResult.hasFollowupQuestion} ` +
+          `requiredAnswerProvided=${questionAiResult.requiredAnswerProvided} ` +
+          `safety=${questionAiResult.safety} ` +
+          `reason="${questionAiResult.reason}"`
+        );
 
-            continue;
-          }
-
-          console.log(
-            `requiredAnswerProvided=${aiCheck.requiredAnswerProvided} ` +
-            `[AUTO-QUESTION] ${userName}: ` +
-            '質問回答OK・追加質問なし → 自動返信続行'
-            
+        if (
+          !questionAiResult.answered ||
+          !questionAiResult.relevant ||
+          !questionAiResult.requiredAnswerProvided
+        ) {
+          recordSkip(
+            `自動返信対象外: 質問への回答不十分 (${questionAiResult.reason})`
           );
+
+          continue;
         }
+
+        console.log(
+          `[AUTO-QUESTION] ${userName}: ` +
+          `requiredAnswerProvided=${questionAiResult.requiredAnswerProvided} ` +
+          '質問回答OK・追加質問なし → 自動返信続行'
+        );
+      }
       }
       if (nengenWords.length > 0) {
         const userTexts = bodyNaibuTexts.length > 0 ? bodyNaibuTexts : (analysis.latestUserTexts || []);
