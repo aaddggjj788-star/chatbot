@@ -7125,11 +7125,113 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         allComments[0] ||
         '';
 
-      const structuredResult =
+      let structuredResult =
         checkStructuredQuestion(
           latestCommentForStructured,
           userTextsForAuto
         );
+
+        // ======================================================
+        // 12691mu1/sinko/1
+        // 前回のfallbackで片方を取得済みの場合、
+        // 今回は残りの回答だけでvalidにする
+        // ======================================================
+
+        if (
+          latestCommentForStructured === '12691mu1/sinko/1' &&
+          structuredResult?.status === 'needs_ai'
+        ) {
+          const currentText =
+            userTextsForAuto
+              .map(text =>
+                normalizeStructuredText(text)
+              )
+              .filter(Boolean)
+              .join('\n');
+
+          const hasQuestion =
+            /[？?]/.test(currentText);
+
+          // 生年月日
+          const currentHasBirthdate =
+            /(?:19|20)\d{2}\s*年\s*(?:0?[1-9]|1[0-2])\s*月\s*(?:0?[1-9]|[12]\d|3[01])\s*日/.test(currentText) ||
+            /(?:19|20)\d{2}[\/\-.](?:0?[1-9]|1[0-2])[\/\-.](?:0?[1-9]|[12]\d|3[01])/.test(currentText) ||
+            /(?:19|20)\d{6}/.test(currentText);
+
+          // 画数
+          // 「19画」のほか、画数だけ再質問した後の「19」も許可
+          const currentHasStrokeCount =
+            /\d{1,3}\s*画/.test(currentText) ||
+            /^\s*\d{1,3}\s*$/.test(currentText);
+
+          // ----------------------------------------------
+          // 前回：生年月日取得済み、画数のみ不足
+          // ----------------------------------------------
+
+          const strokeCountMissingUsed =
+            getStructuredFallbackUseCount(
+              uid,
+              kid,
+              latestCommentForStructured,
+              'stroke_count_missing'
+            );
+
+          if (
+            !hasQuestion &&
+            strokeCountMissingUsed > 0 &&
+            currentHasStrokeCount
+          ) {
+            structuredResult = {
+              matched: true,
+              status: 'valid',
+              reason:
+                'stroke_count_after_stroke_count_missing_fallback',
+              type:
+                'birthdate_and_stroke_count'
+            };
+
+            console.log(
+              `[STRUCTURED-STATE] ${userName}: ` +
+              `生年月日取得済みfallbackを確認 + 今回画数回答あり ` +
+              `→ valid`
+            );
+          }
+
+
+          // ----------------------------------------------
+          // 前回：画数取得済み、生年月日のみ不足
+          // ----------------------------------------------
+
+          const birthdateMissingUsed =
+            getStructuredFallbackUseCount(
+              uid,
+              kid,
+              latestCommentForStructured,
+              'birthdate_missing'
+            );
+
+          if (
+            structuredResult?.status !== 'valid' &&
+            !hasQuestion &&
+            birthdateMissingUsed > 0 &&
+            currentHasBirthdate
+          ) {
+            structuredResult = {
+              matched: true,
+              status: 'valid',
+              reason:
+                'birthdate_after_birthdate_missing_fallback',
+              type:
+                'birthdate_and_stroke_count'
+            };
+
+            console.log(
+              `[STRUCTURED-STATE] ${userName}: ` +
+              `画数取得済みfallbackを確認 + 今回生年月日回答あり ` +
+              `→ valid`
+            );
+          }
+        }
 
       const structuredValid =
         structuredResult?.status === 'valid';
