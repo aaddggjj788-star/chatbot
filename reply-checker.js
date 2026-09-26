@@ -5234,6 +5234,65 @@ function validateStructuredInnerConcernDisclosure(text, rule) {
   };
 }
 
+
+
+function validateStructuredBirthdateAndStrokeCount(text, rule) {
+  const normalized = normalizeStructuredText(text);
+
+  // 生年月日:
+  // 1961年7月7日 / 1961/07/07 / 1961-07-07 / 19610707
+  const hasBirthdate =
+    /(?:19|20)\d{2}\s*年\s*(?:0?[1-9]|1[0-2])\s*月\s*(?:0?[1-9]|[12]\d|3[01])\s*日/.test(normalized) ||
+    /(?:19|20)\d{2}[\/\-.](?:0?[1-9]|1[0-2])[\/\-.](?:0?[1-9]|[12]\d|3[01])/.test(normalized) ||
+    /(?:19|20)\d{6}/.test(normalized);
+
+  // 画数:
+  // 誤true防止のため、機械判定では「○画」と明示されたものだけ拾う。
+  // 「1961/7/7、23です」のような自然回答は fallback AI の valid_answer で救済。
+  const hasStrokeCount = /\d{1,3}\s*画/.test(normalized);
+
+  if (hasBirthdate && hasStrokeCount) {
+    return {
+      status: 'valid',
+      reason: 'birthdate_and_stroke_count_found'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'birthdate_or_stroke_count_ambiguous'
+  };
+}
+
+function validateStructuredKanjiPairWithGold(text, rule) {
+  const normalized = normalizeStructuredText(text)
+    .replace(/[「」『』【】（）()<>＜＞\[\]\s]/g, '');
+
+  // 「金」+ 漢字1文字、または漢字1文字 +「金」
+  // 機械判定は二文字回答が明確な場合だけ valid。
+  const matches = normalized.match(/[\p{Script=Han}]{2}/gu) || [];
+
+  for (const pair of matches) {
+    const chars = [...pair];
+
+    if (
+      chars.length === 2 &&
+      chars.filter((ch) => ch === '金').length === 1 &&
+      chars.every((ch) => /\p{Script=Han}/u.test(ch))
+    ) {
+      return {
+        status: 'valid',
+        reason: 'kanji_pair_with_gold_found'
+      };
+    }
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'kanji_pair_with_gold_not_clear'
+  };
+}
+
 // ======================================================
 // type → validator
 // ======================================================
@@ -5279,7 +5338,13 @@ const STRUCTURED_VALIDATORS = {
     validateStructuredConcreteWish,
 
   inner_concern_disclosure:
-    validateStructuredInnerConcernDisclosure
+    validateStructuredInnerConcernDisclosure,
+
+  birthdate_and_stroke_count:
+  validateStructuredBirthdateAndStrokeCount,
+
+  kanji_pair_with_gold:
+    validateStructuredKanjiPairWithGold
 };
 
 
