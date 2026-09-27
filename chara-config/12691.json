@@ -30,7 +30,7 @@
             },
             "do1": {
                 "fileId": "12691mu2hissinko",
-                "searchTarget": "12691mu2/his/1",
+                "searchTarget": "12691mu2/his/2",
                 "useCurrentRow": true
             },
             "ho1": {
@@ -48,6 +48,48 @@
                 "searchTarget": "12691yu1/sinko/1",
                 "useCurrentRow": true
             }
+            },
+            "yu4": {
+                "fileId": "12691yu4sinko",
+                "ho": {
+                    "searchTarget": "12691yu4/sinko/1",
+                    "useCurrentRow": true
+                }
+            },
+            "yu4mu": {
+                "fileId": "12691yu4musinko",
+                "ho": {
+                    "searchTarget": "12691yu4mu/sinko/1",
+                    "useCurrentRow": true
+                }
+            },
+            "yu5": {
+                "fileId": "12691yu5sinko",
+                "ho": {
+                    "searchTarget": "12691yu5/sinko/1",
+                    "useCurrentRow": true
+                }
+            },
+            "yu15": {
+                "fileId": "12691yu15sinko",
+                "ho": {
+                    "searchTarget": "12691yu15/sinko/1",
+                    "useCurrentRow": true
+                }
+            },
+            "yu21": {
+                "fileId": "12691yu21sinko",
+                "ho": {
+                    "searchTarget": "12691yu21/sinko/1",
+                    "useCurrentRow": true
+                }
+            },
+            "yu22": {
+                "fileId": "12691yu22sinko",
+                "ho": {
+                    "searchTarget": "12691yu22/sinko/1",
+                    "useCurrentRow": true
+                }
+            }
         }
     }
-}
