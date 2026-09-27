@@ -7850,6 +7850,13 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       const hoPhaseResult = (hoCharaCfg && hoTypeNum) ? resolveHoPhase(hoCharaCfg, hoTypeNum, hoType) : null;
       let hoPhaseCfg   = hoPhaseResult?.cfg ?? null;
       if (isPhaseBlocked(hoPhaseCfg)) {
+        // skipIfBlocked: true の場合は根底ルールへのフォールバックを行わず、
+        // このユーザーの返信処理自体をスキップする（対象外として記録し次ユーザーへ）
+        if (hoPhaseCfg.skipIfBlocked) {
+          console.log(`[TIME] ${userName}: hoPhase "${hoPhaseResult?.key}" 時間帯制限かつskipIfBlocked → ユーザースキップ`);
+          recordSkip(`${hoPhaseResult?.key}が時間制限（stopAfter等）に該当しスキップ対象`);
+          continue;
+        }
         console.log(`[TIME] ${userName}: hoPhase "${hoPhaseResult?.key}" 時間帯制限 → フォールバックへ`);
         hoPhaseCfg = null;
       }
@@ -8169,6 +8176,13 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       const phaseResult = (parsed && charaCfg) ? resolvePhaseCfg(parsed, charaCfg) : null;
       let phaseCfg   = phaseResult?.cfg ?? null;
       if (isPhaseBlocked(phaseCfg)) {
+        // skipIfBlocked: true の場合は根底ルールへのフォールバックを行わず、
+        // このユーザーの返信処理自体をスキップする（対象外として記録し次ユーザーへ）
+        if (phaseCfg.skipIfBlocked) {
+          console.log(`[TIME] ${userName}: phase "${phaseResult?.key}" 時間帯制限かつskipIfBlocked → ユーザースキップ`);
+          recordSkip(`${phaseResult?.key}が時間制限（stopAfter等）に該当しスキップ対象`);
+          continue;
+        }
         console.log(`[TIME] ${userName}: phase "${phaseResult?.key}" 時間帯制限 → 通常ルールへ`);
         phaseCfg = null;
       }
