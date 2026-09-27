@@ -42,13 +42,20 @@
                 "useCurrentRow": true
             }
         },
-        "yu1": {
+        "yu1am": {
+            "fileId": "12691yu1amsinko",
+            "ho": {
+                "searchTarget": "12691amyu1/sinko/1",
+                "useCurrentRow": true
+              }
+            },
+        "yu1pm": {
             "fileId": "12691yu1sinko",
             "ho": {
                 "searchTarget": "12691yu1/sinko/1",
                 "useCurrentRow": true
-            }
-            },
+              }
+            },            
             "yu4": {
                 "fileId": "12691yu4sinko",
                 "ho": {
