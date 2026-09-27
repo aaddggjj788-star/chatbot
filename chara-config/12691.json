@@ -44,6 +44,8 @@
         },
         "yu1am": {
             "fileId": "12691yu1amsinko",
+            "stopAfter": "10:50",
+            "skipIfBlocked": true,
             "ho": {
                 "searchTarget": "12691yu1am/sinko/1",
                 "useCurrentRow": true
@@ -99,6 +101,132 @@
             "fileId": "12691yu22sinko",
             "ho": {
                 "searchTarget": "12691yu22/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu7mu": {
+            "fileId": "12691yu7musinko",
+            "ho": {
+                "searchTarget": "12691yu7mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu14mu": {
+            "fileId": "12691yu14musinko",
+            "ho": {
+                "searchTarget": "12691yu14mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu18mu": {
+            "fileId": "12691yu18musinko",
+            "ho": {
+                "searchTarget": "12691yu18mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu32mu": {
+            "fileId": "12691yu32musinko",
+            "ho": {
+                "searchTarget": "12691yu32mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu25mu": {
+            "fileId": "12691yu25musinko",
+            "ho": {
+                "searchTarget": "12691yu25mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu35mu": {
+            "fileId": "12691yu35musinko",
+            "ho": {
+                "searchTarget": "12691yu35mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu46mu": {
+            "fileId": "12691yu46musinko",
+            "ho": {
+                "searchTarget": "12691yu46mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu49mu": {
+            "fileId": "12691yu49musinko",
+            "ho": {
+                "searchTarget": "12691yu49mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu11mu": {
+            "fileId": "12691yu11musinko",
+            "ho": {
+                "searchTarget": "12691yu11mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu21mu": {
+            "fileId": "12691yu21musinko",
+            "ho": {
+                "searchTarget": "12691yu21mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu28mu": {
+            "fileId": "12691yu28musinko",
+            "ho": {
+                "searchTarget": "12691yu28mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu39mu": {
+            "fileId": "12691yu39musinko",
+            "ho": {
+                "searchTarget": "12691yu39mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu42mu": {
+            "fileId": "12691yu42musinko",
+            "ho": {
+                "searchTarget": "12691yu42mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu53mu": {
+            "fileId": "12691yu53musinko",
+            "ho": {
+                "searchTarget": "12691yu53mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu56mu": {
+            "fileId": "12691yu56musinko",
+            "ho": {
+                "searchTarget": "12691yu56mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu63mu": {
+            "fileId": "12691yu63musinko",
+            "ho": {
+                "searchTarget": "12691yu63mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu67mu": {
+            "fileId": "12691yu67musinko",
+            "ho": {
+                "searchTarget": "12691yu67mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu74mu": {
+            "fileId": "12691yu74musinko",
+            "ho": {
+                "searchTarget": "12691yu74mu/sinko/1",
                 "useCurrentRow": true
             }
         }
