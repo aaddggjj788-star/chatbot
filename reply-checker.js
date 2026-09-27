@@ -8409,6 +8409,48 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         }
       }
 
+      // ─── phaseレベル timeBasedFileSwitch チェック ───────────────
+      // 【追加機能】sinko○個別のactionCfg設定が無い場合に、phase全体へ
+      // 一律で適用される時間帯別ファイル切り替え。
+      //   ・最新コメントが sinko○（ho以外。本branchは非ho処理なのでho影響なし）で
+      //   ・そのsinko○に個別のactionCfg設定が無く（個別設定＝sinko○のtimeBasedSearch等が
+      //     あればそちらを優先。actionCfgが存在する場合は本branchに入らない）
+      //   ・phaseCfg.timeBasedFileSwitch の時間帯条件（before/after）に現在時刻が一致する
+      // 場合に、その fileId・searchTarget・useCurrentRow を使って文章を取得する。
+      // いずれの時間帯にも該当しない場合は下の根底ルール（sinko+1）へフォールバックする。
+      if (!replyData && !actionCfg && parsed?.type === 'sinko' && phaseCfg?.timeBasedFileSwitch) {
+        const now = new Date();
+        const curMin = now.getHours() * 60 + now.getMinutes();
+        let selected = null;
+        for (const [cKey, cVal] of Object.entries(phaseCfg.timeBasedFileSwitch)) {
+          const bm = cKey.match(/^before(\d{3,4})$/);
+          const am = cKey.match(/^after(\d{3,4})$/);
+          if (bm) {
+            const t = bm[1].padStart(4, '0');
+            const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+            if (curMin < tMin) { selected = cVal; break; }
+          } else if (am) {
+            const t = am[1].padStart(4, '0');
+            const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(2), 10);
+            if (curMin >= tMin) { selected = cVal; break; }
+          }
+        }
+        if (selected && selected.searchTarget) {
+          const useCurrentRow = selected.useCurrentRow === true;
+          const selectedFileId = selected.fileId ?? fileId;
+          console.log(`[JSON] phase timeBasedFileSwitch → searchTarget="${selected.searchTarget}" useCurrentRow=${useCurrentRow} fileId=${selectedFileId}`);
+          try {
+            replyData = getReplyFromCSVByTarget(charaId, selected.searchTarget, useCurrentRow, selectedFileId);
+          } catch (e) {
+            console.error(`[ERROR] phase timeBasedFileSwitch CSV取得失敗 (${userName}): ${e.message}`);
+            recordSkip(`エラー: ${e.message.slice(0, 50)}`);
+            continue;
+          }
+        } else {
+          console.log(`[JSON] phase timeBasedFileSwitch: 一致する時間帯なし → 根底ルール（sinko+1）へフォールバック`);
+        }
+      }
+
       // ─── デフォルト動作（JSON設定なし、またはsearchTarget系設定なし）──
       if (!replyData) {
         // 複数コメントが全て同じ番号の場合のみspan検索（1件のみはsinko+1）
