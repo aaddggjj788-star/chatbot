@@ -1061,6 +1061,36 @@
         "ambiguous": "use_existing_ai",
         "rejected": "use_existing_ai"
       }
+    },
+        "12691mu2/do/1": {
+      "enabled": true,
+      "type": "money_amount",
+      "fallbackProfile": "12691money_amount",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+            "12691mu2/his/1": {
+      "enabled": true,
+      "type": "money_amount",
+      "fallbackProfile": "12691money_amount",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
     }
   }
 }
