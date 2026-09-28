@@ -596,7 +596,23 @@
         }
       },
       "noTemplateAction": "existing_false_flow"
-    }
+    },
+    "12691yu1_savings_max": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "質問された『これまでの人生で最も多く貯金出来ていた時期の貯金額』について、具体額・概算・範囲など、金額として意味のある回答をしている。例：300万円、500万くらい、数百万円、100～200万円程度、1億円ほど。質問に答える意思があり金額の意味が取れる場合はこのカテゴリ。",
+          "action": "continue_without_ai"
+        },
+        "refusal_no_answer": {
+          "description": "今回の貯金額の質問そのものについて、無回答、答えたくない、言いたくない、秘密にしたい、回答を控えたい等、回答しない意思を明確に示している。鑑定継続の拒否や別件への拒否は含めない。",
+          "template": "ご連絡ありがとうございます。\n答えたくない質問でしたよね。\n申し訳ありませんでした。\n\nしかし、お伺いした理由は前回の鑑定文でお伝えした通りです。\nご理解頂ければ幸いです。\n\n着実に様々な情報が集められております。\n\n確実に、最短で、最小限の負担で\n結果へと辿り着く為のやり取りですからね。\n\n“急がば回れ”という言葉があるように、一見遠回りに見える事でもそれが最短の道だったりします。\n\n他の鑑定師よりも最短で結果を。\nこの言葉を忘れないで下さい。\n\n宝くじを大量に買う。\nこれも一つの手段ではありますが、これは特別な鑑定も何もなしの状態で完全に運任せ。\nしかも経済に余裕がある人がやること。\n\n貴方はその様な事をする必要はありませんからね。\n\nではいきます。\n\n【{getUserData(siteOriginal[wordinsert/start])}1兼2兼3兼4兼5兼{getUserData(siteOriginal[wordinsert/end])}】\n\nと私にお送り下さい。\n\nではお待ちしております。",
+          "nextComment": "12691yu1/sinko/3"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    }    
   },
   "rules": {
     "12690mu1/sinko/1": {
@@ -1091,6 +1107,21 @@
         "ambiguous": "use_existing_ai",
         "rejected": "use_existing_ai"
       }
-    }
+    },
+    "12691yu1/sinko/2": {
+      "enabled": true,
+      "type": "money_amount",
+      "fallbackProfile": "12691yu1_savings_max",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    }    
   }
 }

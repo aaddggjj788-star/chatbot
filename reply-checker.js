@@ -6777,6 +6777,8 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     let structuredFallbackComment = '';
     let structuredFallbackCategory = '';
     let structuredFallbackProfileName = '';
+    let structuredFallbackNextComment = '';
+
 
     // 三段形式の特殊コメント検出（sinkoHo/noresHo/stop1等）
     const subActionComments = allComments.map(parseSubActionComment).filter(Boolean);
@@ -7390,17 +7392,25 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           structuredFallbackComment =
             latestCommentForStructured;
 
+        structuredFallbackNextComment =
+          String(
+            fallbackCfg?.nextComment ||
+            latestCommentForStructured
+          ).trim();
+
           structuredFallbackCategory =
             fallbackResult.category;
 
           structuredFallbackProfileName =
             fallbackProfileName;
+            
 
           console.log(
             `[STRUCTURED-FALLBACK] ${userName}: ` +
             `テンプレート採用 ` +
             `category=${structuredFallbackCategory} ` +
-            `comment=${structuredFallbackComment}`
+            `sourceComment=${structuredFallbackComment} ` +
+            `nextComment=${structuredFallbackNextComment}`
           );
         }
       }
@@ -7609,22 +7619,32 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           : String(kid);
 
 
-      const sameCommentTag =
-        structuredFallbackComment
-          ? `<!--${structuredFallbackComment}-->`
-          : '';
+        const fallbackNextCommentTag =
+          structuredFallbackNextComment
+            ? `<!--${structuredFallbackNextComment}-->`
+            : (
+                structuredFallbackComment
+                  ? `<!--${structuredFallbackComment}-->`
+                  : ''
+              );
 
+        replyData = {
+          title:
+            'structured-fallback',
 
-      replyData = {
-        title:
-          'structured-fallback',
+          replyText:
+            structuredFallbackReplyText,
 
-        replyText:
-          structuredFallbackReplyText,
+          nextComment:
+            fallbackNextCommentTag
+        };
 
-        nextComment:
-          sameCommentTag
-      };
+        console.log(
+          `[STRUCTURED-FALLBACK] ${userName}: ` +
+          `fallback返信を作成 ` +
+          `sourceComment=${structuredFallbackComment} ` +
+          `sendComment=${structuredFallbackNextComment || structuredFallbackComment}`
+        );
 
 
       console.log(
