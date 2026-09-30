@@ -1026,7 +1026,24 @@ function resolveHoPhase(charaCfg, typeNum, hoType) {
   const phases = charaCfg?.phases || {};
   if (phases[typeNum]) return { key: typeNum, cfg: phases[typeNum] };
 
-  const prefixMatches = Object.entries(phases).filter(([k]) => k.startsWith(typeNum));
+  const prefixMatches =
+    Object.entries(phases)
+      .filter(([k]) => {
+        if (k === typeNum) {
+          return true;
+        }
+
+        const escaped =
+          typeNum.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            '\\$&'
+          );
+
+        return new RegExp(
+          `^${escaped}(?!\\d)`
+        ).test(k);
+      });
+      
   if (prefixMatches.length === 0) {
     // 通常のphase解決で見つからない場合、minPhaseNumberが設定された
     // phaseを探し、typeNumの数値部分がminPhaseNumber以上であれば
