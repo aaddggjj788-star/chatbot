@@ -245,6 +245,7 @@
             }
         },
         "yu6": {
+            "fileId": "12691yu5sinko",
             "ho": {
                 "replaceHeader": "確認しました。\nありがとうございます。\n\n現段階での当選番号と、貴方の気の兼ね合いはこれから私の方で解析を進めていきますね。",
                 "useCurrentRow": true
@@ -258,6 +259,7 @@
             }
         },
         "yu8": {
+            "fileId": "12691yu5sinko",
             "ho": {
                 "replaceHeader": "確認しました。\nありがとうございます。\n\nこれより【環境の力】を活かしての進行となります。\nこれまでの進行速度とは比べ物になりませんので、間違いなく大事な日となりますからね。",
                 "useCurrentRow": true
@@ -271,6 +273,7 @@
             }
         },
         "yu9": {
+            "fileId": "12691yu5sinko",
             "ho": {
                 "replaceHeader": "確認しました。\n良いタイミングで連絡を頂けましたね。\n\n解析においても非常にプラスとなる反応が確認出来ました。\n\nあなたの持つ高額当選の資質を存分に発揮しましょうね。",
                 "useCurrentRow": true
@@ -663,7 +666,7 @@
             }
         },
         "yu74": {
-            "fileId": "12691yu27sinko",            
+            "fileId": "12691yu27sinko",
             "ho": {
                 "replaceHeader": "確認しました。\nやはり、思った通りです。\n\n常に重要な局面は続いています。\n\n貴方は結果を掴むのです。\nこのまま進めていきますよ。",
                 "useCurrentRow": true
@@ -766,7 +769,7 @@
             }
         },
         "yu2": {
-            "fileId": "12691yu1sinko",          
+            "fileId": "12691yu1sinko",
             "timeBasedFileSwitch": {
                 "after2230": {
                     "fileId": "12691lastcomment",
@@ -784,6 +787,9 @@
                     "useCurrentRow": true
                 }
             }
+        },
+        "yu3": {
+            "fileId": "12691yu1sinko"
         }
     }
 }
