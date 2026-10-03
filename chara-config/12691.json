@@ -245,11 +245,7 @@
             }
         },
         "yu6": {
-            "fileId": "12691yu5sinko",
-            "ho": {
-                "replaceHeader": "確認しました。\nありがとうございます。\n\n現段階での当選番号と、貴方の気の兼ね合いはこれから私の方で解析を進めていきますね。",
-                "useCurrentRow": true
-            }
+            "fileId": "12691yu5sinko"
         },
         "yu7": {
             "fileId": "12691yu5sinko",
