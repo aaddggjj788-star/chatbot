@@ -74,7 +74,9 @@ function resolveCsvPath(charaId, fileId) {
     let bestFile = null;
     for (const f of files) {
       if (!f.endsWith('.csv')) continue;
-      const fm = f.match(new RegExp(`^${baseId}${type}(\\d+)`));
+      const fm = f.match(
+        new RegExp(`^${baseId}${type}(\\d+)(?!mu|yu)`)
+      );
       if (!fm) continue;
       const n = parseInt(fm[1], 10);
       if (n <= targetNum && n > bestNum) { bestNum = n; bestFile = f; }
@@ -102,6 +104,30 @@ function splitAColumn(aContent) {
     replyText: s.replace(/\\n/g, '\n').trim(),
     nextComment: '',
   };
+}
+
+
+// reply-checker.js と同じ replaceHeader 処理
+// ・<imgタグがある場合は、画像より前をreplaceHeaderに置換
+// ・画像がない場合は、文頭3段落をreplaceHeaderに置換
+function applyReplaceHeader(replyText, replaceHeader) {
+  if (!replyText) return replaceHeader;
+
+  const imgMatch = replyText.match(/<img/i);
+
+  if (imgMatch) {
+    return `${replaceHeader}\n${replyText.slice(imgMatch.index)}`;
+  }
+
+  const paragraphs =
+    replyText.split(/\n\s*\n/);
+
+  const rest =
+    paragraphs.slice(3).join('\n\n');
+
+  return rest
+    ? `${replaceHeader}\n${rest}`
+    : replaceHeader;
 }
 
 function printResult(csvPath, rowIdx, row) {
@@ -257,28 +283,95 @@ function resolvePhaseCfg(parsed, config) {
 // reply-checker.js の resolveHoPhase と同じロジック
 function resolveHoPhase(charaCfg, typeNum, hoType) {
   const phases = charaCfg?.phases || {};
-  if (phases[typeNum]) return { key: typeNum, cfg: phases[typeNum] };
 
-  const prefixMatches = Object.entries(phases).filter(([k]) => k.startsWith(typeNum));
+  // 完全一致を最優先
+  if (phases[typeNum]) {
+    return {
+      key: typeNum,
+      cfg: phases[typeNum]
+    };
+  }
+
+  // 同じ日程番号の派生phaseだけを候補にする。
+  // yu7 → yu7mu等は対象
+  // yu7 → yu74mu等は対象外
+  const prefixMatches =
+    Object.entries(phases)
+      .filter(([k]) => {
+        if (k === typeNum) {
+          return true;
+        }
+
+        const escaped =
+          typeNum.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            '\\$&'
+          );
+
+        return new RegExp(
+          `^${escaped}(?!\\d)`
+        ).test(k);
+      });
+
   if (prefixMatches.length === 0) {
-    const numMatch = typeNum.match(/(\d+)/);
+    const numMatch =
+      typeNum.match(/(\d+)/);
+
     if (numMatch) {
-      const num = parseInt(numMatch[1], 10);
-      const minPhaseEntry = Object.entries(phases).find(
-        ([, p]) => typeof p.minPhaseNumber === 'number' && num >= p.minPhaseNumber
-      );
-      if (minPhaseEntry) return { key: minPhaseEntry[0], cfg: minPhaseEntry[1] };
+      const num =
+        parseInt(numMatch[1], 10);
+
+      const minPhaseEntry =
+        Object.entries(phases).find(
+          ([, p]) =>
+            typeof p.minPhaseNumber === 'number' &&
+            num >= p.minPhaseNumber
+        );
+
+      if (minPhaseEntry) {
+        return {
+          key: minPhaseEntry[0],
+          cfg: minPhaseEntry[1]
+        };
+      }
     }
+
     return null;
   }
-  if (prefixMatches.length === 1) return { key: prefixMatches[0][0], cfg: prefixMatches[0][1] };
 
-  const baseKey = hoType ? hoType.replace(/\d+$/, '') : null;
-  const withKey = prefixMatches.find(([, p]) =>
-    (hoType && p[hoType] !== undefined) || (baseKey && baseKey !== hoType && p[baseKey] !== undefined)
-  );
-  if (withKey) return { key: withKey[0], cfg: withKey[1] };
-  return { key: prefixMatches[0][0], cfg: prefixMatches[0][1] };
+  if (prefixMatches.length === 1) {
+    return {
+      key: prefixMatches[0][0],
+      cfg: prefixMatches[0][1]
+    };
+  }
+
+  const baseKey =
+    hoType
+      ? hoType.replace(/\d+$/, '')
+      : null;
+
+  const withKey =
+    prefixMatches.find(([, p]) =>
+      (hoType && p[hoType] !== undefined) ||
+      (
+        baseKey &&
+        baseKey !== hoType &&
+        p[baseKey] !== undefined
+      )
+    );
+
+  if (withKey) {
+    return {
+      key: withKey[0],
+      cfg: withKey[1]
+    };
+  }
+
+  return {
+    key: prefixMatches[0][0],
+    cfg: prefixMatches[0][1]
+  };
 }
 
 // reply-checker.js のho系コメント検出条件と同じ正規表現
@@ -340,12 +433,16 @@ function resolveAction(charaCfg, commentStr) {
       phaseKey: phaseResult?.key ?? null,
       actionKey: usedActionKey,
       actionCfg,
-      // phaseCfg.fileIdは使わない: minPhaseNumberでphase設定を流用している
-      // 場合、phaseCfg.fileIdは流用元（例: yu5）のCSVを指しているため、
-      // それをそのまま使うと実際のresolvedCharaId（例: yu8）のCSVが
-      // 検索されなくなる。resolveCsvPath(resolvedCharaId)自身の
-      // カスケード解決に任せるため、actionCfg自身のfileIdのみを使う
-      fileId: actionCfg?.fileId ?? null,
+
+      // fileId優先順位:
+      // 1. ho/action固有fileId
+      // 2. phase共通fileId
+      // 3. 両方なければresolveCsvPathの根底ルール
+      fileId:
+        actionCfg?.fileId ??
+        phaseCfg?.fileId ??
+        null,
+
       resolvedCharaId,
     };
   }
@@ -418,20 +515,254 @@ function runJsonMode(charaId, commentStr) {
     return;
   }
 
-  const target = actionCfg.searchTarget ?? actionCfg.nextTarget ?? null;
+  const target =
+    actionCfg.searchTarget ??
+    actionCfg.nextTarget ??
+    null;
+
+
+  // ======================================================
+  // searchTargetなしのho
+  // → 根底ルールで使用CSVを決定
+  // → CSVの純粋な先頭行 row[0] をテスト用に使用
+  // → replaceHeaderがあれば本番と同じ処理を適用
+  // ======================================================
+
   if (!target) {
-    console.log('→ searchTarget/nextTargetが設定されていないため確認不可');
+
+    if (resolved.kind !== 'ho') {
+      console.log(
+        '→ searchTarget/nextTargetが設定されていないため確認不可'
+      );
+      return;
+    }
+
+
+    const {
+      csvPath,
+      resolvedCharaId
+    } = resolveCsvPath(
+      resolved.resolvedCharaId,
+      resolved.fileId
+    );
+
+
+    console.log(
+      '→ hoにsearchTargetなし'
+    );
+
+    console.log(
+      `→ 根底ルールでCSVを解決: ${csvPath}`
+    );
+
+    console.log(
+      `→ resolvedCharaId: ${resolvedCharaId}`
+    );
+
+    console.log(
+      `→ 指定fileId: ${resolved.fileId ?? '(なし・自動解決)'}`
+    );
+
+
+    if (!fs.existsSync(csvPath)) {
+      throw new Error(
+        `CSVなし: ${csvPath}`
+      );
+    }
+
+
+    const rows =
+      parseCSV(csvPath);
+
+
+    if (!rows.length || !rows[0]) {
+      throw new Error(
+        `CSVの先頭行を取得できません: ${csvPath}`
+      );
+    }
+
+
+    const firstRow =
+      rows[0];
+
+
+    const {
+      replyText,
+      nextComment
+    } = splitAColumn(
+      firstRow[0]
+    );
+
+
+    let finalReplyText =
+      replyText;
+
+
+    // ----------------------------------------------
+    // replaceHeader確認
+    // ----------------------------------------------
+
+    if (actionCfg.replaceHeader) {
+
+      console.log(
+        '→ replaceHeaderあり: 本番と同じ処理を適用'
+      );
+
+      finalReplyText =
+        applyReplaceHeader(
+          replyText,
+          actionCfg.replaceHeader
+        );
+
+    } else {
+
+      console.log(
+        '→ replaceHeaderなし'
+      );
+    }
+
+
+    console.log(
+      `CSVファイル: ${csvPath}`
+    );
+
+    console.log(
+      'マッチした行番号: 0'
+    );
+
+    console.log(
+      '--- 元の返信文章 ---'
+    );
+
+    console.log(
+      replyText
+    );
+
+
+    if (actionCfg.replaceHeader) {
+
+      console.log(
+        '--- replaceHeader適用後 ---'
+      );
+
+      console.log(
+        finalReplyText
+      );
+    }
+
+
+    console.log(
+      '--- nextComment ---'
+    );
+
+    console.log(
+      nextComment
+    );
+
+
     return;
   }
-  const useCurrentRow = actionCfg.useCurrentRow === true;
-  console.log(`検索対象(searchTarget): "${target}"`);
-  console.log(`useCurrentRow: ${useCurrentRow} → ${useCurrentRow ? '同行' : '次行'}を表示`);
 
-  const found = findByTarget(resolved.resolvedCharaId, target, useCurrentRow, actionCfg.fileId ?? resolved.fileId ?? null);
+
+  // ======================================================
+  // searchTarget / nextTargetあり
+  // ======================================================
+
+  const useCurrentRow =
+    actionCfg.useCurrentRow === true;
+
+  console.log(
+    `検索対象(searchTarget): "${target}"`
+  );
+
+  console.log(
+    `useCurrentRow: ${useCurrentRow} → ` +
+    `${useCurrentRow ? '同行' : '次行'}を表示`
+  );
+
+
+  const found =
+    findByTarget(
+      resolved.resolvedCharaId,
+      target,
+      useCurrentRow,
+      actionCfg.fileId ??
+        resolved.fileId ??
+        null
+    );
+
+
   if (!found) {
-    throw new Error('対象行が取得できませんでした（末尾到達等）');
+    throw new Error(
+      '対象行が取得できませんでした（末尾到達等）'
+    );
   }
-  printResult(found.csvPath, found.rowIdx, found.row);
+
+
+  // ======================================================
+  // searchTargetありのhoでもreplaceHeaderを確認できるようにする
+  // ======================================================
+
+  if (
+    resolved.kind === 'ho' &&
+    actionCfg.replaceHeader
+  ) {
+
+    const {
+      replyText,
+      nextComment
+    } = splitAColumn(
+      found.row[0]
+    );
+
+    const finalReplyText =
+      applyReplaceHeader(
+        replyText,
+        actionCfg.replaceHeader
+      );
+
+
+    console.log(
+      `CSVファイル: ${found.csvPath}`
+    );
+
+    console.log(
+      `マッチした行番号: ${found.rowIdx}`
+    );
+
+    console.log(
+      '--- 元の返信文章 ---'
+    );
+
+    console.log(
+      replyText
+    );
+
+    console.log(
+      '--- replaceHeader適用後 ---'
+    );
+
+    console.log(
+      finalReplyText
+    );
+
+    console.log(
+      '--- nextComment ---'
+    );
+
+    console.log(
+      nextComment
+    );
+
+    return;
+  }
+
+
+  printResult(
+    found.csvPath,
+    found.rowIdx,
+    found.row
+  );
 }
 
 // ─── エントリポイント ───────────────────────────────────────────────
