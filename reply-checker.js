@@ -7924,7 +7924,10 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       // minPhaseNumberでphase設定を流用している場合、phaseCfg.fileIdは
       // 流用元（例: yu5）のCSVを指しているため、それをそのままsearchTarget系の
       // 検索に使うと実際のcharaId（例: yu8）のCSVが検索されなくなる
-      const hoFileId = hoActionCfg?.fileId ?? null;
+      const hoFileId =
+        hoActionCfg?.fileId ??
+        hoPhaseCfg?.fileId ??
+        null;
 
       console.log(`[COMMENT] ${userName}: /hoモード comment="${hoComment}" hoType="${hoType}" phase=${hoPhaseResult?.key} actionCfg=${JSON.stringify(hoActionCfg)}`);
 
@@ -11521,7 +11524,10 @@ async function resolveHoNextReplyForInquiry(page, hoComment) {
   }
 
   // hoFileIdはactionCfg自身のfileIdのみを使う（processUsersと同じ）
-  const hoFileId = hoActionCfg?.fileId ?? null;
+  const hoFileId =
+    hoActionCfg?.fileId ??
+    hoPhaseCfg?.fileId ??
+    null;
   const isSinkoHo = /\/sinko\/ho/.test(hoComment);
 
   console.log(`[次行照会] /hoモード comment="${hoComment}" hoType="${hoType}" phase=${hoPhaseResult?.key} actionCfg=${JSON.stringify(hoActionCfg)}`);
