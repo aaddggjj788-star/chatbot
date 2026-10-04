@@ -1,7 +1,7 @@
 {
     "charaId": "12684",
     "globalStopTime": {
-        "start": "23:00",
+        "start": "22:10",
         "end": "09:00"
     },
     "spanMatchExclude": [

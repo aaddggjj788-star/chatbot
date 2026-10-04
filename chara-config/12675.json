@@ -1,7 +1,7 @@
 {
   "charaId": "12675",
   "name": "津木嶋　恵子",
-  "globalStopTime": { "start": "23:00", "end": "09:00" },
+  "globalStopTime": { "start": "22:10", "end": "09:00" },
   "spanMatchExclude": [
     "12675mu2/sinko/6",
     "12675mu2/sinko/7",
