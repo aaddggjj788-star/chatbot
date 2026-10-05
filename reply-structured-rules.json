@@ -612,9 +612,60 @@
         }
       },
       "noTemplateAction": "existing_false_flow"
-    }    
+    },
+    "12695money_amount": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "本人が取り急ぎ必要としている具体的な金額を、円・万円・億円など金額として明確に特定できる形で提示している。『3000万円』『500万くらい』『1億円』『最低2000万円、できれば3000万円』など、本人が必要とする金額が意味として明確なら成立。説明文を伴っていても金額が明確なら成立する。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "なぜ必要金額を聞くのか、何のために金額を答える必要があるのかなど、この質問の意味や目的を質問している。",
+          "template": "お伺いしているのは、今あなたが具体的にどの程度の金額を必要としているのかを確認する為です。難しく考える必要はありません。今のあなたが「これだけあれば状況を変えられる」と思う具体的な金額を、そのままお教え下さい。例として3000万円、5000万円、1億円など、金額が分かる形でお送り頂ければ大丈夫です。",
+          "commentPolicy": "same"
+        },
+        "uncertain_amount": {
+          "description": "答える意思はあるが、『いくらにすればいいか分からない』『金額を決められない』『どの程度答えればよいか分からない』など、具体的な金額をまだ提示していない。",
+          "template": "正解となる金額が決まっている質問ではありません。高く見積もって頂いても構いませんので、今のあなたが必要だと思う金額を一つ具体的に挙げて下さい。例えば3000万円、5000万円といった形でお送り頂ければ大丈夫です。",
+          "commentPolicy": "same"
+        },
+        "amount_unit_missing": {
+          "description": "『3000』『500』『1000くらい』など数字は提示しているが、円・万円・億円等の単位がなく、必要金額を一意に特定できない。",
+          "template": "数字の方は確認出来ました。ただ、金額を正確に確認する必要がありますので、「円」「万円」「億円」などの単位も付けてお送り下さい。例えば【3000万円】という形で大丈夫です。",
+          "commentPolicy": "same"
+        },
+        "multiple_amounts_question": {
+          "description": "複数の金額候補を提示し、どれを答えればよいか尋ねている、または一つに決められず選択方法を質問している。",
+          "template": "複数の金額が浮かんでいる場合は、その中で今もっとも必要だと思う金額を一つお選び下さい。高く見積もって頂いて構いません。一つに絞った上で、具体的な金額をそのままお送り下さい。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "今回求められている必要金額そのものについて、『答えたくない』『金額を言いたくない』『教えたくない』と明確に拒否している。料金不足や有料鑑定を続けられない等、鑑定継続に対する拒否は含めない。",
+          "template": "無理に別の情報をお聞きしているわけではありません。ここで確認したいのは、今あなたが必要としている具体的な金額です。鑑定を進める上で確認しておきたい内容となりますので、お答え頂けるのであれば具体的な金額を一つお送り下さい。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    }
   },
   "rules": {
+    "12695yu2/ho": {
+      "enabled": true,
+      "type": "money_amount",
+      "fallbackProfile": "12695money_amount",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
     "12690mu1/sinko/1": {
       "enabled": true,
       "type": "concrete_wish",
@@ -1078,7 +1129,7 @@
         "rejected": "use_existing_ai"
       }
     },
-        "12691mu2/do/1": {
+    "12691mu2/do/1": {
       "enabled": true,
       "type": "money_amount",
       "fallbackProfile": "12691money_amount",
@@ -1093,7 +1144,7 @@
         "rejected": "use_existing_ai"
       }
     },
-            "12691mu2/his/1": {
+    "12691mu2/his/1": {
       "enabled": true,
       "type": "money_amount",
       "fallbackProfile": "12691money_amount",
@@ -1122,6 +1173,6 @@
         "ambiguous": "use_existing_ai",
         "rejected": "use_existing_ai"
       }
-    }    
+    }
   }
 }
