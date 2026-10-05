@@ -8008,7 +8008,11 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
             recordSkip(`エラー: ${e.message.slice(0, 50)}`);
             continue;
           }
-        } else if (hoActionCfg.useCurrentRow) {
+        } else if (
+            hoActionCfg.useCurrentRow &&
+            hoActionCfg.workflowMarker &&
+            hoActionCfg.useHistorySearch
+          ) {
           // searchTarget系の指定がなくuseCurrentRowのみの場合:
           // hoコメント自身の行（文頭）を取得する
           let currentRowData;
@@ -11578,14 +11582,22 @@ async function resolveHoNextReplyForInquiry(page, hoComment) {
       } else {
         console.log(`[次行照会] ho timeBasedSearch: 一致する時間帯なし → フォールバックへ`);
       }
-    } else if (hoActionCfg.searchTarget) {
+    } else if (
+        hoActionCfg.useCurrentRow &&
+        hoActionCfg.workflowMarker &&
+        hoActionCfg.useHistorySearch
+      ) {
       const useCurrentRow = hoActionCfg.useCurrentRow === true;
       console.log(`[次行照会] ho searchTarget="${hoActionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
       replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.searchTarget, useCurrentRow, hoFileId);
     } else if (hoActionCfg.nextTarget) {
       console.log(`[次行照会] ho nextTarget="${hoActionCfg.nextTarget}"`);
       replyData = getReplyFromCSVByTarget(charaId, hoActionCfg.nextTarget, true, hoFileId);
-    } else if (hoActionCfg.useCurrentRow) {
+    } else if (
+        hoActionCfg.useCurrentRow &&
+        hoActionCfg.workflowMarker &&
+        hoActionCfg.useHistorySearch
+      ) {
       // searchTarget系の指定がなくuseCurrentRowのみ: hoコメント自身の行（文頭）を取得
       const currentRowData = getReplyFromCSVByTarget(charaId, hoComment, true, hoFileId);
       if (currentRowData && hoActionCfg.workflowMarker && hoActionCfg.useHistorySearch) {
