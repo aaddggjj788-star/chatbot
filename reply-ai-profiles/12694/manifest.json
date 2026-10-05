@@ -1,0 +1,18 @@
+{
+  "kid": "12694",
+  "baseProfile": "12694.json",
+  "phaseProfiles": [
+    "12694mu1.json",
+    "12694mu2am.json",
+    "12694mu2pm.json",
+    "12694yu1.json",
+    "12694yu4.json",
+    "12694yu11.json",
+    "12694yu12.json"
+  ],
+  "notes": [
+    "baseProfileは隠岐 弾正共通ルール。",
+    "mu2は前半am・後半pmを分離。",
+    "有料進行はファイル切替で返信番号をリセットせず、yu1=1〜39、yu4=40〜80、yu11=81〜94、yu12=既存返信1以降として扱う。"
+  ]
+}

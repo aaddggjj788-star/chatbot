@@ -1,0 +1,27 @@
+{
+  "kid": "12694",
+  "routingPolicy": {
+    "baseProfile": "12694.json",
+    "phaseProfileRule": "最新コメントアウトのmu/yu区分を優先し、mu2am・mu2pm・yu1・yu4・yu11・yu12を明示マッピングする。",
+    "fallback": "該当フェーズが取得できない場合は同一区分内の直前フェーズのみ参照し、無料/有料境界やyu11/yu12境界を跨がない。",
+    "doNotCrossBoundary": true
+  },
+  "specialMappings": {
+    "12694mu1": "12694mu1.json",
+    "12694mu2am": "12694mu2am.json",
+    "12694mu2pm": "12694mu2pm.json",
+    "12694mu2": "12694mu2pm.json",
+    "12694yu1": "12694yu1.json",
+    "12694yu2": "12694yu1.json",
+    "12694yu3": "12694yu1.json",
+    "12694yu4": "12694yu4.json",
+    "12694yu5": "12694yu4.json",
+    "12694yu6": "12694yu4.json",
+    "12694yu7": "12694yu4.json",
+    "12694yu8": "12694yu4.json",
+    "12694yu9": "12694yu4.json",
+    "12694yu10": "12694yu4.json",
+    "12694yu11": "12694yu11.json",
+    "12694yu12": "12694yu12.json"
+  }
+}
