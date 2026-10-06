@@ -8,6 +8,10 @@
     "phases": {
         "mu1": {
             "fileId": "12694mu1sinko",
+            "minElapsedMinutes": {
+                "before1700": 25,
+                "after1700": 20
+            },
             "do1": {
                 "searchTarget": "12694mu1/sinko/1",
                 "useCurrentRow": true
@@ -15,6 +19,10 @@
         },
         "mu2am": {
             "fileId": "12694mu2amsinko",
+            "minElapsedMinutes": {
+                "before1700": 25,
+                "after1700": 20
+            },
             "ho": {
                 "searchTarget": "12694mu2am/sinko/1",
                 "useCurrentRow": true
