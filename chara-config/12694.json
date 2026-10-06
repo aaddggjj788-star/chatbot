@@ -17,6 +17,21 @@
                 "useCurrentRow": true
             }
         },
+        "mu2his": {
+            "fileId": "12694mu2hissinko",
+            "his3": {
+                "timeBasedSearch": {
+                    "before1650": {
+                        "searchTarget": "12694mu2am/sinko/2",
+                        "useCurrentRow": true
+                    },
+                    "after1710": {
+                        "searchTarget": "12694mu2pm/sinko/1",
+                        "useCurrentRow": true
+                    }
+                }
+            }
+        },
         "mu2am": {
             "fileId": "12694mu2amsinko",
             "minElapsedMinutes": {
@@ -30,6 +45,10 @@
         },
         "mu2pm": {
             "fileId": "12694mu2pmsinko",
+                        "minElapsedMinutes": {
+                "before1900": 25,
+                "after1900": 20
+            },
             "ho": {
                 "searchTarget": "12694mu2pm/sinko/1",
                 "useCurrentRow": true
