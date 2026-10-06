@@ -45,7 +45,7 @@
         },
         "mu2pm": {
             "fileId": "12694mu2pmsinko",
-                        "minElapsedMinutes": {
+            "minElapsedMinutes": {
                 "before1900": 25,
                 "after1900": 20
             },
