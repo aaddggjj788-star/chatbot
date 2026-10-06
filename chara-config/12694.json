@@ -38,8 +38,18 @@
                 "before1700": 25,
                 "after1700": 20
             },
-            "ho": {
+            "ho1": {
                 "searchTarget": "12694mu2am/sinko/1",
+                "useCurrentRow": true
+            },
+            "ho2": {
+                "fileId": "12694mu2hissinko",
+                "searchTarget": "12694mu2/his/2",
+                "useCurrentRow": true
+            },
+            "ho3": {
+                "fileId": "12694mu2hissinko",
+                "searchTarget": "12694mu2/his/1",
                 "useCurrentRow": true
             }
         },
