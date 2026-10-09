@@ -16,6 +16,10 @@
   "phases": {
     "mu1": {
       "fileId": "12668mu1sinko",
+      "do": {
+        "searchTarget": "12668mu1/sinko/1",
+        "useCurrentRow": true
+      },
       "sinko2": {
         "specialProcess": [
           "saveMemo1",
@@ -26,11 +30,11 @@
         "timeBasedSearch": {
           "before1630": {
             "fileId": "12668mu2amhissinko",
-                      "searchTarget": "12668mu2am/his/3"
+            "searchTarget": "12668mu2am/his/3"
           },
           "after1630": {
             "fileId": "12668mupm2hissinko",
-                                  "searchTarget": "12668mu2pm/his/3"
+            "searchTarget": "12668mu2pm/his/3"
           }
         },
         "specialProcess": [
@@ -57,7 +61,7 @@
     "mu2pm": {
       "fileId": "12668mu2pmsinko",
       "activeFrom": "17:10",
-            "ho1": {
+      "ho1": {
         "searchTarget": "12668mu2pm/sinko/1",
         "useCurrentRow": true
       },
@@ -136,8 +140,8 @@
       }
     },
     "mu2": {
-       "fileId": "12668mu2hispm",
-       "ho2": {
+      "fileId": "12668mu2hispm",
+      "ho2": {
         "specialProcess": [
           "saveMemo1",
           "saveNickname"
@@ -227,7 +231,7 @@
     },
     "yu1his": {
       "fileId": "12668yu1hissinko"
-      },
+    },
     "yu1sinko": {
       "fileId": "12668yu1sinko",
       "sinkoHo": {
