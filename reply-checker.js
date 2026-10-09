@@ -483,19 +483,83 @@ function matchesSpanRange(comment, rangeList) {
 // ※ part3が英字の場合は先頭大文字にしてキャメルケースで結合（数字はそのまま）
 // ※ sinko/his + 数値（通常のsinko/his番号コメント）は除外
 function parseSubActionComment(commentStr) {
-  const m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-zA-Z]+)\/(\w+)$/);
+  // ── doだけは末尾番号なしも許可 ──
+  // 12668mu1/do   → actionKey:"do"
+  // 12668mu1/do/1 → actionKey:"do1"
+  const doMatch = commentStr.match(
+    /^(\d+)((?:yu|mu)\d+\w*)\/do(?:\/(\w+))?$/
+  );
+
+  if (doMatch) {
+    const part3 = doMatch[3] || null;
+
+    const actionKey = part3
+      ? 'do' + (
+          /^\d+$/.test(part3)
+            ? part3
+            : part3.charAt(0).toUpperCase() + part3.slice(1)
+        )
+      : 'do';
+
+    return {
+      baseId: doMatch[1],
+      typeNum: doMatch[2],
+      sub: 'do',
+      part3,
+      actionKey,
+      charaId: doMatch[1] + doMatch[2],
+      comment: commentStr
+    };
+  }
+
+  // ── 既存の三段形式 ──
+  const m = commentStr.match(
+    /^(\d+)((?:yu|mu)\d+\w*)\/([a-zA-Z]+)\/(\w+)$/
+  );
+
   if (!m) return null;
+
   const sub = m[3];
   const part3 = m[4];
-  if (/^(?:sinko|his)/.test(sub) && /^\d+$/.test(part3)) return null; // 通常 sinko/his 番号は除外
-  if (/^ho/.test(sub)) return null; // hoコメントはhoモードで処理するため除外
-  // "12680yu1/sinko/ho"（sinkoHo）形式はsubActionにせず、hoモードのsinko挟み込み
-  // 履歴検索（同一charaIdのsinko/○を検索してsinko+1送信）で処理する
-  if (sub === 'sinko' && /^ho\d*$/.test(part3)) return null;
-  // part3が英字なら先頭を大文字化してキャメルケースに結合（例: mtm→Mtm, ho→Ho）
-  const part3Key = /^\d+$/.test(part3) ? part3 : (part3.charAt(0).toUpperCase() + part3.slice(1));
+
+  if (
+    /^(?:sinko|his)/.test(sub) &&
+    /^\d+$/.test(part3)
+  ) {
+    return null;
+  }
+
+  if (/^ho/.test(sub)) {
+    return null;
+  }
+
+  // 12680yu1/sinko/ho はsubActionではなくhoモード
+  if (
+    sub === 'sinko' &&
+    /^ho\d*$/.test(part3)
+  ) {
+    return null;
+  }
+
+  const part3Key =
+    /^\d+$/.test(part3)
+      ? part3
+      : (
+          part3.charAt(0).toUpperCase() +
+          part3.slice(1)
+        );
+
   const actionKey = sub + part3Key;
-  return { baseId: m[1], typeNum: m[2], sub, part3, actionKey, charaId: m[1] + m[2], comment: commentStr };
+
+  return {
+    baseId: m[1],
+    typeNum: m[2],
+    sub,
+    part3,
+    actionKey,
+    charaId: m[1] + m[2],
+    comment: commentStr
+  };
 }
 
 // ho設定のreplaceHeaderで返信文の文頭部分を差し替える
