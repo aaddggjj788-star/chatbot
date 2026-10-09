@@ -91,6 +91,31 @@
                 "searchTarget": "12694yu12/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu10": {
+            "fileId": "12694yu4sinko"
+        },
+        "yu3": {
+            "fileId": "12694yu1sinko"
+        },
+        "yu10mu": {
+            "fileId": "12694yu10musinko",
+            "ho": {
+                "searchTarget": "12694yu10mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu3mu": {
+            "fileId": "12694yu3musinko",
+            "ho": {
+                "searchTarget": "12694yu3mu/sinko/1",
+                "useCurrentRow": true
+            },
+            "sinko5": {
+                "useHistorySearch": true,
+                "historyCharaId": "12694yu1",
+                "fallbackSearch": "12694yu1/sinko/3"
+            }
         }
     }
 }

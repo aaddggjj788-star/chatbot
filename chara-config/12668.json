@@ -16,55 +16,32 @@
   "phases": {
     "mu1": {
       "fileId": "12668mu1sinko",
-      "his2": {
+      "sinko2": {
         "specialProcess": [
           "saveMemo1",
           "saveNickname"
-        ],
-        "branch": {
-          "positive": "12668mu1/sinko/3/A",
-          "negative": "12668mu1/sinko/3/B"
-        }
+        ]
       },
-      "hisuMtm": {
+      "hisMtm": {
         "timeBasedSearch": {
           "before1630": {
-            "fileId": "12668mu2hisam"
+            "fileId": "12668mu2amhissinko",
+                      "searchTarget": "12668mu2am/his/3"
           },
           "after1630": {
-            "fileId": "12668mu2hispm"
+            "fileId": "12668mupm2hissinko",
+                                  "searchTarget": "12668mu2pm/his/3"
           }
         },
         "specialProcess": [
           "saveMemo1",
           "saveNickname"
-        ],
-        "branch": {
-          "positive": "12668mu2/his/3/A",
-          "negative": "12668mu2/his/3/B"
-        }
-      },
-      "searchOverride": {
-        "12668mu1/sinko/3/A": {
-          "searchTarget": "12668mu1/sinko/4",
-          "useCurrentRow": true
-        },
-        "12668mu1/sinko/3/B": {
-          "searchTarget": "12668mu1/sinko/4",
-          "useCurrentRow": true
-        }
+        ]
       }
     },
-    "mu2zenhan": {
-      "fileId": "12668mu2zenhansinko",
-      "activeUntil": "16:30",
+    "mu2am": {
+      "fileId": "12668mu2amsinko",
       "stopAfter": "16:30",
-      "searchOverride": {
-        "12668mu2zenhan/his/1": {
-          "searchTarget": "12668mu2zenhan/sinko/1",
-          "useCurrentRow": true
-        }
-      },
       "ho1": {
         "searchTarget": "12668mu2am/sinko/1",
         "useCurrentRow": true
@@ -74,18 +51,22 @@
           "saveMemo1",
           "saveNickname"
         ],
-        "branch": {
-          "positive": "12668mu2/his/3/A",
-          "negative": "12668mu2/his/3/B"
-        }
+        "searchTarget": "12668mu2am/his/3"
       }
     },
-    "mu2kouhan": {
-      "fileId": "12668mu2kouhansinko",
-      "activeFrom": "16:30",
-      "kouhanHis": {
-        "searchTarget": "12668mu2/kouhan/sinko/1",
+    "mu2pm": {
+      "fileId": "12668mu2pmsinko",
+      "activeFrom": "17:10",
+            "ho1": {
+        "searchTarget": "12668mu2pm/sinko/1",
         "useCurrentRow": true
+      },
+      "ho2": {
+        "specialProcess": [
+          "saveMemo1",
+          "saveNickname"
+        ],
+        "searchTarget": "12668mu2pm/his/3"
       }
     },
     "mu2his": {
@@ -95,7 +76,7 @@
           "timeBasedSearch": {
             "before1630": {
               "fileId": "12668mu2hisam",
-              "searchTarget": "12668mu2zenhan/his/1",
+              "searchTarget": "12668mu2am/his/1",
               "useCurrentRow": true
             },
             "after1630": {
@@ -109,7 +90,7 @@
           "timeBasedSearch": {
             "before1630": {
               "fileId": "12668mu2hisam",
-              "searchTarget": "12668mu2zenhan/his/1",
+              "searchTarget": "12668mu2am/his/1",
               "useCurrentRow": true
             },
             "after1630": {
@@ -150,7 +131,7 @@
       },
       "his6": {
         "fileId": "12668mu2hispm",
-        "searchTarget": "12668mu2kouhan/sinko/1",
+        "searchTarget": "12668mu2pm/sinko/1",
         "useCurrentRow": true
       }
     },
