@@ -257,17 +257,83 @@ function parseCommentStr(commentStr) {
 
 // reply-checker.js の parseSubActionComment と同じロジック
 function parseSubActionComment(commentStr) {
-  const m = commentStr.match(/^(\d+)((?:yu|mu)\d+\w*)\/([a-zA-Z]+)\/(\w+)$/);
+  // ── doだけは末尾番号なしも許可 ──
+  // 12668mu1/do   → actionKey:"do"
+  // 12668mu1/do/1 → actionKey:"do1"
+  const doMatch = commentStr.match(
+    /^(\d+)((?:yu|mu)\d+\w*)\/do(?:\/(\w+))?$/
+  );
+
+  if (doMatch) {
+    const part3 = doMatch[3] || null;
+
+    const actionKey = part3
+      ? 'do' + (
+          /^\d+$/.test(part3)
+            ? part3
+            : part3.charAt(0).toUpperCase() + part3.slice(1)
+        )
+      : 'do';
+
+    return {
+      baseId: doMatch[1],
+      typeNum: doMatch[2],
+      sub: 'do',
+      part3,
+      actionKey,
+      charaId: doMatch[1] + doMatch[2],
+      comment: commentStr
+    };
+  }
+
+  // ── 既存の三段形式 ──
+  const m = commentStr.match(
+    /^(\d+)((?:yu|mu)\d+\w*)\/([a-zA-Z]+)\/(\w+)$/
+  );
+
   if (!m) return null;
+
   const sub = m[3];
   const part3 = m[4];
-  if (/^(?:sinko|his)/.test(sub) && /^\d+$/.test(part3)) return null;
-  if (/^ho/.test(sub)) return null;
-  // "12680yu1/sinko/ho"（sinkoHo）形式はsubActionにせず、hoモードの履歴検索で処理する
-  if (sub === 'sinko' && /^ho\d*$/.test(part3)) return null;
-  const part3Key = /^\d+$/.test(part3) ? part3 : (part3.charAt(0).toUpperCase() + part3.slice(1));
+
+  if (
+    /^(?:sinko|his)/.test(sub) &&
+    /^\d+$/.test(part3)
+  ) {
+    return null;
+  }
+
+  if (/^ho/.test(sub)) {
+    return null;
+  }
+
+  // 12680yu1/sinko/ho はsubActionではなくhoモード
+  if (
+    sub === 'sinko' &&
+    /^ho\d*$/.test(part3)
+  ) {
+    return null;
+  }
+
+  const part3Key =
+    /^\d+$/.test(part3)
+      ? part3
+      : (
+          part3.charAt(0).toUpperCase() +
+          part3.slice(1)
+        );
+
   const actionKey = sub + part3Key;
-  return { baseId: m[1], typeNum: m[2], sub, part3, actionKey, charaId: m[1] + m[2], comment: commentStr };
+
+  return {
+    baseId: m[1],
+    typeNum: m[2],
+    sub,
+    part3,
+    actionKey,
+    charaId: m[1] + m[2],
+    comment: commentStr
+  };
 }
 
 // reply-checker.js の resolvePhaseCfg と同じロジック
