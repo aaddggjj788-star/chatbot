@@ -35,6 +35,13 @@
         ]
       }
     },
+    "mu2": {
+      "do": {
+        "fileId": "12668mu2hissinko",
+        "searchTarget": "12668mu2/his/1",
+        "useCurrentRow": true
+      }
+    },
     "mu2am": {
       "fileId": "12668mu2amsinko",
       "stopAfter": "16:30",
@@ -90,13 +97,6 @@
         "saveNickname"
       ],
       "searchTarget": "12668mu2/his/3",
-      "useCurrentRow": true
-    }
-  },
-  "mu2": {
-    "do": {
-      "fileId": "12668mu2hissinko",
-      "searchTarget": "12668mu2/his/1",
       "useCurrentRow": true
     }
   },
