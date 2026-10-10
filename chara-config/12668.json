@@ -130,19 +130,19 @@
           "useCurrentRow": true
         }
       }
-    }
-  },
-  "his5": {
-    "timeBasedSearch": {
-      "before1650": {
-        "fileId": "12668mu3hissinko",
-        "searchTarget": "12668mu3hiru/sinko/1",
-        "useCurrentRow": true
-      },
-      "after1650": {
-        "fileId": "12668mu3hissinko",
-        "searchTarget": "12668mu2/his/6",
-        "useCurrentRow": true
+    },
+    "his5": {
+      "timeBasedSearch": {
+        "before1650": {
+          "fileId": "12668mu3hissinko",
+          "searchTarget": "12668mu3hiru/sinko/1",
+          "useCurrentRow": true
+        },
+        "after1650": {
+          "fileId": "12668mu3hissinko",
+          "searchTarget": "12668mu2/his/6",
+          "useCurrentRow": true
+        }
       }
     }
   },
