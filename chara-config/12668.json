@@ -158,23 +158,27 @@
     },
     "mu3hiru": {
       "fileId": "12668mu3hirusinko",
-      "noresHo": {
+      "ho1": {
         "searchTarget": "12668mu3hiru/sinko/1",
         "useCurrentRow": true
       },
-      "ho": {
-        "searchTarget": "12668mu3hiru/sinko/1",
+      "ho2": {
+        "searchTarget": "12668mu3hiru/sinko/0",
         "useCurrentRow": true
       }
     },
     "mu3yoru": {
       "fileId": "12668mu3yorusinko",
       "noresHo": {
-        "searchTarget": "12668mu3yoru/sinko/1",
+        "searchTarget": "12668mu3yoru/sinko/0",
         "useCurrentRow": true
       },
-      "ho": {
-        "searchTarget": "12668mu3yoru/sinko/1",
+      "ho1": {
+        "searchTarget": "12668mu3hiru/sinko/1",
+        "useCurrentRow": true
+      },
+      "ho2": {
+        "searchTarget": "12668mu3yoru/sinko/0",
         "useCurrentRow": true
       }
     },
