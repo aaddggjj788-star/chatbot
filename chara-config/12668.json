@@ -189,36 +189,6 @@
         "useCurrentRow": true
       }
     },
-    "yu1his": {
-      "his1": {
-        "fileId": "12668yu1sinko",
-        "requiredMessages": [
-          [
-            "宝財幸全授",
-            "ほうざいこうぜんじゅ"
-          ],
-          [
-            "幸せへといざなう幸福符",
-            "しあわせへといざなうこうふくふ"
-          ]
-        ],
-        "requiredCount": 2,
-        "searchTarget": "12668yu1/sinko/1",
-        "useCurrentRow": true
-      },
-      "his2": {
-        "fileId": "12668yu1sinko",
-        "requiredMessages": [
-          [
-            "幸せへといざなう幸福符",
-            "しあわせへといざなうこうふくふ"
-          ]
-        ],
-        "requiredCount": 1,
-        "searchTarget": "12668yu1/sinko/1",
-        "useCurrentRow": true
-      }
-    },
     "yu1": {
       "fileId": "12668yu1sinko",
       "ho1": {
@@ -237,19 +207,15 @@
         "searchTarget": "12668yu1/sinko/1",
         "useCurrentRow": true
       },
-      "noresHo": {
+      "ho2": {
         "fileId": "12668yu1sinko",
         "requiredMessages": [
-          [
-            "宝財幸全授",
-            "ほうざいこうぜんじゅ"
-          ],
           [
             "幸せへといざなう幸福符",
             "しあわせへといざなうこうふくふ"
           ]
         ],
-        "requiredCount": 2,
+        "requiredCount": 1,
         "searchTarget": "12668yu1/sinko/1",
         "useCurrentRow": true
       }
