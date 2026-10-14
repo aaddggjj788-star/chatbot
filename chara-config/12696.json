@@ -1,0 +1,48 @@
+{
+    "charaId": "12696",
+    "globalStopTime": {
+        "start": "23:00",
+        "end": "09:00"
+    },
+    "spanMatchExclude": [
+        "12696mu1/sinko/3"
+    ],
+    "phases": {
+        "mu1": {
+            "fileId": "12696mu1sinko",
+            "do": {
+                "searchTarget": "12696mu1/sinko/1",
+                "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1700": 25,
+                "after1700": 15
+            }
+        },
+        "mu2his": {
+            "fileId": "12696mu2hissinko"
+        },
+        "mu2": {
+            "fileId": "12696mu2sinko",
+            "do": {
+                "searchTarget": "12696mu2/his/1",
+                "useCurrentRow": true
+            },
+            "ho": {
+                "searchTarget": "12696mu2/sinko/1",
+                "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1700": 25,
+                "after1700": 15
+            }
+        },
+        "yu1": {
+            "fileId": "12696yu1sinko",
+            "ho": {
+                "searchTarget": "12696yu1/sinko/1",
+                "useCurrentRow": true
+            }
+        }
+    }
+}
