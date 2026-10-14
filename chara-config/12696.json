@@ -25,11 +25,32 @@
         "mu2": {
             "fileId": "12696mu2sinko",
             "do": {
+                "fileId": "12696mu2hissinko",
                 "searchTarget": "12696mu2/his/1",
                 "useCurrentRow": true
             },
-            "ho": {
-                "searchTarget": "12696mu2/sinko/1",
+            "ho1": {
+                "searchTarget": "12696mu2/sinko/2",
+                "useCurrentRow": true
+            },
+            "ho2": {
+                "fileId": "12696mu2hissinko",
+                "searchTarget": "12696mu2/his/5",
+                "useCurrentRow": true
+            },
+            "ho3": {
+                "fileId": "12696mu2hissinko",
+                "searchTarget": "12696mu2/his/4",
+                "useCurrentRow": true
+            },
+            "ho4": {
+                "fileId": "12696mu2hissinko",
+                "searchTarget": "12696mu2/his/3",
+                "useCurrentRow": true
+            },
+            "ho5": {
+                "fileId": "12696mu2hissinko",
+                "searchTarget": "12696mu2/his/2",
                 "useCurrentRow": true
             },
             "minElapsedMinutes": {
