@@ -5,7 +5,8 @@
         "end": "09:00"
     },
     "spanMatchExclude": [
-        "12696mu1/sinko/3"
+        "12696mu1/sinko/3",
+        "12696mu2/his/3"
     ],
     "phases": {
         "mu1": {
