@@ -6693,16 +6693,80 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     }
 
     // ─── 500ms固定待機後、Ajax完了を待つ ────────────────────────
+    // ─── 対象ユーザーの画面読み込み完了を確認 ────────────────────────
     await new Promise(r => setTimeout(r, 500));
+
     try {
-      await mainFrame.waitForFunction(() => {
-        const el = document.querySelector('#bodyKakunin');
-        const trCount = document.querySelectorAll('tr').length;
-        return el !== null && el.innerHTML.length > 0 && trCount >= 20;
-      }, { timeout: 15000 });
-    } catch (_) {
-      console.log(`[WARN] ${userName}: #bodyKakunin のタイムアウト`);
+      await mainFrame.waitForFunction(
+        ({ expectedKid, expectedUid }) => {
+          const el = document.querySelector('#bodyKakunin');
+          const trCount = document.querySelectorAll('tr').length;
+
+          // 既存の読み込み完了条件
+          const contentReady =
+            el !== null &&
+            el.innerHTML.length > 0 &&
+            trCount >= 20;
+
+          if (!contentReady) return false;
+
+          // 現在の画面URLから対象IDを取得
+          const params = new URLSearchParams(
+            window.location.search
+          );
+
+          const currentKid = params.get('k_id');
+          const currentUid = params.get('u_id');
+
+          // 処理対象ユーザーと一致する場合のみ完了
+          return (
+            currentKid === expectedKid &&
+            currentUid === expectedUid
+          );
+        },
+        {
+          expectedKid: String(kid),
+          expectedUid: String(uid)
+        },
+        {
+          timeout: 15000
+        }
+      );
+
+    } catch (e) {
+      console.log(
+        `[SKIP] ${userName}: 対象画面の読み込み未完了、またはUID/KID不一致 (${e.message})`
+      );
+
+      recordSkip(
+        '対象画面の読み込み未完了、またはUID/KID不一致'
+      );
+
+      continue;
     }
+
+    // ─── 解析直前の対象ユーザー一致確認 ────────────────────────
+    const currentUrl = new URL(mainFrame.url());
+
+    const currentKid = currentUrl.searchParams.get('k_id');
+    const currentUid = currentUrl.searchParams.get('u_id');
+
+    if (
+      currentKid !== String(kid) ||
+      currentUid !== String(uid)
+    ) {
+      console.log(
+        `[SKIP] ${userName}: 解析直前のUID/KID不一致 ` +
+        `期待=${kid}/${uid} ` +
+        `実際=${currentKid}/${currentUid}`
+      );
+
+      recordSkip(
+        '解析直前のUID/KID不一致'
+      );
+
+      continue;
+    }    
 
     // ─── デバッグログ ──────────────────────────────────────────
     console.log(`[DEBUG] ope_main URL: ${mainFrame.url()}`);
@@ -9755,14 +9819,26 @@ async function executeGeneratedSkippedPlan(
 
 
     // sendManualReply内の確認に対して自動で「送信」
-    const autoWaitForReply =
-      async () => {
+    let confirmStep = 0;
+
+    const autoWaitForReply = async () => {
+      confirmStep++;
+
+      if (confirmStep === 1) {
         console.log(
-          '[GENERATED-EXEC] 自動確認応答: 送信'
+          '[GENERATED-EXEC] 自動確認応答①: ' +
+          followCommand.slice(0, 80)
         );
 
-        return '送信';
-      };
+        return followCommand;
+      }
+
+      console.log(
+        '[GENERATED-EXEC] 最終送信は手動確認待ち'
+      );
+
+      return waitForLineReply();
+    };
 
 
     await sendManualReply(
