@@ -9398,6 +9398,7 @@ async function generateAiReplyForSkippedTarget(
       false,
       false
     );
+      return sent;
     }
   );
 }
@@ -9760,25 +9761,35 @@ async function executeGeneratedSkippedPlan(
 
     let confirmStep = 0;
 
-    const autoWaitForReply =
-      async () => {
-        confirmStep++;
+    const autoWaitForReply = async () => {
+      confirmStep++;
 
-        if (confirmStep === 1) {
-          console.log(
-            `[GENERATED-EXEC] 自動確認応答①: ` +
-            `${followCommand.slice(0, 80)}`
-          );
-
-          return followCommand;
-        }
-
+      // 最初から送信コマンドの場合も手動確認
+      if (followCommand === '送信') {
         console.log(
-          '[GENERATED-EXEC] 自動確認応答②: 送信'
+          '[GENERATED-EXEC] 最終送信の手動確認待ち'
         );
 
-        return '送信';
-      };
+        return await waitForLineReply();
+      }
+
+      // 1回目は生成済みコマンドを自動適用
+      if (confirmStep === 1) {
+        console.log(
+          '[GENERATED-EXEC] 自動確認応答①: ' +
+          followCommand.slice(0, 80)
+        );
+
+        return followCommand;
+      }
+
+      // 差し込み・差し替え後の最終送信確認
+      console.log(
+        '[GENERATED-EXEC] 最終送信の手動確認待ち'
+      );
+
+      return await waitForLineReply();
+    };
 
 
     const sent =
@@ -9819,29 +9830,17 @@ async function executeGeneratedSkippedPlan(
 
 
     // sendManualReply内の確認に対して自動で「送信」
-    let confirmStep = 0;
-
+    // 直接返信は最終確認を手動で行う
     const autoWaitForReply = async () => {
-      confirmStep++;
-
-      if (confirmStep === 1) {
-        console.log(
-          '[GENERATED-EXEC] 自動確認応答①: ' +
-          followCommand.slice(0, 80)
-        );
-
-        return followCommand;
-      }
-
       console.log(
-        '[GENERATED-EXEC] 最終送信は手動確認待ち'
+        '[GENERATED-EXEC] 直接返信の手動確認待ち'
       );
 
-      return waitForLineReply();
+      return await waitForLineReply();
     };
 
 
-    await sendManualReply(
+    const sent = await sendManualReply(
       currentIndex,
       replyText,
       sendLine,
@@ -9850,7 +9849,7 @@ async function executeGeneratedSkippedPlan(
       false
     );
 
-    return true;
+    return sent === true;
   }
 
 
@@ -11452,6 +11451,8 @@ async function checkQuestionAnswerWithAI(kanteishiText, userText, strictMode = f
 //   true                … 次のコメントアウト（番号+1）を文末に付与
 // sendLine / waitForLineReply は呼び出し側（server.js）から渡す
 async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY_RUN = false, useNextComment = false) {
+  let sent = false;
+
   console.log(`[MANUAL-REPLY] 対象外ID=${index} useNextComment=${useNextComment} 返信文="${(replyText || '').slice(0, 40)}"`);
 
   // 前回の停止要求が残っていると waitForLineReply が即座に停止扱いになるため、
@@ -11573,6 +11574,7 @@ async function sendManualReply(index, replyText, sendLine, waitForLineReply, DRY
     await sendFrame.fill('textarea#mess_body', finalReplyText);
     await sendFrame.click('#chara_mail_send');
     await sendFrame.waitForLoadState('networkidle').catch(() => {});
+    sent = true;
     console.log(`[MANUAL-REPLY] uid=${uid} (${userName}) 送信完了`);
 
     await sendLine(`【対象外返信完了】\n会員ID：${uid}`);
