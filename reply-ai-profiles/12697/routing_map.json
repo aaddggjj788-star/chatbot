@@ -1,0 +1,51 @@
+{
+  "kid": "12697",
+  "routingPolicy": {
+    "baseProfile": "12697.json",
+    "phaseProfileRule": "最新コメントアウトの mu/yu + 日数を基準に対応JSONを選択する。",
+    "fallback": "該当日JSONが存在しない場合のみ同じmu/yu内の過去の既存JSONを参照。ただし進行段階を補完・創作しない。",
+    "doNotCrossBoundary": true
+  },
+  "specialMappings": {
+    "12697yu2": {
+      "sourceDirectory": "特殊展開/yu2",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu4": {
+      "sourceDirectory": "特殊展開/yu4",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu7": {
+      "sourceDirectory": "特殊展開/yu7",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu11": {
+      "sourceDirectory": "特殊展開/yu11",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu14": {
+      "sourceDirectory": "特殊展開/yu14",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu18": {
+      "sourceDirectory": "特殊展開/yu18",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu21": {
+      "sourceDirectory": "特殊展開/yu21",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu25": {
+      "sourceDirectory": "特殊展開/yu25",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu28": {
+      "sourceDirectory": "特殊展開/yu28",
+      "requireExplicitSpecialFlow": true
+    },
+    "12697yu32": {
+      "sourceDirectory": "特殊展開/yu32",
+      "requireExplicitSpecialFlow": true
+    }
+  }
+}

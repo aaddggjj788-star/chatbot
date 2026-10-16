@@ -1,0 +1,423 @@
+{
+  "phaseKey": "12697yu3",
+  "situation": "有料鑑定",
+  "startState": "原稿上の対象日程。相談者ごとの現時点の到達位置はコメントアウトと外部判定に依存。",
+  "goal": "原文で指定された当該日程のやり取りを維持し、質問には正面から答える。進行条件を自作しない。",
+  "currentProcess": {
+    "summary": "通常返信ログが存在。返信本文に記載された図・行動・送り返し指定に従う。",
+    "steps": [
+      "通常返信: 87件のコメント付き参照箇所を確認。実際の工程はreferenceLogsの該当本文を優先。",
+      "掘り起こし・まとめ: 9件のコメント付き参照箇所を確認。実際の工程はreferenceLogsの該当本文を優先。"
+    ]
+  },
+  "progressRules": [
+    "現在の日付だけで次工程へ進まない。最新の進行コメントと既存返信ログを参照。",
+    "質問への回答に伴い返信語や段階を増やさない。"
+  ],
+  "replyRules": [
+    "その日の本文に登場する語句・図形・数字と整合させる。",
+    "返信文章の内容から進行番号を推測しない。"
+  ],
+  "allowed": [
+    "相談者の質問への補足説明",
+    "すでに案内済みの手順・語句の確認"
+  ],
+  "forbidden": [
+    "未来の日程の工程を前倒しすること",
+    "存在しない返信ログ番号を生成すること",
+    "金銭的利益や期限を保証すること"
+  ],
+  "importantTerms": {},
+  "referenceLogs": [
+    {
+      "sourceFile": "掘り起こし/夕_レス有.txt",
+      "comment": "<!--12697yu3/ho-->",
+      "excerpt": "＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n【有料3日目】\n元ファイル：【鷹司】有料3日目掘り.txt\n管理表記：当日レスあり止まり（原文114行）\n＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n\n>当日レスあり止まり\n----------------------------------\n\nあなたは今人生の重大な岐路にいます。\n\n望んでいる未来へと進むか否かという究極の分岐点。\n\nこれはあなたのご行動次第で変化していきますからね。\n\n良い方へと進んで行きたいのであれば立ち止まることなく進んでいきましょう。\n\nそれでは先にお送りしている工程にお取組みになりご連絡ください。\n\nお待ちしております。"
+    },
+    {
+      "sourceFile": "掘り起こし/夜_レス有.txt",
+      "comment": "<!--12697yu3/ho-->",
+      "excerpt": "＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n【有料3日目】\n元ファイル：【鷹司】有料3日目掘り.txt\n管理表記：当日レスあり止まり（原文159行）\n＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n\n>当日レスあり止まり\n----------------------------------\n\n『※天与の財運※』の恩恵を手にすることは正義です。\n\nあなた自身の行いに疑問を頂く必要は全くありません。\n\n突然多額の金銭を手にしたとしても、お金の良さも悪さも怖さも知っているあなたならば、お金に振り回されることなく必ず良い使い方が出来るはず。\n\n本日はあなたの中に付与した『天奉の金運』の後押しで計り知れない成果が得られることでしょう。\n\nですので、お"
+    },
+    {
+      "sourceFile": "掘り起こし/朝_オール.txt",
+      "comment": "<!--12697yu3/ho-->",
+      "excerpt": "＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n【有料3日目】\n元ファイル：【鷹司】有料3日目掘り.txt\n管理表記：ALL（原文4行）\n＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n\n>ALL\n------------------------------\n\nおはようございます。\n鷹司　春樹です。\n\n既にあなたの中には『天奉の金運』が付与されております。\n\n金運というのは生き物のようなものですから、仲間が仲間を呼ぶように金運は金運を呼び寄せます。\n\nそのために今回あなたの中には『天奉の金運』という一輪の花を植えました。\n\n総額10億円以上を越える『※天与の財運※』は待ってくれません。\n常に時間が流れているように事態は絶えず動いております。\n\n"
+    },
+    {
+      "sourceFile": "掘り起こし/昼_レス有.txt",
+      "comment": "<!--12697yu3/ho-->"
+    },
+    {
+      "sourceFile": "掘り起こし/夜_レス無.txt",
+      "comment": "<!--12697yu3/ho-->"
+    },
+    {
+      "sourceFile": "掘り起こし/昼_レス無.txt",
+      "comment": "<!--12697yu3/ho-->"
+    },
+    {
+      "sourceFile": "掘り起こし/まとめ_レス無.txt",
+      "comment": "<!--12697yu3/nores/mtm-->"
+    },
+    {
+      "sourceFile": "掘り起こし/夕_レス無.txt",
+      "comment": "<!--12697yu3/ho-->"
+    },
+    {
+      "sourceFile": "掘り起こし/まとめ_レス有.txt",
+      "comment": "<!--12697yu3/mtm-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/1-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/2-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/3-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/4-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/5-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/6-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/7-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/8-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/9-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/10-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/11-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/12-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/13-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/14-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/15-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/16-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/17-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/18-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/19-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/20-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/21-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/22-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/23-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/24-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/25-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/26-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/27-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/28-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/29-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/30-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/31-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/32-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/33-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/34-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/35-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/36-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/37-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/38-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/39-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/40-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/41-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/42-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/43-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/44-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/45-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/46-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/47-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/48-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/49-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/50-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/51-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/52-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/53-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/54-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/55-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/56-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/57-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/58-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/59-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/60-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/61-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/62-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/63-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/64-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/65-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/66-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/67-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/68-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/69-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/70-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/71-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/72-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/73-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/74-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/75-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/76-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/77-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/78-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/79-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/80-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/81-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/82-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/83-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/84-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/85-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/86-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu3_通常返信ログ.txt",
+      "comment": "<!--12697yu3/sinko/87-->"
+    }
+  ],
+  "additionalRules": [
+    "当日の原文にない固有名詞・所要時間・効果を追加しない。"
+  ]
+}

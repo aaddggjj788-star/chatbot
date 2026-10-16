@@ -1,0 +1,339 @@
+{
+  "phaseKey": "12697yu47",
+  "situation": "有料鑑定",
+  "startState": "原稿上の対象日程。相談者ごとの現時点の到達位置はコメントアウトと外部判定に依存。",
+  "goal": "原文で指定された当該日程のやり取りを維持し、質問には正面から答える。進行条件を自作しない。",
+  "currentProcess": {
+    "summary": "通常返信ログが存在。返信本文に記載された図・行動・送り返し指定に従う。",
+    "steps": [
+      "通常返信: 70件のコメント付き参照箇所を確認。実際の工程はreferenceLogsの該当本文を優先。",
+      "掘り起こし・まとめ: 5件のコメント付き参照箇所を確認。実際の工程はreferenceLogsの該当本文を優先。"
+    ]
+  },
+  "progressRules": [
+    "現在の日付だけで次工程へ進まない。最新の進行コメントと既存返信ログを参照。",
+    "質問への回答に伴い返信語や段階を増やさない。"
+  ],
+  "replyRules": [
+    "その日の本文に登場する語句・図形・数字と整合させる。",
+    "返信文章の内容から進行番号を推測しない。"
+  ],
+  "allowed": [
+    "相談者の質問への補足説明",
+    "すでに案内済みの手順・語句の確認"
+  ],
+  "forbidden": [
+    "未来の日程の工程を前倒しすること",
+    "存在しない返信ログ番号を生成すること",
+    "金銭的利益や期限を保証すること"
+  ],
+  "importantTerms": {},
+  "referenceLogs": [
+    {
+      "sourceFile": "掘り起こし/夜_レス有.txt",
+      "comment": "<!--12697yu47/ho-->",
+      "excerpt": "＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n【有料47日目】\n元ファイル：【鷹司】有料47日目掘り.txt\n管理表記：当日レスあり止まり（原文79行）\n＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n\n>当日レスあり止まり\n----------------------------------\n\n《常勢の供給》に内在する金運が黄金に輝きだしました。\n\n金運が輝きを帯びた時には、最も金銭の幸及び該当の『※天与の財運※』を獲得し易くなります。\n\nつまり、最も早期に最短にあなたの手中に『※天与の財運※』を納められる事とすらなる決して見逃すべきではないチャンスがここに訪れたという事。\n\nまるで旋風が吹き荒れるようなこの出来事の起因となるのは他でもない"
+    },
+    {
+      "sourceFile": "掘り起こし/朝_オール.txt",
+      "comment": "<!--12697yu47/ho-->",
+      "excerpt": "＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n【有料47日目】\n元ファイル：【鷹司】有料47日目掘り.txt\n管理表記：ALL（原文4行）\n＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n\n>ALL\n------------------------------\n\nおはようございます。\n鷹司　春樹です。\n\nまさに青天の霹靂…あなたにとってこの一日が『※天与の財運※』の恩恵獲得の明暗を分ける重大な一日になる事を重んじてください。\n\n以下が詳細です。\n\n本日《常勢の供給》が誕生しました。\n\nこの光景に私は身の毛が逆立つような興奮と感銘を禁じえませんでした。\n\n《常勢の供給》とは、『※天与の財運※』を獲得するためにあなたが宿した特大の器と言えるもの。"
+    },
+    {
+      "sourceFile": "掘り起こし/昼_レス有.txt",
+      "comment": "<!--12697yu47/ho-->",
+      "excerpt": "＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n【有料47日目】\n元ファイル：【鷹司】有料47日目掘り.txt\n管理表記：当日レスあり止まり（原文40行）\n＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n\n>当日レスあり止まり\n----------------------------------\n\n自由奔放、無限の可能性が広がる未来を切り開くのはあなたの一挙手一投足です。\n\n私はあなたのプライベートな事象などに踏み込むつもりはありませんし、鑑定を無理強いする事もありませんが、一つだけ念を押させてほしいのは絶対に後悔ではなく「本当によかった」と心からの笑みでこの鑑定を卒業してほしいという事、ただそれだけです。\n\n今現在の状況、そして未来のご自身の"
+    },
+    {
+      "sourceFile": "掘り起こし/夜_レス無.txt",
+      "comment": "<!--12697yu47/ho-->"
+    },
+    {
+      "sourceFile": "掘り起こし/昼_レス無.txt",
+      "comment": "<!--12697yu47/ho-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/1-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/2-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/3-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/4-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/5-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/6-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/7-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/8-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/9-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/10-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/11-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/12-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/13-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/14-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/15-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/16-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/17-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/18-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/19-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/20-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/21-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/22-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/23-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/24-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/25-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/26-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/27-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/28-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/29-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/30-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/31-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/32-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/33-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/34-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/35-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/36-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/37-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/38-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/39-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/40-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/41-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/42-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/43-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/44-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/45-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/46-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/47-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/48-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/49-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/50-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/51-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/52-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/53-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/54-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/55-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/56-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/57-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/58-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/59-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/60-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/61-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/62-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/63-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/64-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/65-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/66-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/67-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/68-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/69-->"
+    },
+    {
+      "sourceFile": "返信ログ/yu47_通常返信ログ.txt",
+      "comment": "<!--12697yu47/sinko/70-->"
+    }
+  ],
+  "additionalRules": [
+    "当日の原文にない固有名詞・所要時間・効果を追加しない。"
+  ]
+}
