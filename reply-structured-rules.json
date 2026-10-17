@@ -7,6 +7,109 @@
     "requireExactCommentMatch": true
   },
   "fallbackProfiles": {
+    "12697life_change": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "過去2年間に新たに生じた具体的な出来事、または変化がなかった旨を明言。仕事が変わった、引っ越した、結婚したなど自然文も含む。単なる「はい」や「色々あった」は不足。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "どの程度の出来事を答えるべきか、質問理由を尋ねている。",
+          "template": "この2年間に、以前にはなかった出来事や生活上の変化があったかを伺っています。大きな出来事でなくても構いません。差し支えない範囲で「仕事に変化があった」などとお答え頂くか、特にない場合は「変化はなかった」とお伝えください。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "変化があったか分からない、思い出せないが回答拒否はしていない。",
+          "template": "はっきりと思い当たることがなければ、無理に探して頂く必要はありません。思い当たる変化があればその分野だけ、なければ「変化はなかった」で大丈夫です。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "出来事の詳細を知られることに不安を示す。",
+          "template": "詳しい事情までお話し頂く必要はありません。「人間関係に変化があった」など、分野だけでも構いません。お答えできる範囲でお知らせください。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "過去2年間の変化の有無そのものへの回答を拒否している。",
+          "template": "承知しました。無理にお話し頂く必要はありません。詳しい内容を伏せたまま、変化があった分野だけお伝え頂く方法もありますので、可能な範囲でご判断ください。",
+          "commentPolicy": "same"
+        },
+        "multiple_answers": {
+          "description": "複数の変化があり、どれを回答すべきか尋ねている。",
+          "template": "複数の出来事がある場合は、その中から一つお選び頂いても、分野をまとめてお伝え頂いても大丈夫です。詳しい説明は不要ですよ。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12697residence_region": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "現在住んでいる都道府県、関東・関西・東北などの広域、または市区町村等から居住地域が明確に示されている。出生地や過去の居住地のみは不可。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "なぜ地域を知りたいのか、どこまで答えればよいか質問している。",
+          "template": "お住まいの地域を伺っていますが、詳しい住所は必要ありません。関東や関西といった地方名でも構いませんし、可能であれば都道府県までお伝え頂ければ大丈夫です。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "居住地域を伝えることへの個人情報上の不安。",
+          "template": "住所や市区町村など、詳しい個人情報はお知らせ頂かなくて大丈夫です。関東や関西など、大まかな地域名だけでも構いません。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "居住地域の回答そのものを明確に拒否している。",
+          "template": "承知しました。お住まいについて無理に詳しくお話し頂く必要はありません。もし差し支えなければ、地方名だけでお答え頂く方法もございます。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "どの地方に分類されるか迷っている、居住地の伝え方に迷っている。",
+          "template": "地方名で迷われる場合は、都道府県名だけでも構いません。詳しい住所は不要ですので、差し支えない範囲でお知らせください。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12697desired_income": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "理想・希望の収入として金額が明示されている、または「今の収入で十分」「現状で満足」など増額を望まない意向が明確。月収・年収が明示される自然文も有効。現在の収入額だけや借金額だけは不可。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "希望収入は月収か年収か、何を基準に考えるか尋ねている。",
+          "template": "今の生活で自由に使えるお金も含め、どの程度の収入があれば理想的かを伺っています。月収でも年収でも構いませんので、希望額と一緒にお伝えください。現在の収入で十分なら、そのままそうお答え頂いて大丈夫です。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "希望額が決められない、どの程度を答えればよいか迷っている。",
+          "template": "厳密な金額でなくても大丈夫です。普段の生活を思い浮かべて、希望する収入を大まかな金額でお答えください。今の収入に満足されているなら「今のままで十分」で構いません。",
+          "commentPolicy": "same"
+        },
+        "multiple_answers": {
+          "description": "月収と年収など複数の希望額を挙げ、どちらを答えるべきか尋ねている。",
+          "template": "月収と年収のどちらでお答え頂いても構いません。分かりやすい方を一つ選び、希望額をお知らせください。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "具体的な希望収入を伝えることへのプライバシー上の不安。",
+          "template": "現在の収入や家計の細かな事情をお話し頂く必要はありません。あくまで理想の収入を伺っていますので、大まかな希望額だけで構いません。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "理想の収入または満足度への回答そのものを拒否している。",
+          "template": "承知しました。無理に金額をお伝え頂く必要はありません。もしお答え頂けるようでしたら、希望する収入の目安、または「今のままで十分」のどちらかだけでも結構です。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
     "12689name": {
       "enabled": true,
       "maxAutoUse": 1,
@@ -651,6 +754,51 @@
     }
   },
   "rules": {
+    "12697mu1/sinko/1": {
+      "enabled": true,
+      "type": "life_change_or_none",
+      "fallbackProfile": "12697life_change",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12697mu1/sinko/2": {
+      "enabled": true,
+      "type": "residence_region",
+      "fallbackProfile": "12697residence_region",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12697mu1/sinko/4": {
+      "enabled": true,
+      "type": "desired_income_or_satisfied",
+      "fallbackProfile": "12697desired_income",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
     "12695yu2/ho": {
       "enabled": true,
       "type": "money_amount",

@@ -5374,6 +5374,46 @@ function validateStructuredKanjiPairWithGold(text, rule) {
   };
 }
 
+function validateStructuredLifeChangeOrNone(text, rule) {
+  const t = normalizeStructuredText(text);
+  if (!t || /[？?]/.test(t)) return {status:'needs_ai',reason:'life_change_missing_or_question'};
+  if (/^(?:変化はなかった|変化はありませんでした|特に変化はない|特に変化はありません|何も変わっていません|変わったことはない)[。.!！\s]*$/.test(t))
+    return {status:'valid',reason:'explicit_no_life_change'};
+  // 「○○に変化があった」や具体的な新しい事実だけを狭く許容。
+  if (/^(?:生活|仕事|職場|収入|経済状況|金銭|貯金|借金|家族|結婚|子供|子ども|孫|住居|家|人間関係|友人|健康|環境)(?:のこと|面|関係)?に変化があった[。.!！\s]*$/.test(t))
+    return {status:'valid',reason:'explicit_life_change_area'};
+  return {status:'needs_ai',reason:'life_change_needs_semantic_review'};
+}
+
+function validateStructuredResidenceRegion(text, rule) {
+  const t=normalizeStructuredText(text);
+  if (!t || /[？?]/.test(t)) return {status:'needs_ai',reason:'region_missing_or_question'};
+  // 厳格な都道府県完全一致と、質問文で明示的に認められている地方名に限定。
+  const prefectures = /^(?:北海道|青森県|岩手県|宮城県|秋田県|山形県|福島県|茨城県|栃木県|群馬県|埼玉県|千葉県|東京都|神奈川県|新潟県|富山県|石川県|福井県|山梨県|長野県|岐阜県|静岡県|愛知県|三重県|滋賀県|京都府|大阪府|兵庫県|奈良県|和歌山県|鳥取県|島根県|岡山県|広島県|山口県|徳島県|香川県|愛媛県|高知県|福岡県|佐賀県|長崎県|熊本県|大分県|宮崎県|鹿児島県|沖縄県)$/;
+  const regions = /^(?:北海道地方|東北|東北地方|関東|関東地方|甲信越|北陸|東海|中部|中部地方|近畿|近畿地方|関西|中国地方|四国|九州|九州地方|沖縄)$/;
+  const s=t.replace(/[。.!！\s]+$/g,'').replace(/(?:に住んでいます|に住んでおります|在住です|在住|です)$/,'');
+  if (prefectures.test(s) || regions.test(s)) return {status:'valid',reason:'explicit_residence_region'};
+  return {status:'needs_ai',reason:'residence_region_needs_semantic_review'};
+}
+
+function validateStructuredDesiredIncomeOrSatisfied(text, rule) {
+  const t=normalizeStructuredText(text);
+  if (!t || /[？?]/.test(t)) return {status:'needs_ai',reason:'desired_income_missing_or_question'};
+  if (/^(?:今のままで十分|今の収入で十分|現在の収入で十分|現状の収入で満足しています|今の収入で満足しています|今のままで満足)[。.!！\s]*$/.test(t))
+    return {status:'valid',reason:'current_income_sufficient'};
+  // 金額という共通意味単位の検証は既存validatorへ委譲。
+  // 希望する収入と明示した場合だけ呼び、借金額や現在の収入額の誤検知を防ぐ。
+  if (/^(?:希望(?:する|の)?(?:収入|年収|月収)|欲しい(?:収入|年収|月収)|(?:月収|年収|収入)(?:は|として|で))/.test(t)
+      && !/(?:今の|現在の)収入(?:は|が)/.test(t)) {
+    const amountResult=validateStructuredMoneyAmount(text,rule);
+    if (amountResult && amountResult.status==='valid')
+      return {status:'valid',reason:'explicit_desired_income_amount'};
+  }
+  return {status:'needs_ai',reason:'desired_income_needs_semantic_review'};
+}
+
+
+
 // ======================================================
 // type → validator
 // ======================================================
