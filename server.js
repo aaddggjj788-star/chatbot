@@ -568,6 +568,65 @@ const INQUIRY_POST_URL = ''; // 後で設定
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.static('public'));
 
+// 有効期限付きURLからポイント履歴画像を返す
+app.get('/line-point-image/:token', (req, res) => {
+  try {
+    const secret = process.env.LINE_IMAGE_SIGNING_SECRET;
+
+    if (!secret) {
+      return res.sendStatus(404);
+    }
+
+    const [data, signature] = req.params.token.split('.');
+
+    if (!data || !signature) {
+      return res.sendStatus(404);
+    }
+
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(data)
+      .digest();
+
+    const received = Buffer.from(signature, 'base64url');
+
+    if (
+      received.length !== expected.length ||
+      !crypto.timingSafeEqual(received, expected)
+    ) {
+      return res.sendStatus(403);
+    }
+
+    const payload = JSON.parse(
+      Buffer.from(data, 'base64url').toString('utf8')
+    );
+
+    if (
+      !/^\d+$/.test(String(payload.uid || '')) ||
+      !/^[A-Za-z0-9._-]+\.png$/.test(String(payload.filename || '')) ||
+      !Number.isSafeInteger(payload.exp) ||
+      Date.now() > payload.exp
+    ) {
+      return res.sendStatus(403);
+    }
+
+    const imagePath = path.join(
+      __dirname,
+      'point-history-captures',
+      payload.uid,
+      payload.filename
+    );
+
+    res.set('Cache-Control', 'private, no-store');
+
+    return res.type('png').sendFile(imagePath);
+
+  } catch (err) {
+    console.error('[LINE-IMAGE] 画像取得失敗:', err.message);
+    return res.sendStatus(404);
+  }
+});
+
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });

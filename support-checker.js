@@ -47,7 +47,9 @@ const anthropic = new Anthropic();
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
-
+const {
+  sendLinePointHistoryImage
+} = require('./line-image-notify');
 const LOGIN_URL  = process.env.SYSTEM_URL || 'http://manager.x7j4l2p9m1.com/mg/mg_ope.php';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const DRY_RUN    = process.env.DRY_RUN === 'true';
@@ -821,6 +823,8 @@ async function notifyBankHistory(page, uid) {
     );
   }
 
+  
+
     await sendLine(
       [
         '【当日ポイント履歴取得】',
@@ -834,6 +838,21 @@ async function notifyBankHistory(page, uid) {
           : [])
       ].join('\n')
     );
+
+    // ===============================================
+// 保存済みポイント履歴画像をLINEにも送信
+// ===============================================
+if (evidence?.screenshotPath) {
+  const lineImageSent = await sendLinePointHistoryImage(
+    evidence.screenshotPath,
+    uid
+  );
+
+  console.log(
+    `[POINT-HISTORY] uid=${uid} LINE画像送信=` +
+    (lineImageSent ? '成功' : '失敗')
+  );
+}
 
     console.log(`[BANK-CHECK] uid=${uid}: 当日決済履歴 ${paymentRows.length}件`);
     if (paymentRows.length === 0) {
