@@ -14,7 +14,11 @@ const { simpleParser } = require('mailparser');
 const axios = require('axios');
 // 入金処理（ポイント追加）のロジックは utils.js に集約し、
 // contact-checker.js / support-checker.js / server.js と共通化する
-const { processPayment, calcPaymentPoints } = require('./utils');
+const {
+  processPayment,
+  calcPaymentPoints,
+  addPointsOnly
+} = require('./utils');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
 
 // ─── 設定 ─────────────────────────────────────────────────────────
@@ -39,11 +43,11 @@ const STAFF_TARGET_IDS = [
   '2488023', '6092588', '12516134', '16935122', '16667313',
   '3866720', '9966839', '3569849', '1042324', '2486932',
   '10562903', '1045392', '16166564', '2900792', '8764227',
-  '13595998', '16244500', '1494510', '20224382', '21042523', '20369054','1042287','19052327','17895178',
+  '13595998', '16244500', '1494510', '20224382', '21042523', '20369054','1042287','19052327','17895178','16410371',
 ];
 
 // 通知のみID（ポイント追加はしないがLINEに通知）
-const NOTIFY_ONLY_IDS = ['19122552','18420135'];
+const POINT_ONLY_IDS = ['19122552','18420135'];
 
 // 名前→ID変換テーブル（カタカナ氏名などIDが判別できない依頼人名の対応）
 const NAME_TO_ID = {
@@ -242,13 +246,56 @@ async function checkMail() {
         continue;
       }
 
-      // 優先順位3: 通知のみIDはLINE通知だけ行う
-      if (memberId && NOTIFY_ONLY_IDS.includes(memberId)) {
-        console.log(`  通知のみ（NOTIFY_ONLY） 会員ID:${memberId}`);
-        await sendLine(
-          `【入金通知】会員ID：${memberId}\n入金額：${amount}円\n※処理は除外対象です`
+      // 指定IDは銀行入金処理をせず、ポイントのみ追加
+      if (memberId && POINT_ONLY_IDS.includes(memberId)) {
+        const points = calcPaymentPoints(amount);
+
+        console.log(
+          `[POINT-ONLY] uid=${memberId} amount=${amount}円 points=${points}pt`
         );
-        await markAsSeen(connection, msg);
+
+        if (DRY_RUN) {
+          console.log(
+            `[DRY RUN][POINT-ONLY] uid=${memberId} ${points}pt追加予定`
+          );
+
+          // テスト時は既読にしない
+          continue;
+        }
+
+        try {
+          await addPointsOnly(memberId, points);
+
+          await markAsSeen(connection, msg);
+
+          await sendLine(
+            `【ポイント追加完了】\n` +
+            `会員ID：${memberId}\n` +
+            `入金額：${amount}円\n` +
+            `追加ポイント：${points}pt\n` +
+            `処理方式：ポイント調整`
+          );
+
+          console.log(
+            `[POINT-ONLY] 処理完了 uid=${memberId}`
+          );
+
+        } catch (err) {
+          console.error(
+            `[POINT-ONLY] エラー uid=${memberId}: ${err.message}`
+          );
+
+          await sendLine(
+            `【ポイント追加要確認】\n` +
+            `会員ID：${memberId}\n` +
+            `入金額：${amount}円\n` +
+            `追加予定：${points}pt\n` +
+            `エラー：${err.message}`
+          );
+
+          // 成否が確定できないため、ここでは既読化しない
+        }
+
         continue;
       }
 

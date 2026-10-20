@@ -1656,6 +1656,94 @@ async function processPayment(memberId, amount, points) {
   }
 }
 
+
+// ======================================================
+// ポイントのみ追加（銀行入金フォームを使用しない）
+// ======================================================
+async function addPointsOnly(memberId, points) {
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox']
+  });
+
+  try {
+    const context = await browser.newContext({
+      httpCredentials: {
+        username: process.env.BASIC_AUTH_ID,
+        password: process.env.BASIC_AUTH_PASS
+      }
+    });
+
+    const page = await context.newPage();
+
+    // 既存の入金処理と同じログイン方法
+    await page.goto(
+      'http://manager.x7j4l2p9m1.com/mg/mg_ope.php',
+      { waitUntil: 'networkidle' }
+    );
+
+    const sessionLink =
+      page.locator('a[href*="s_system"]');
+
+    if (await sessionLink.count() > 0) {
+      await sessionLink.first().click();
+      await page.waitForLoadState('networkidle');
+    }
+
+    await page.fill(
+      process.env.SEL_LOGIN_ID || '[name="login_id"]',
+      process.env.CHECK_LOGIN_ID
+    );
+
+    await page.fill(
+      process.env.SEL_LOGIN_PASS || '[name="password"]',
+      process.env.CHECK_LOGIN_PASS
+    );
+
+    await page.click(
+      process.env.SEL_LOGIN_SUBMIT || '[type="submit"]'
+    );
+
+    await page.waitForLoadState('networkidle');
+
+    const detailPage = await openKyouseitaikai(
+      page,
+      memberId
+    );
+
+    try {
+      if (
+        !detailPage.url().includes(
+          'mg_kyoseitaikai.php'
+        )
+      ) {
+        throw new Error(
+          '会員詳細ページを取得できません'
+        );
+      }
+
+      // 銀行入金処理ではなく、ポイント調整
+      await adjustPoint(
+        detailPage,
+        points,
+        '+'
+      );
+
+      console.log(
+        `[POINT-ONLY] uid=${memberId} ${points}pt追加操作完了`
+      );
+
+      return true;
+
+    } finally {
+      await detailPage.close().catch(() => {});
+    }
+
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 // ─── 手動入金コマンド共通処理 ─────────────────────────────────────────
 // 「{uid} {金額}円 入金」コマンドの実処理。ポイントを計算して processPayment で
 // 追加し、完了/エラーを sendLine で通知する（server.js / contact-checker.js /
@@ -1687,5 +1775,5 @@ module.exports = {
   checkAndApplyDiscount,
   calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, captureTodayPointHistory, checkPointDiff,
   getCampaignInfo, formatCampaignInfo, calcCouponPoint,
-  calcPaymentPoints, processPayment, runPaymentCommand,adrentPoint,
+  calcPaymentPoints, processPayment, runPaymentCommand,adrentPoint,addPointsOnly,
 };

@@ -108,9 +108,14 @@ async function sendSlack(message) {
   const raw = typeof message === 'string' ? message : String(message ?? '');
   if (!raw.trim()) return;
 
-  const text = raw.length > MAX_LEN
-    ? `${raw.slice(0, MAX_LEN)}\n（以降は文字数上限のため省略）`
+  const separator = '\n\n────────────────────────';
+
+  const maxBodyLen = MAX_LEN - separator.length;
+  const textBody = raw.length > maxBodyLen
+    ? `${raw.slice(0, maxBodyLen - 20)}\n（以降は省略）`
     : raw;
+
+  const text = textBody + separator;
 
   try {
     await axios.post(
