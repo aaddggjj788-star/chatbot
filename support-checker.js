@@ -38,7 +38,11 @@ const {
   runPaymentCommand,
 } = require('./utils');
 const supportAiTemplates = require('./support-ai-templates.json');
-const { sendSlack, isSlackOnly } = require('./slack-notify');
+const {
+  sendSlack,
+  sendSlackImage,
+  isSlackOnly
+} = require('./slack-notify');
 const anthropic = new Anthropic();
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -795,6 +799,27 @@ async function notifyBankHistory(page, uid) {
       historyPage,
       uid
     );
+
+
+  // ===============================================
+  // 保存済みポイント履歴画像をSlackへ送信
+  // ===============================================
+  if (evidence?.screenshotPath) {
+    const imageSent = await sendSlackImage(
+      evidence.screenshotPath,
+      [
+        '【当日ポイント履歴】',
+        `会員ID：${uid}`,
+        `対象日：${evidence.date}`,
+        `履歴件数：${evidence.todayRows.length}件`
+      ].join('\n')
+    );
+
+    console.log(
+      `[POINT-HISTORY] uid=${uid} Slack画像送信=` +
+      (imageSent ? '成功' : '失敗')
+    );
+  }
 
     await sendLine(
       [

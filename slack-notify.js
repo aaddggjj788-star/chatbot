@@ -22,6 +22,8 @@
 
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 // Slackの1メッセージ上限（40000文字）に対する安全マージン
 const MAX_LEN = 39000;
@@ -64,4 +66,113 @@ async function sendSlack(message) {
   }
 }
 
-module.exports = { sendSlack, isSlackOnly, isSlackEnabled };
+// ======================================================
+// Slack画像送信（ポイント履歴などのPNG証跡用）
+// ======================================================
+async function sendSlackImage(imagePath, message = '') {
+  const token = process.env.SLACK_BOT_TOKEN;
+  const channelId = process.env.SLACK_IMAGE_CHANNEL_ID;
+
+  if (!token || !channelId) {
+    console.error(
+      '[SLACK-IMAGE] Bot TokenまたはチャンネルIDが未設定'
+    );
+    return false;
+  }
+
+  if (!imagePath || !fs.existsSync(imagePath)) {
+    console.error(
+      `[SLACK-IMAGE] 画像ファイルなし: ${imagePath}`
+    );
+    return false;
+  }
+
+  try {
+    const filename = path.basename(imagePath);
+    const buffer = fs.readFileSync(imagePath);
+    const headers = {
+      Authorization: `Bearer ${token}`
+    };
+
+    // ① Slackからアップロード先URLを取得
+    const ticket = await axios.post(
+      'https://slack.com/api/files.getUploadURLExternal',
+      null,
+      {
+        headers,
+        params: {
+          filename,
+          length: buffer.length
+        },
+        timeout: 15000
+      }
+    );
+
+    if (!ticket.data?.ok) {
+      throw new Error(
+        `アップロードURL取得失敗: ${ticket.data?.error}`
+      );
+    }
+
+    // ② 取得したURLへPNGデータをアップロード
+    await axios.post(
+      ticket.data.upload_url,
+      buffer,
+      {
+        headers: {
+          'Content-Type': 'application/octet-stream'
+        },
+        maxBodyLength: Infinity,
+        timeout: 60000
+      }
+    );
+
+    // ③ アップロードを確定し、チャンネルへ共有
+    const completed = await axios.post(
+      'https://slack.com/api/files.completeUploadExternal',
+      {
+        files: [
+          {
+            id: ticket.data.file_id,
+            title: filename
+          }
+        ],
+        channel_id: channelId,
+        initial_comment: String(message || '')
+      },
+      {
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    if (!completed.data?.ok) {
+      throw new Error(
+        `アップロード確定失敗: ${completed.data?.error}`
+      );
+    }
+
+    console.log(
+      `[SLACK-IMAGE] 送信完了: ${filename}`
+    );
+
+    return true;
+
+  } catch (err) {
+    console.error(
+      `[SLACK-IMAGE] 送信失敗: ${err.message}`
+    );
+
+    return false;
+  }
+}
+
+module.exports = {
+  sendSlack,
+  sendSlackImage,
+  isSlackOnly,
+  isSlackEnabled
+};
