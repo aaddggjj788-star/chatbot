@@ -4,8 +4,13 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { isSlackOnly } = require('./slack-notify');
 
 async function sendLinePointHistoryImage(imagePath, uid) {
+  if (isSlackOnly()) {
+    console.log('[LINE-IMAGE] Slack専用モードのため送信省略');
+    return false;
+  }
   const origin = process.env.LINE_IMAGE_BASE_URL;
   const secret = process.env.LINE_IMAGE_SIGNING_SECRET;
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;

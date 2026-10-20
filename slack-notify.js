@@ -25,6 +25,62 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
+const NOTIFY_MODE_FILE = path.join(
+  __dirname,
+  'notify-mode.json'
+);
+
+// LINE / Slack の通知先を取得
+function getNotifyMode() {
+  try {
+    if (fs.existsSync(NOTIFY_MODE_FILE)) {
+      const data = JSON.parse(
+        fs.readFileSync(NOTIFY_MODE_FILE, 'utf8')
+      );
+
+      if (data.mode === 'line' || data.mode === 'slack') {
+        return data.mode;
+      }
+    }
+  } catch (err) {
+    console.error('[NOTIFY] 設定読込失敗:', err.message);
+  }
+
+  // 初期設定は従来の.envを引き継ぐ
+  if (
+    process.env.SLACK_ONLY === 'true' &&
+    process.env.SLACK_WEBHOOK_URL
+  ) {
+    return 'slack';
+  }
+
+  return 'line';
+}
+
+// 通知先を保存
+function setNotifyMode(mode) {
+  if (!['line', 'slack'].includes(mode)) {
+    throw new Error('通知先はlineまたはslackを指定してください');
+  }
+
+  if (mode === 'slack' && !process.env.SLACK_WEBHOOK_URL) {
+    throw new Error('Slack Webhook URLが未設定です');
+  }
+
+  fs.writeFileSync(
+    NOTIFY_MODE_FILE,
+    JSON.stringify({ mode }, null, 2),
+    'utf8'
+  );
+
+  console.log(`[NOTIFY] 通知先を${mode}に変更`);
+  return mode;
+}
+
+function isLineOnly() {
+  return getNotifyMode() === 'line';
+}
+
 // Slackの1メッセージ上限（40000文字）に対する安全マージン
 const MAX_LEN = 39000;
 
@@ -41,10 +97,11 @@ function isSlackEnabled() {
 // ※SLACK_WEBHOOK_URL未設定時は、SLACK_ONLY=trueでも false を返す。
 //   Slackにも送れない状態でLINEまで止めると通知が完全に消えてしまうため。
 function isSlackOnly() {
-  return process.env.SLACK_ONLY === 'true' && isSlackEnabled();
+  return getNotifyMode() === 'slack' && isSlackEnabled();
 }
 
 async function sendSlack(message) {
+  if (isLineOnly()) return;
   const url = process.env.SLACK_WEBHOOK_URL;
   if (!url) return;
 
@@ -70,6 +127,10 @@ async function sendSlack(message) {
 // Slack画像送信（ポイント履歴などのPNG証跡用）
 // ======================================================
 async function sendSlackImage(imagePath, message = '') {
+  if (isLineOnly()) {
+    console.log('[SLACK-IMAGE] LINE専用モードのため送信省略');
+    return false;
+  }
   const token = process.env.SLACK_BOT_TOKEN;
   const channelId = process.env.SLACK_IMAGE_CHANNEL_ID;
 
@@ -174,5 +235,8 @@ module.exports = {
   sendSlack,
   sendSlackImage,
   isSlackOnly,
-  isSlackEnabled
+  isSlackEnabled,
+  getNotifyMode,
+  setNotifyMode,
+  isLineOnly
 };

@@ -12,6 +12,7 @@ const REPLY_AUTO_CONFIG_FILE = path.join(
   __dirname,
   'reply-auto-config.json'
 );
+const slackNotify = require('./slack-notify');
 
 // reply-checker.js との連携用（LINEから「送信」「スキップ」を受け取りポーリング通知）
 const REPLY_STATE_FILE = '/tmp/rune-reply-state.json';
@@ -826,18 +827,8 @@ app.post('/inquiry', async (req, res) => {
 
 // Slackへ通知する。SLACK_WEBHOOK_URL が未設定なら何もしない
 async function sendSlack(text) {
-  if (!process.env.SLACK_WEBHOOK_URL) return;
-  await fetch(process.env.SLACK_WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  }).catch(err => console.error('Slack通知エラー:', err.message));
+  return await slackNotify.sendSlack(text);
 }
-
-// SLACK_ONLY=true のときはLINE送信をスキップしてSlackのみに通知する。
-// ただしSLACK_WEBHOOK_URL未設定時は無効とする（Slackにも送れずLINEも止まると
-// 通知が完全に消えてしまうため）。各チェッカーの isSlackOnly() と同じ判定。
-const SLACK_ONLY = process.env.SLACK_ONLY === 'true' && Boolean(process.env.SLACK_WEBHOOK_URL);
 
 // Slack受信の詳細デバッグログ（リクエスト受信・署名検証・イベント受信等）は
 // .env に DEBUG_SLACK=true を設定した場合のみ出力する。
@@ -849,7 +840,7 @@ async function lineReply(replyToken, text) {
   await sendSlack(text);
 
   // SLACK_ONLY のときはLINE返信を行わない
-  if (SLACK_ONLY) return;
+  if (slackNotify.isSlackOnly()) return;
 
   await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
@@ -871,7 +862,7 @@ async function lineBroadcast(text) {
   await sendSlack(text);
 
   // SLACK_ONLY のときはLINEブロードキャストを行わない
-  if (SLACK_ONLY) return;
+  if (slackNotify.isSlackOnly()) return;
 
   await fetch('https://api.line.me/v2/bot/message/broadcast', {
     method: 'POST',
@@ -1070,6 +1061,38 @@ async function runMemberCommand(uid, command) {
 // source: ログ表示用のソース名（'LINE' / 'SLACK'）
 async function processCommand(text, reply, source = 'LINE') {
   console.log(`[${source}] 受信:`, JSON.stringify(text));
+
+// ===============================================
+// 通知先切り替えコマンド
+// ===============================================
+if (text === '通知先 LINE' || text === '通知先 Slack') {
+  const mode = text === '通知先 LINE'
+    ? 'line'
+    : 'slack';
+
+  try {
+    slackNotify.setNotifyMode(mode);
+
+    return await lineBroadcast(
+      `【通知先変更完了】\n` +
+      `現在の通知先：${mode === 'line' ? 'LINE' : 'Slack'}`
+    );
+  } catch (err) {
+    // 切り替え失敗時は設定を変更しない
+    return reply(
+      `【通知先変更失敗】\n${err.message}`
+    );
+  }
+}
+
+if (text === '通知先確認') {
+  const mode = slackNotify.getNotifyMode();
+
+  return await lineBroadcast(
+    `【現在の通知先】\n` +
+    `${mode === 'line' ? 'LINEのみ' : 'Slackのみ'}`
+  );
+}
 
   // 停止コマンドは返信待ち中でも即座に効くよう、state file転送より先に判定する
   if (text === '停止') {
@@ -1695,7 +1718,13 @@ async function handleSlackMessageEvent(event) {
 
   try {
     // コマンド実行結果は sendSlack() で通知する
-    await processCommand(text, (msg) => sendSlack(msg), 'SLACK');
+    await processCommand(
+      text,
+      (msg) => slackNotify.isLineOnly()
+        ? lineBroadcast(msg)
+        : sendSlack(msg),
+      'SLACK'
+    );
   } catch (err) {
     console.error('[SLACK] コマンド処理エラー:', err.message);
   }
