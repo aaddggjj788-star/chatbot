@@ -55,7 +55,7 @@ const path = require('path');
 const {
   openKyouseitaikai, adjustPoint, adrentPoint, setPointLevel, getPointLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
-  calcExpectedPoints, calcCouponPoint, getMailRows, getBankHistory, checkPointDiff,
+  calcExpectedPoints, calcCouponPoint, getMailRows, getBankHistory, captureTodayPointHistory, checkPointDiff,
   formatCampaignInfo,
   runPaymentCommand,
 } = require('./utils');
@@ -539,6 +539,27 @@ async function notifyBankHistory(page, uid) {
       couponLevel
     } = await getBankHistory(page, kyouseiPage);
     historyPage = hp;
+
+    // 当日ポイント履歴の全行と画像を取得
+    const evidence = await captureTodayPointHistory(
+      historyPage,
+      uid
+    );
+
+    await sendLine(
+      [
+        '【当日ポイント履歴取得】',
+        `会員ID：${uid}`,
+        `対象日：${evidence.date}`,
+        `取得行数：${evidence.todayRows.length}件`,
+        `画像：${evidence.screenshotPath ? '保存完了' : '撮影失敗'}`,
+        `JSON：保存完了`,
+        ...(evidence.screenshotError
+          ? [`画像エラー：${evidence.screenshotError}`]
+          : [])
+      ].join('\n')
+    );
+
     console.log(`[BANK-CHECK] uid=${uid}: 当日決済履歴 ${paymentRows.length}件`);
     if (paymentRows.length === 0) {
       await sendLine(NO_BANK_HISTORY_MSG);

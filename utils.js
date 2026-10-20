@@ -1242,6 +1242,193 @@ async function getBankHistory(topPage, target, options = {}) {
   return { paymentRows, actionRows, manualRows, historyPage, couponLevel, prePayment };
 }
 
+
+
+// ======================================================
+// 当日ポイント履歴の証跡取得（コマンド実行時のみ使用）
+// ======================================================
+async function captureTodayPointHistory(historyPage, uid) {
+  const today = jstToday();
+
+  const ymd = [
+    today.y,
+    String(today.mo).padStart(2, '0'),
+    String(today.d).padStart(2, '0')
+  ].join('-');
+
+  const folder = path.join(
+    __dirname,
+    'point-history-captures',
+    String(uid)
+  );
+
+  fs.mkdirSync(folder, {
+    recursive: true,
+    mode: 0o700
+  });
+
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[:.]/g, '-');
+
+  const basePath = path.join(folder, `${ymd}-${stamp}`);
+
+  // 日付指定ができない場合は、誤った期間を
+  // 「当日履歴」として保存しない
+  if (!(await dateSearchAvailable(historyPage))) {
+    throw new Error(
+      'ポイント履歴の日付検索欄が見つかりません'
+    );
+  }
+
+  const startDate = new Date(
+    today.y,
+    today.mo - 1,
+    today.d
+  );
+
+  // 既存の日付検索機能を利用して当日00:00から表示
+  const rows = await loadHistoryRange(
+    historyPage,
+    startDate,
+    async (pg) => {
+      return await pg.evaluate(() => {
+        const results = [];
+
+        for (const tr of document.querySelectorAll('tr')) {
+          const tds = Array.from(
+            tr.querySelectorAll('td')
+          );
+
+          if (tds.length === 0) continue;
+
+          const cells = tds.map(
+            td => (td.innerText || td.textContent || '').trim()
+          );
+
+          // 既存のポイント履歴の背景色分類を再利用
+          let style =
+            (tr.getAttribute('style') || '') + ' ' +
+            (tr.getAttribute('bgcolor') || '');
+
+          for (const td of tds) {
+            style += ' ' +
+              (td.getAttribute('style') || '') + ' ' +
+              (td.getAttribute('bgcolor') || '');
+          }
+
+          style = style.toLowerCase();
+
+          let type = null;
+
+          if (style.includes('ccffcc')) {
+            type = 'payment';
+          } else if (style.includes('ccccff')) {
+            type = 'action';
+          } else if (style.includes('ffcccc')) {
+            type = 'manual';
+          }
+
+          if (!type) continue;
+
+          results.push({
+            type,
+            time: cells[0],
+            cells
+          });
+        }
+
+        return results;
+      });
+    }
+  );
+
+  // 画面に年月日が明示されている場合は当日と照合。
+  // 時刻だけの場合は当日検索結果であることを前提に採用する。
+  const todayRows = rows.filter(row => {
+    const s = String(row.time || '');
+
+    const full = s.match(
+      /(\d{4})[\/.\-年](\d{1,2})[\/.\-月](\d{1,2})日?/
+    );
+
+    if (full) {
+      return (
+        Number(full[1]) === today.y &&
+        Number(full[2]) === today.mo &&
+        Number(full[3]) === today.d
+      );
+    }
+
+    const short = s.match(
+      /(\d{1,2})[\/.\-月](\d{1,2})日?/
+    );
+
+    if (short) {
+      return (
+        Number(short[1]) === today.mo &&
+        Number(short[2]) === today.d
+      );
+    }
+
+    // 日付が省略されている場合は、
+    // 当日00:00指定の検索結果として採用
+    return /^\s*\d{1,2}:\d{2}/.test(s);
+  });
+
+  const screenshotPath = `${basePath}.png`;
+  const dataPath = `${basePath}.json`;
+
+  // スクロール領域を含むページ全体を撮影
+  let screenshotError = null;
+
+  try {
+    await historyPage.screenshot({
+      path: screenshotPath,
+      fullPage: true,
+      animations: 'disabled',
+      timeout: 30000
+    });
+  } catch (err) {
+    screenshotError = err.message;
+
+    console.error(
+      `[POINT-HISTORY] 画像取得失敗 uid=${uid}: ${err.message}`
+    );
+  }
+
+  const evidence = {
+    uid: String(uid),
+    date: ymd,
+    capturedAt: new Date().toISOString(),
+    searchStart: `${ymd} 00:00`,
+    totalRows: rows.length,
+    todayRows,
+    screenshotPath: screenshotError ? null : screenshotPath,
+    screenshotError
+  };
+
+  fs.writeFileSync(
+    dataPath,
+    JSON.stringify(evidence, null, 2),
+    {
+      encoding: 'utf8',
+      mode: 0o600
+    }
+  );
+
+  console.log(
+    `[POINT-HISTORY] uid=${uid} ` +
+    `当日履歴=${todayRows.length}件 ` +
+    `画像=${screenshotError ? '失敗' : '保存完了'}`
+  );
+
+  return {
+    ...evidence,
+    dataPath
+  };
+}
+
 // ─── STEP15相当: ポイント差異チェック ─────────────────────────────
 // 期待ポイントと実際のポイントを照合し、差異があればLINEに確認通知して
 // 返信を待つ。実際の調整（adjustPoint呼び出し）は呼び出し側で行う。
@@ -1498,7 +1685,7 @@ module.exports = {
   openKyouseitaikai, openKyouseitaikaiBySearch,
   adjustPoint, setPointLevel, getPointLevel, getCouponLevel, getCurrentPoint, getMemberBasicInfo, setLoveLevel,
   checkAndApplyDiscount,
-  calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, checkPointDiff,
+  calcExpectedPoints, getTodayCampaignRows, getMailRows, getBankHistory, captureTodayPointHistory, checkPointDiff,
   getCampaignInfo, formatCampaignInfo, calcCouponPoint,
   calcPaymentPoints, processPayment, runPaymentCommand,adrentPoint,
 };
