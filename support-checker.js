@@ -772,12 +772,6 @@ async function notifyBankHistory(page, uid) {
       return;
     }
 
-    // getBankHistory()は「お知らせメール一覧から会員詳細へ戻る」前提で
-    // window.history.back()を実行するため、単独実行時に戻り先が無くならないよう
-    // 同じURLをもう一度開いて履歴を1つ積んでおく
-    await kyouseiPage.goto(kyouseiPage.url());
-    await kyouseiPage.waitForLoadState('networkidle');
-
     const {
       paymentRows,
       actionRows,
@@ -789,7 +783,8 @@ async function notifyBankHistory(page, uid) {
       page,
       kyouseiPage,
       {
-        resolvePrePayment: true
+        resolvePrePayment: true,
+        skipBack: true
       }
     );
 
