@@ -13,10 +13,17 @@
                 "useCurrentRow": true
             }
         },
-        "mu2": {
-            "fileId": "12698mu2sinko",
+        "mu2am": {
+            "fileId": "12698mu2amsinko",
             "ho": {
-                "searchTarget": "12698mu2/sinko/1",
+                "searchTarget": "12698mu2am/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "mu2pm": {
+            "fileId": "12698mu2pmsinko",
+            "ho": {
+                "searchTarget": "12698mu2pm/sinko/12",
                 "useCurrentRow": true
             }
         },
