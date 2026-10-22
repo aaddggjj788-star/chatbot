@@ -96,6 +96,21 @@
                 "searchTarget": "12696yu1/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu8": {
+            "fileId": "12696yu8sinko",
+            "ho1": {
+                "searchTarget": "12696yu8/sinko/1",
+                "useCurrentRow": true
+            },
+            "ho2": {
+                "searchTarget": "12696yu8/sinko/1",
+                "useCurrentRow": true
+            },
+            "ho3": {
+                "searchTarget": "12696yu8/sinko/1",
+                "useCurrentRow": true
+            }
         }
     }
 }

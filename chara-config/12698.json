@@ -61,6 +61,41 @@
                 "searchTarget": "12698yu12/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu3mu": {
+            "fileId": "12698yu3musinko",
+            "ho": {
+                "searchTarget": "12698yu3mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu7mu": {
+            "fileId": "12698yu7musinko",
+            "ho": {
+                "searchTarget": "12698yu7mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu11mu": {
+            "fileId": "12698yu11musinko",
+            "ho": {
+                "searchTarget": "12698yu11mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu17mu": {
+            "fileId": "12698yu17musinko",
+            "ho": {
+                "searchTarget": "12698yu17mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu21mu": {
+            "fileId": "12698yu21musinko",
+            "ho": {
+                "searchTarget": "12698yu21mu/sinko/1",
+                "useCurrentRow": true
+            }
         }
     }
 }
