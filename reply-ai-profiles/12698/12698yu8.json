@@ -1,0 +1,96 @@
+{
+  "phaseKey": "12698yu8",
+  "situation": "有料8日目。",
+  "startState": "直前に実際に送信された鑑定士メッセージとユーザー返信を根拠に確定。日数だけから進行完了を推定しない。",
+  "goal": "当該日程の既存原稿で定義された範囲に留め、AI返信のみで進行を完了させない。",
+  "currentProcess": {
+    "summary": "確認できた原稿のコメントアウトに沿った進行。",
+    "steps": [
+      {
+        "comment": "<!--12698yu8/sinko/1-->",
+        "sourceFile": "返信ログ/有料08日目.txt",
+        "summary": "実際の返信指示・到達条件は原文と運用判定を参照"
+      },
+      {
+        "comment": "<!--12698yu8/sinko/2-->",
+        "sourceFile": "返信ログ/有料08日目.txt",
+        "summary": "実際の返信指示・到達条件は原文と運用判定を参照"
+      },
+      {
+        "comment": "<!--12698yu8/sinko/3-->",
+        "sourceFile": "返信ログ/有料08日目.txt",
+        "summary": "実際の返信指示・到達条件は原文と運用判定を参照"
+      },
+      {
+        "comment": "<!--12698yu8/sinko/4-->",
+        "sourceFile": "返信ログ/有料08日目.txt",
+        "summary": "実際の返信指示・到達条件は原文と運用判定を参照"
+      },
+      {
+        "comment": "<!--12698yu8/sinko/5-->",
+        "sourceFile": "返信ログ/有料08日目.txt",
+        "summary": "実際の返信指示・到達条件は原文と運用判定を参照"
+      },
+      {
+        "comment": "<!--12698yu8/sinko/6-->",
+        "sourceFile": "返信ログ/有料08日目.txt",
+        "summary": "実際の返信指示・到達条件は原文と運用判定を参照"
+      }
+    ]
+  },
+  "progressRules": [
+    "AIが独自に段階を進めない。",
+    "現在の返信番号と既存次行候補はシステム側で確定する。"
+  ],
+  "replyRules": [
+    "直前のユーザーメッセージの質問意図へ先に答える。",
+    "同日に複数のレス条件がある場合、運用側で選択した枝を優先する。"
+  ],
+  "allowed": [
+    "既に当日の会話で提示された情報の範囲の説明。",
+    "原稿上の守護霊・祖霊等の設定の説明。"
+  ],
+  "forbidden": [
+    "次の日程の未公開内容を先出ししない。",
+    "未確定の進行・効果・結果を完了扱いしない。",
+    "新しい返信語や儀式を考案しない。"
+  ],
+  "importantTerms": {},
+  "referenceLogs": [
+    {
+      "sourceFile": "返信ログ/有料08日目.txt",
+      "phase": "12698yu8",
+      "replyNumber": "1",
+      "comment": "<!--12698yu8/sinko/1-->",
+      "purpose": "返信進行の参照",
+      "text": "���l�ɂ��𑽂͂��؂��ׂɂ��������̃��[���Ɉ�A������ɕ����Ă����艺�����ˁj\r\n{getUserData(siteOriginal[12349template])}\r\n�y{getUserData(siteOriginal[wordinsert/start])}���э�i��傤���񂳂��j{getUserData(siteOriginal[wordinsert/end])}�z\r\n\r\n�҂��Ă����ˁB"
+    },
+    {
+      "sourceFile": "返信ログ/有料08日目.txt",
+      "phase": "12698yu8",
+      "replyNumber": "2",
+      "comment": "<!--12698yu8/sinko/2-->",
+      "purpose": "返信進行の参照",
+      "text": "���l�ɂ��𑽂͂��؂��ׂɂ��������̃��[���Ɉ�A������ɕ����Ă����艺�����ˁj\r\n{getUserData(siteOriginal[12349template])}\r\n�y{getUserData(siteOriginal[wordinsert/start])}�x�ėy�i���񂵂傤�悤�j{getUserData(siteOriginal[wordinsert/end])}�z\r\n\r\n�҂��Ă����ˁB"
+    },
+    {
+      "sourceFile": "返信ログ/有料08日目.txt",
+      "phase": "12698yu8",
+      "replyNumber": "3",
+      "comment": "<!--12698yu8/sinko/3-->",
+      "purpose": "返信進行の参照",
+      "text": "ꍇ�͎���l�ɂ��𑽂͂��؂��ׂɂ��������̃��[���Ɉ�A������ɕ����Ă����艺�����ˁj\r\n{getUserData(siteOriginal[12349template])}\r\n�y{getUserData(siteOriginal[wordinsert/start])}�䎍�P�i���񂵂��j{getUserData(siteOriginal[wordinsert/end])}�z\r\n\r\n�҂��Ă����ˁB"
+    },
+    {
+      "sourceFile": "返信ログ/有料08日目.txt",
+      "phase": "12698yu8",
+      "replyNumber": "4",
+      "comment": "<!--12698yu8/sinko/4-->",
+      "purpose": "返信進行の参照",
+      "text": "�l�ɂ��𑽂͂��؂��ׂɂ��������̃��[���Ɉ�A������ɕ����Ă����艺�����ˁj\r\n{getUserData(siteOriginal[12349template])}\r\n�y{getUserData(siteOriginal[wordinsert/start])}�y�D���i�悤�䂤���傤�j{getUserData(siteOriginal[wordinsert/end])}�z\r\n\r\n�҂��Ă����ˁB"
+    }
+  ],
+  "additionalRules": [
+    "段落間は1行空ける。JSON上は\\n\\n、実際の送信本文では空行として描画する。"
+  ]
+}
