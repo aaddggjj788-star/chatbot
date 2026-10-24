@@ -987,12 +987,13 @@ async function resolveConfirmCommand({
               : `差し込み確認（${cmd.lineNum}行目）`
           );
 
-    return await confirmSecondarySend({
-      label,
-      text: splicedText,
-      sendLine,
-      waitForLineReply
-    });
+      return await confirmSecondarySend({
+        label,
+        text: splicedText,
+        sendLine,
+        waitForLineReply,
+        onEdit: retryEdit
+      });
   }
 
   // 差し替え#（返信文を丸ごと差し替え）
