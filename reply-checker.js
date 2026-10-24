@@ -514,13 +514,13 @@ function parseSubActionComment(commentStr) {
 
   // ── 既存の三段形式 ──
   const m = commentStr.match(
-    /^(\d+)((?:yu|mu)\d+\w*)\/([a-zA-Z]+)\/(\w+)$/
+    /^(\d+)((?:yu|mu)\d+\w*)\/([a-zA-Z]+)(?:\/(\w+))?$/
   );
 
   if (!m) return null;
 
   const sub = m[3];
-  const part3 = m[4];
+  const part3 = m[4] || '';
 
   if (
     /^(?:sinko|his)/.test(sub) &&
@@ -633,23 +633,53 @@ function parseConfirmCommand(reply) {
 // 差し込み・差し替え系で生成した本文を提示し、「送信」なら送信テキストを返す二次確認。
 // 「送信」以外・タイムアウトはスキップ扱いにする。
 // 戻り値: { send: true, text } | { send: false, reason }
-async function confirmSecondarySend({ label, text, sendLine, waitForLineReply }) {
+async function confirmSecondarySend({
+  label,
+  text,
+  sendLine,
+  waitForLineReply,
+  onEdit
+}) {
   await sendLine([
     `【${label}】`,
     '---',
     text,
     '---',
     'この内容で送信しますか？',
-    '「送信」または「スキップ」',
+    '「送信」「スキップ」',
+    'または再度「差し込み#」「差し込みN#」',
+    '「差し替え#」「差し替え前文#」'
   ].join('\n'));
+
   let r;
+
   try {
     r = await waitForLineReply();
   } catch (e) {
-    return { send: false, reason: `${label}の5分タイムアウト` };
+    return {
+      send: false,
+      reason: `${label}の5分タイムアウト`
+    };
   }
-  if ((r || '').trim() === '送信') return { send: true, text };
-  return { send: false, reason: `${label}でスキップを選択` };
+
+  const cmd = parseConfirmCommand(r);
+
+  if (cmd.kind === 'send') {
+    return { send: true, text };
+  }
+
+  if (
+    onEdit &&
+    ['sashikomi', 'sashikae', 'sashikaeZenbun']
+      .includes(cmd.kind)
+  ) {
+    return await onEdit(r, text);
+  }
+
+  return {
+    send: false,
+    reason: `${label}でスキップを選択`
+  };
 }
 
 
@@ -891,6 +921,22 @@ async function resolveConfirmCommand({
 }) {
   const cmd = parseConfirmCommand(reply);
   const tail = nextComment || '';
+
+  // 二次確認時の再編集
+  // 現在表示されている編集済み文章を次の編集元にする
+  const retryEdit = async (newReply, currentText) => {
+    return await resolveConfirmCommand({
+      reply: newReply,
+      replyText: currentText,
+      nextComment: '',
+      latestComment,
+      charaId,
+      supportPage,
+      sendLine,
+      waitForLineReply
+    });
+  };
+
 
   // 送信：返信文 + 次のコメントアウトを末尾に追記
   if (cmd.kind === 'send') {
@@ -7048,6 +7094,42 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           )
         ]);
 
+
+        // 単純なお礼・感謝のメッセージだけを20文字制限から除外
+        function isSimpleThanksMessage(text) {
+          const t = String(text || '')
+            .replace(/<[^>]*>/g, '')
+            .replace(/\s+/g, '')
+            .trim();
+
+          if (!t) return false;
+
+          // 質問・相談・要求などが含まれる場合は除外しない
+          if (
+            /[？?]|でしょうか|ですか|教えて|どうすれば|どうしたら|なぜ|いつ|本当|不安|心配|困って|助けて|お願いします|できません|無理|払えない|買えない|購入できない|お金がない|お金が無い|お金がなく|お金が無く/.test(t)
+          ) {
+            // 「お金がなくて助かりました」などは後段で個別判定
+            const isPastThanks =
+              /お金が(?:ない|無い|なく|無く|なくて|無くて)|ポイントが(?:買えず|買えなくて|購入できず)/.test(t) &&
+              /ありがとう|助かりました|感謝/.test(t) &&
+              !/[？?]|でしょうか|ですか|教えて|どうすれば|どうしたら|お願いします/.test(t);
+
+            if (!isPastThanks) return false;
+          }
+
+          // 感謝の言葉がない文章は通過させない
+          if (!/ありがとう|感謝|助かりました|ありがたい|嬉しいです|うれしいです/.test(t)) {
+            return false;
+          }
+
+          // 明確な追加要求や問題提起があれば対象外
+          if (/してください|してほしい|して欲しい|教えてください|返金|詐欺|信用できない|納得できない|借金|死にたい/.test(t)) {
+            return false;
+          }
+
+          return true;
+        }
+
       const longUserMessages =
         userTextsForAuto
           .map((text, index) => {
@@ -7061,13 +7143,14 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
               length: [...normalized].length
             };
           })
-          .filter(
-            item =>
-              item.length >= 20 &&
-              !longMessageExceptions.has(
-                item.normalized
-              )
-          );
+        .filter(
+          item =>
+            item.length >= 20 &&
+            !longMessageExceptions.has(
+              item.normalized
+            ) &&
+            !isSimpleThanksMessage(item.text)
+        );
 
       if (
         longUserMessages.length > 0 &&
@@ -7853,6 +7936,24 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         }
         if (phaseCfg?.alwaysQuoteUser) alwaysQuoteUser = true;
         let actionCfg = phaseCfg?.[parsed.actionKey] ?? null;
+
+        // /do の設定をJSONから取得する
+        // do/1 は do1、番号なしは do を優先する
+        if (!actionCfg && parsed.sub === 'do' && phaseCfg) {
+          actionCfg =
+            phaseCfg.do ??
+            phaseCfg.do1 ??
+            null;
+
+          if (actionCfg) {
+            console.log(
+              `[DO] ${userName}: JSON設定を取得 ` +
+              `phase=${phaseResult?.key} ` +
+              `action=${parsed.actionKey}`
+            );
+          }
+        }
+
         if (!actionCfg && parsed.actionKey !== 'ho' && phaseCfg) {
           actionCfg = phaseCfg['ho'] ?? null;
           if (actionCfg) {
@@ -7863,19 +7964,17 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         console.log(`[COMMENT] ${userName}: subAction comment="${parsed.comment}" actionKey="${parsed.actionKey}" phase=${phaseResult?.key} actionCfg=${JSON.stringify(actionCfg)}`);
 
         if (!actionCfg) {
-          if (parsed.sub === 'do') {
-            // /do コメント: JSON設定なしでも CSV を直接検索して次行を送信
-            charaId = parsed.charaId;
-            latestComment = parsed.comment;
-            const doFileId = phaseCfg?.fileId ?? null;
-            console.log(`[DO] ${userName}: /do 直接検索 comment="${parsed.comment}" charaId="${charaId}" fileId="${doFileId}"`);
-            try {
-              replyData = getReplyFromCSVByTarget(charaId, parsed.comment, false, doFileId);
-            } catch (e) {
-              console.error(`[ERROR] /do CSV取得失敗 (${userName}): ${e.message}`);
-              recordSkip(`エラー: ${e.message.slice(0, 50)}`);
-              skipUser = true;
-            }
+          if (!actionCfg) {
+            console.log(
+              `[SKIP] ${userName}: JSONのsubAction設定なし ` +
+              `(${parsed.actionKey}, phase=${phaseResult?.key})`
+            );
+
+            recordSkip(
+              `JSONのsubAction設定なし (${parsed.actionKey})`
+            );
+
+            skipUser = true;
             break;
           }
           console.log(`[SKIP] ${userName}: subAction actionCfgなし (${parsed.actionKey})`);
@@ -7938,7 +8037,10 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         }
 
         if (actionCfg.searchTarget) {
-          const useCurrentRow = actionCfg.useCurrentRow === true;
+          const useCurrentRow =
+            parsed.sub === 'do'
+              ? true
+              : actionCfg.useCurrentRow === true;
           console.log(`[JSON] subAction searchTarget="${actionCfg.searchTarget}" useCurrentRow=${useCurrentRow}`);
           try {
             replyData = getReplyFromCSVByTarget(parsed.charaId, actionCfg.searchTarget, useCurrentRow, effectiveFileId);

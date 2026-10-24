@@ -8,6 +8,11 @@ const rc = require('./reply-checker');
 const supportChecker = require('./support-checker');
 const contactChecker = require('./contact-checker');
 const generatedQueue = require('./generated-queue');
+// 生成ID確認後の簡易コマンド用
+const activeGeneratedConfirm = new Map();
+
+// 確認状態は10分間有効
+const GENERATED_CONFIRM_TTL = 10 * 60 * 1000;
 const REPLY_AUTO_CONFIG_FILE = path.join(
   __dirname,
   'reply-auto-config.json'
@@ -1129,10 +1134,60 @@ if (text === '通知先確認') {
   }
 
 
+  
+  // reply-checker.js/support-checker.js/contact-checker.js が返信待ち中なら
+  // 受信テキストをそのままstate fileに書き込んで終了する。
+  // 固定コマンド（開始/開始#〜/送信/手動対応/スキップ/調整する/変更する/差し込み#〜/差し替え#〜）に加え、
+  // contact-checker.js/support-checker.js の処理コマンド
+  // （開始 / 開始#補足 / 手動対応 / スキップ / レベル変更:〇 /
+  //   メール確認 / 決済確認 / {数値}pt追加 / {数値}pt減算 /
+  //   絆変更:{キャラID}:{value} の組み合わせ）や
+  // contact-checker.js のSTEP6（返答内容の自由入力）、
+  // 「会員:{uid} {操作コマンド}」形式の直接操作コマンド、
+  // 「返信対象外チェック」「対象外ID:{番号} {返信文章}」にも対応するため、
+  // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」「会員:〜」
+  // 「返信対象外チェック」「対象外ID:〜」もそのままstate fileへ書き込まれる。
+  // これにより対象外返信の確認待ち中の「送信」「スキップ」も転送される）
+  if (fs.existsSync(REPLY_STATE_FILE)) {
+    try {
+      const state = JSON.parse(fs.readFileSync(REPLY_STATE_FILE, 'utf8'));
+      if (state.status === 'waiting') {
+        fs.writeFileSync(REPLY_STATE_FILE, JSON.stringify({ status: 'replied', reply: text }));
+        return;
+      }
+    } catch (_) {}
+  }
+
+
 // ─── 生成リスト確認 ───────────────────────────────────────────────
-if (text === '生成リスト') {
-  const items = generatedQueue.listGeneratedItems({
+const generatedListMatch =
+  text.match(/^生成リスト(?:\s+(CS))?(?:\s+(\d+))?$/i);
+
+if (generatedListMatch) {
+  const [, csOption, kidOption] = generatedListMatch;
+
+  const allItems = generatedQueue.listGeneratedItems({
     status: 'pending'
+  });
+
+  // 指定条件に一致する生成データのみ表示
+  const items = allItems.filter(item => {
+    if (csOption) {
+      if (!['contact', 'support'].includes(item.source)) {
+        return false;
+      }
+    } else if (kidOption) {
+      // KIDのみ指定された場合は返信チェック生成分
+      if (item.source !== 'reply-skipped') {
+        return false;
+      }
+    }
+
+    if (kidOption && String(item.kid) !== kidOption) {
+      return false;
+    }
+
+    return true;
   });
 
   if (items.length === 0) {
@@ -1168,6 +1223,42 @@ if (text === '生成リスト') {
   return reply(lines.join('\n'));
 }
 
+
+// 確認中の生成IDに対する簡易コマンド
+// LINEとSlackの操作状態は分離
+if (text === '送信' || text === 'スキップ') {
+  const current = activeGeneratedConfirm.get(source);
+
+  if (current) {
+    const expired =
+      Date.now() - current.createdAt > GENERATED_CONFIRM_TTL;
+
+    if (expired) {
+      activeGeneratedConfirm.delete(source);
+
+      return reply(
+        '生成内容の確認から10分が経過しました。\n' +
+        'もう一度「生成ID:番号 確認」を実行してください。'
+      );
+    }
+
+    const item = generatedQueue.getGeneratedItem(current.id);
+
+    if (!item || item.status !== 'pending') {
+      activeGeneratedConfirm.delete(source);
+
+      return reply(
+        '確認中の生成データは既に処理済み、または存在しません。'
+      );
+    }
+
+    // 既存の生成ID付きコマンド処理をそのまま利用
+    text = `生成ID:${current.id} ${text}`;
+
+    // 同じ確認状態から二重実行しない
+    activeGeneratedConfirm.delete(source);
+  }
+}
 
 // ─── 生成ID:{番号} 送信 ───────────────────────────────────────────
 const generatedSendMatch =
@@ -1279,51 +1370,70 @@ if (generatedCheckMatch) {
     );
   }
 
+  // 送信待ちの生成IDを記憶する
+  if (item.status === 'pending') {
+    activeGeneratedConfirm.set(source, {
+      id,
+      createdAt: Date.now()
+    });
+  } else {
+    activeGeneratedConfirm.delete(source);
+  }
+
+  const actionLabels = {
+    insert_next: '次行に差し込み',
+    replace_previous: '前文を差し替え',
+    reply_and_resume: '個別返信'
+  };
+
+  // 表示専用の改行整形
+  function formatGeneratedReply(value) {
+    return String(value || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/\r\n?/g, '\n')
+      .replace(/。([^\s\n])/g, '。\n\n$1')
+      .replace(/。\n(?!\n)/g, '。\n\n')
+      .trim();
+  }
+
+  const action =
+    item.decision?.action ||
+    item.action ||
+    '';
+
+  const replyText =
+    formatGeneratedReply(
+      item.replyDraft ||
+      item.generatedText ||
+      item.finalText ||
+      ''
+    );
+
   return reply([
-    `【生成内容確認】`,
-    `生成ID:${item.id}`,
-    `状態：${item.status}`,
-    `種別：${item.source || '不明'}`,
+    '【生成内容確認】',
+    `生成ID：${item.id}`,
     `UID：${item.uid || '不明'}`,
     `KID：${item.kid || '不明'}`,
     `ユーザー：${item.userName || '不明'}`,
-    `理由：${item.reason || '不明'}`,
     `受信日時：${item.receivedAt || '不明'}`,
+    '',
+    '【対象外理由】',
+    item.reason || '不明',
+    '',
+    '【判定結果】',
+    `処理：${actionLabels[action] || action || '不明'}`,
+    `理由：${item.decision?.reason || '不明'}`,
     '',
     '【ユーザー本文】',
     item.userText || '（なし）',
     '',
-    '【OpenAI判定】',
-    item.decision
-      ? [
-          `分類：${item.decision.questionType || '不明'}`,
-          `返信ワード：${item.decision.hasReplyWord ? 'あり' : 'なし'}`,
-          `action：${item.decision.action || '不明'}`,
-          `理由：${item.decision.reason || '不明'}`
-        ].join('\n')
-      : '（なし）',
+    '【生成返信案】',
+    replyText || '（なし）',
     '',
-    '【返信案】',
-    item.replyDraft || '（なし）',
-    '',
-    '【実行予定コマンド】',
-    Array.isArray(item.commands) && item.commands.length > 0
-      ? item.commands
-          .map((cmd, i) => `${i + 1}. ${cmd}`)
-          .join('\n')
-      : '（なし）',
-    '',
-    '【予定処理】',
-    item.action || '（なし）',
-    '',
-    '【生成文章】',
-    item.generatedText || '（なし）',
-    '',
-    '【コメントアウト】',
-    item.comment || '（なし）',
-    '',
-    '【最終送信文章】',
-    item.finalText || '（なし）'
+    '【実行】',
+    item.status === 'pending'
+      ? '送信 または スキップ'
+      : 'この生成データは送信待ちではありません'
   ].join('\n'));
 }
 
@@ -1364,28 +1474,6 @@ if (generatedSkipMatch) {
   );
 }
 
-  // reply-checker.js/support-checker.js/contact-checker.js が返信待ち中なら
-  // 受信テキストをそのままstate fileに書き込んで終了する。
-  // 固定コマンド（開始/開始#〜/送信/手動対応/スキップ/調整する/変更する/差し込み#〜/差し替え#〜）に加え、
-  // contact-checker.js/support-checker.js の処理コマンド
-  // （開始 / 開始#補足 / 手動対応 / スキップ / レベル変更:〇 /
-  //   メール確認 / 決済確認 / {数値}pt追加 / {数値}pt減算 /
-  //   絆変更:{キャラID}:{value} の組み合わせ）や
-  // contact-checker.js のSTEP6（返答内容の自由入力）、
-  // 「会員:{uid} {操作コマンド}」形式の直接操作コマンド、
-  // 「返信対象外チェック」「対象外ID:{番号} {返信文章}」にも対応するため、
-  // waiting状態であれば内容を問わず転送する（＝「開始」「開始#〜」「会員:〜」
-  // 「返信対象外チェック」「対象外ID:〜」もそのままstate fileへ書き込まれる。
-  // これにより対象外返信の確認待ち中の「送信」「スキップ」も転送される）
-  if (fs.existsSync(REPLY_STATE_FILE)) {
-    try {
-      const state = JSON.parse(fs.readFileSync(REPLY_STATE_FILE, 'utf8'));
-      if (state.status === 'waiting') {
-        fs.writeFileSync(REPLY_STATE_FILE, JSON.stringify({ status: 'replied', reply: text }));
-        return;
-      }
-    } catch (_) {}
-  }
 
   // ─── 「返信対象外チェック」───────────────────────────────────
   // 直近の返信チェックでSKIPになったユーザーと理由を一覧通知する
