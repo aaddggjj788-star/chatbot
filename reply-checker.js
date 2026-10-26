@@ -1892,9 +1892,69 @@ async function analyzeMessages(page) {
       return { result: { target: false, reason: '鑑定士メッセージなし', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: 0, debugLogs };
     }
 
-    // 【判定1.5】最新鑑定士メッセージの既/未チェック（「未」ならスキップ）
-    if (!(msgs[firstKIdx].trText || '').includes('既')) {
-      return { result: { target: false, reason: '最新鑑定士メッセージが未読', ...emptyK }, lastKIdx: firstKIdx, afterUserCount: 0, debugLogs };
+    // 【判定1.5】最新鑑定士メッセージの既/未チェック
+    // do・ho の場合のみ、連続する同一コメントアウトの既読を許可
+
+    let latestKRead = (msgs[firstKIdx].trText || '').includes('既');
+
+    if (!latestKRead) {
+      const latestComments = msgs[firstKIdx].comments || [];
+
+      // コメントアウトが1つだけの場合に限り特例判定
+      const latestComment =
+        latestComments.length === 1
+          ? String(latestComments[0]).trim()
+          : '';
+
+      const isDoHo =
+        /\/(?:do|ho)(?:\/\d+)?$/.test(latestComment);
+
+      if (isDoHo) {
+        // 最新より古い鑑定士メッセージを順に確認
+        for (let i = firstKIdx + 1; i < msgs.length; i++) {
+          const m = msgs[i];
+
+          // ユーザーメッセージは飛ばす
+          if (m.type !== 'kanteishi') continue;
+
+          const comments = m.comments || [];
+          const comment =
+            comments.length === 1
+              ? String(comments[0]).trim()
+              : '';
+
+          // 異なるコメントアウトが出た時点で探索終了
+          if (comment !== latestComment) {
+            break;
+          }
+
+          // 同一コメントアウトに既読があれば通過
+          if ((m.trText || '').includes('既')) {
+            latestKRead = true;
+
+            debugLogs.push(
+              `[READ-EXCEPTION] ${latestComment}: ` +
+              `同一コメントアウトの既読を確認 index=${i}`
+            );
+
+            break;
+          }
+        }
+      }
+    }
+
+    // 通常判定と特例判定の両方で既読が確認できなければスキップ
+    if (!latestKRead) {
+      return {
+        result: {
+          target: false,
+          reason: '最新鑑定士メッセージが未読',
+          ...emptyK
+        },
+        lastKIdx: firstKIdx,
+        afterUserCount: 0,
+        debugLogs
+      };
     }
 
     // 最新鑑定士より上（新しい）のユーザーメッセージ
@@ -8899,6 +8959,7 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       '「送信」：そのまま送信',
       '【AI返信】',
       '「スキップ」：送信しない',
+      '「開封」：返信済みにして次へ進む',
       '「差し込み#{文章}」：1番目の非空行の後に文章を追加',
       '「差し込み{N}#{文章}」：N番目の非空行の後に文章を追加',
       '「差し替え#{文章}」：返信文を丸ごと差し替え',
@@ -9020,6 +9081,36 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
     }
 
     console.log(`[LINE] 返信: ${reply}`);
+
+    // ─── 手動チェック：開封コマンド ───
+if (String(reply || '').trim() === '開封') {
+
+  if (!dcheckValue) {
+    await sendLine(
+      `【開封失敗】会員ID：${uid}\nチェック対象を取得できませんでした`
+    );
+    recordSkip('開封失敗：チェック値なし');
+    continue;
+  }
+
+  markAsRepliedTargets.push({
+    userName,
+    uid,
+    kid,
+    dcheckValue,
+    reason: '手動コマンド：開封'
+  });
+
+  console.log(
+    `[MANUAL-OPEN] ${userName}: 返信済み化対象に追加`
+  );
+
+  await sendLine(
+    `【開封受付】会員ID：${uid}\n返信済み化を予約しました`
+  );
+
+  continue;
+}
 
 
     // ─── 送信 / スキップ / 差し込み[N] / 差し替え / 差し替え前文 ────────
