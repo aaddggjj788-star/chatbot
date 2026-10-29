@@ -51,6 +51,9 @@
                 "useCurrentRow": true
             }
         },
+        "yu7": {
+            "fileId": "12698yu4sinko"
+        },
         "yu8": {
             "fileId": "12698yu8sinko",
             "ho": {
@@ -79,6 +82,9 @@
                 "useCurrentRow": true
             }
         },
+        "yu11": {
+            "fileId": "12698yu8sinko"
+        },
         "yu11mu": {
             "fileId": "12698yu11musinko",
             "ho": {
@@ -86,12 +92,18 @@
                 "useCurrentRow": true
             }
         },
+        "yu17": {
+            "fileId": "12698yu12sinko"
+        },
         "yu17mu": {
             "fileId": "12698yu17musinko",
             "ho": {
                 "searchTarget": "12698yu17mu/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu21": {
+            "fileId": "12698yu12sinko"
         },
         "yu21mu": {
             "fileId": "12698yu21musinko",
