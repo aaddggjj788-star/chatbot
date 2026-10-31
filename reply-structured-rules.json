@@ -7,6 +7,37 @@
     "requireExactCommentMatch": true
   },
   "fallbackProfiles": {
+    "12700emotion_choice_or_self_reflection": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "過去1年間に最も強く感じた感情についての回答。次のいずれかを満たす場合は有効回答とする。(1)『自分の為に頑張れない』『幸せな未来なんて迎えられないと思う』『諦めたくないのに諦めてしまう』のいずれかを選択している。番号、言い換え、自然文も認める。(2)『どれも当てはまらない』『該当なし』『全部違う』など、3択すべてを否定している。(3) 3択を選ばず、自分自身の性格、感情、思考の傾向、自己評価、人生観、物事への向き合い方などについて具体的な自己考察を述べている。自己考察は3つの選択肢と内容が一致する必要はない。肯定的な自己評価や、悩みがないという自己認識も認める。『自分は前向きな人間だと思う』『最近は何をしても自信が持てない』『今の自分に満足している』『人の顔色を気にしすぎる』などは有効回答。複数の選択肢を選んでいても、本人が該当する感情を明確に回答しているなら有効とする。一方、『分からない』『考えていない』『自分の事を考えています』だけでは具体的な感情や自己認識が示されていないため無効。質問への回答が明確に含まれていれば、別の話題が併記されていても有効とする。相談者が述べていない感情を推測して補ってはならない。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "なぜ感情を選ぶ必要があるのか、質問の意味や目的を尋ねている。具体的な回答はまだ提示していない。",
+          "template": "この質問では、この1年ほどを振り返って、ご自身がどのようなお気持ちで過ごされてきたのかを知りたいと思っています。\n\n難しく考える必要はありませんよ。\n\n3つの中に近いものがあればそれを、どれも違うのであれば今のご自身について感じている事を教えて頂ければ結構ですからね。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "自分の感情が分からない、判断できない、選べないと述べているが、具体的な自己考察は提示していない。",
+          "template": "無理に一つを選ぼうとなさらなくても大丈夫ですよ。\n\nこの1年を振り返って、ご自身について思う事や、どのような気持ちで過ごされてきたのかを自由にお話し頂いても構いません。\n\n今思い浮かぶ事を、そのまま教えて下さいね。",
+          "commentPolicy": "same"
+        },
+        "multiple_answers_question": {
+          "description": "複数の感情が当てはまり、どれを選べばよいか質問している。具体的な回答はまだ確定していない。",
+          "template": "複数の感情が当てはまる事もあるでしょうね。\n\nその場合は、一番強く感じたものを選んで頂いても、複数の感情をそのまま教えて頂いても結構ですよ。\n\nご自身のお気持ちを無理に一つへ絞る必要はありませんからね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "今回の感情や自己考察について答えたくないと明確に拒否している。料金や鑑定継続など、別の事柄への拒否はこのカテゴリに含めない。",
+          "template": "お答えしにくいお気持ちもあるでしょうから、無理に詳しくお話し頂く必要はありませんよ。\n\nもし差し支えなければ、3つの中から近いものを選ぶだけでも結構です。\n\nどれも違う場合は、その旨だけでも構いませんからね。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
     "12697life_change": {
       "enabled": true,
       "maxAutoUse": 1,
@@ -754,6 +785,21 @@
     }
   },
   "rules": {
+    "12700mu1/sinko/2": {
+      "enabled": true,
+      "type": "emotion_choice_or_self_reflection",
+      "fallbackProfile": "12700emotion_choice_or_self_reflection",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
     "12697mu1/sinko/1": {
       "enabled": true,
       "type": "life_change_or_none",

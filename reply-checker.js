@@ -5521,6 +5521,72 @@ function validateStructuredDesiredIncomeOrSatisfied(text, rule) {
 
 
 
+function validateStructuredEmotionChoiceOrSelfReflection(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return { status: 'needs_ai', reason: 'empty' };
+  }
+
+  // 質問返しはAI側で文脈判断
+  if (/[?？]/.test(t)) {
+    return {
+      status: 'needs_ai',
+      reason: 'question_or_mixed_answer'
+    };
+  }
+
+  // 回答拒否
+  if (/(答えたくない|話したくない|教えたくない|言いたくない)/.test(t)) {
+    return {
+      status: 'needs_ai',
+      reason: 'possible_refusal'
+    };
+  }
+
+  // 3択の番号回答。単独回答だけを確定
+  if (/^(?:第?[123１２３一二三][番つ個]?(?:です|にします|を選びます)?)[。.!！\s]*$/.test(t)) {
+    return {
+      status: 'valid',
+      reason: 'emotion_choice_number'
+    };
+  }
+
+  // 3択の回答文そのもの
+  const choices = [
+    /^自分の為に頑張れない[。.!！\s]*$/,
+    /^幸せな未来なんて迎えれないと思ってる[。.!！\s]*$/,
+    /^諦めたくないのにすぐに諦めてしまう[。.!！\s]*$/
+  ];
+
+  if (choices.some(pattern => pattern.test(t))) {
+    return {
+      status: 'valid',
+      reason: 'emotion_choice_exact'
+    };
+  }
+
+  // 明確な「どれも当てはまらない」
+  if (
+    /^(?:どれも|どちらも|全部|すべて|全て|いずれも|特に)(?:当てはまらない|当てはまりません|該当しません|該当なし|違います|ないです|ありません)[。.!！\s]*$/.test(t)
+    || /^(?:該当なし|該当するものはありません|当てはまるものはありません|どれでもない|全部違う)[。.!！\s]*$/.test(t)
+  ) {
+    return {
+      status: 'valid',
+      reason: 'none_of_choices'
+    };
+  }
+
+  // 自由記述・自己考察・言い換えはAIで判断
+  return {
+    status: 'needs_ai',
+    reason: 'emotion_reflection_requires_ai'
+  };
+}
+
+
+
+
 // ======================================================
 // type → validator
 // ======================================================
@@ -5572,7 +5638,10 @@ const STRUCTURED_VALIDATORS = {
   validateStructuredBirthdateAndStrokeCount,
 
   kanji_pair_with_gold:
-    validateStructuredKanjiPairWithGold
+    validateStructuredKanjiPairWithGold,
+    
+  emotion_choice_or_self_reflection:
+    validateStructuredEmotionChoiceOrSelfReflection
 };
 
 
