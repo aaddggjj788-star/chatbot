@@ -1,7 +1,7 @@
 {
     "charaId": "12700",
     "globalStopTime": {
-        "start": "23:00",
+        "start": "22:20",
         "end": "09:00"
     },
     "spanMatchExclude": [
@@ -43,6 +43,66 @@
                 "searchTarget": "12700yu1/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu4mu": {
+            "fileId": "12700yu4musinko",
+            "ho": {
+                "searchTarget": "12700yu4mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu7mu": {
+            "fileId": "12700yu7musinko",
+            "ho": {
+                "searchTarget": "12700yu7mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu11mu": {
+            "fileId": "12700yu11musinko",
+            "ho": {
+                "searchTarget": "12700yu11mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu14mu": {
+            "fileId": "12700yu14musinko",
+            "ho": {
+                "searchTarget": "12700yu14mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu24mu": {
+            "fileId": "12700yu24musinko",
+            "ho": {
+                "searchTarget": "12700yu24mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu31mu": {
+            "fileId": "12700yu31musinko",
+            "ho": {
+                "searchTarget": "12700yu31mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4": {
+            "fileId": "12700yu1sinko"
+        },
+        "yu7": {
+            "fileId": "12700yu1sinko"
+        },
+        "yu11": {
+            "fileId": "12700yu1sinko"
+        },
+        "yu14": {
+            "fileId": "12700yu1sinko"
+        },
+        "yu24": {
+            "fileId": "12700yu1sinko"
+        },
+        "yu31": {
+            "fileId": "12700yu1sinko"
         }
     }
 }
