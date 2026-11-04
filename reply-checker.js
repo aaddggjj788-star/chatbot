@@ -1223,7 +1223,12 @@ function resolveCsvPath(charaId, fileId) {
   function findByPrefix(prefix) {
     const exact = [`${prefix}sinko.csv`, `${prefix}his.csv`].find(n => files.includes(n));
     if (exact) return exact;
-    const candidates = files.filter(f => f.startsWith(prefix) && f.endsWith('.csv'));
+    const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const candidates = files.filter(f =>
+      f.endsWith('.csv') &&
+      new RegExp(`^${escapedPrefix}(?!\\d|mu|yu)`).test(f)
+    );
     if (candidates.length === 0) return null;
     return candidates.find(f => f.includes('sinko')) || candidates[0];
   }
@@ -1244,8 +1249,18 @@ function resolveCsvPath(charaId, fileId) {
       if (!f.endsWith('.csv')) continue;
       // 数値の直後に別サブタイプ(yu/mu)が続くファイル(例: yu4mu)は別系統として除外する
       // 有効なサフィックス(sinko/his/kouhansinko/yorusinko等)は英字始まりだが yu/mu では始まらない
-      const fm = f.match(new RegExp(`^${baseId}${type}(\\d+)(?!mu|yu)`));
+      const fm = f.match(
+        new RegExp(`^${baseId}${type}(\\d+)(.*)\\.csv$`)
+      );
+
       if (!fm) continue;
+
+      // 別系統や返信CSV以外を除外
+      const suffix = fm[2];
+
+      if (/^(?:mu|yu)/.test(suffix)) continue;
+      if (!/(?:sinko|his)/.test(suffix)) continue;
+
       const n = parseInt(fm[1], 10);
       if (n <= targetNum && n > bestNum) { bestNum = n; bestFile = f; }
     }
