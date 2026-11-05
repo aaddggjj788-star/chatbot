@@ -206,6 +206,11 @@
             "ho": {
                 "searchTarget": "12691yu39mu/sinko/1",
                 "useCurrentRow": true
+            },
+            "sinko3": {
+                "useHistorySearch": true,
+                "historyCharaId": "12691yu27",
+                "fallbackSearch": "12691yu27/sinko/3"
             }
         },
         "yu42mu": {
