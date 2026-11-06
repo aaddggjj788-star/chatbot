@@ -1,0 +1,110 @@
+{
+    "charaId": "12701",
+    "globalStopTime": {
+        "start": "22:20",
+        "end": "09:00"
+    },
+    "spanMatchExclude": [
+        "12701mu1/sinko/3"
+    ],
+    "phases": {
+        "mu1": {
+            "fileId": "12701mu1sinko",
+            "ho": {
+                "searchTarget": "12701mu1/sinko/1",
+                "useCurrentRow": true
+            },
+            "do": {
+                "searchTarget": "12701mu1/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "mu2": {
+            "fileId": "12701mu2sinko",
+            "ho": {
+                "searchTarget": "12701mu2/sinko/1",
+                "useCurrentRow": true
+            },
+            "do": {
+                "fileId": "12701mu2hissinko",
+                "searchTarget": "12701mu2/his/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu1": {
+            "fileId": "12701yu1sinko",
+            "ho": {
+                "searchTarget": "12701yu1/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu2": {
+            "fileId": "12701yu2sinko",
+            "ho": {
+                "searchTarget": "12701yu2/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu5": {
+            "fileId": "12701yu5sinko",
+            "ho": {
+                "searchTarget": "12701yu5/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu10": {
+            "fileId": "12701yu10sinko",
+            "ho": {
+                "searchTarget": "12701yu10/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu15": {
+            "fileId": "12701yu15sinko",
+            "ho": {
+                "searchTarget": "12701yu15/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4mu": {
+            "fileId": "12701yu4musinko",
+            "ho": {
+                "searchTarget": "12701yu4mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu8mu": {
+            "fileId": "12701yu8musinko",
+            "ho": {
+                "searchTarget": "12701yu8mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu11mu": {
+            "fileId": "12701yu11musinko",
+            "ho": {
+                "searchTarget": "12701yu11mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu14mu": {
+            "fileId": "12701yu14musinko",
+            "ho": {
+                "searchTarget": "12701yu14mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4": {
+            "fileId": "12701yu2sinko"
+        },
+        "yu8": {
+            "fileId": "12701yu5sinko"
+        },
+        "yu11": {
+            "fileId": "12701yu10sinko"
+        },
+        "yu14": {
+            "fileId": "12701yu10sinko"
+        }
+    }
+}

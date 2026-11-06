@@ -1,0 +1,110 @@
+{
+  "phaseKey": "12701yu146",
+  "situation": "有料146日目。収録のない144・145日目の出来事を補わず、実際の直前履歴から継続する。",
+  "startState": "実際の直前送信本文と受信履歴を起点にする。前日の日程が存在することだけで、前日の全返信・所作を完了済みとはみなさない。龍亀が去った旨まで送信済みなら、その後の状態を維持する。招財十宝との同化の説明が送信済みなら、その状態を前提とする。",
+  "goal": "この日程にある既存の説明・進行の範囲で個別返信を支える。収録のない144・145日目の出来事を補わず、実際の直前履歴から継続する。 日程の予告や最後の原稿があることだけで、相談者の念願成就を達成済みにしない。",
+  "currentProcess": {
+    "summary": "収録のない144・145日目の出来事を補わず、実際の直前履歴から継続する。",
+    "steps": [
+      {
+        "sourceRecordId": "R0461",
+        "branch": "scheduledFollowup",
+        "sourceOrder": 128,
+        "replyNumber": null,
+        "comment": "<!--12701yu146/ho-->",
+        "sourceFile": "掘り起こし/朝_オール.txt",
+        "sourceLines": [
+          5864,
+          5896
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "顕夢神（けんむしん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": "朝",
+          "category": "ALL",
+          "conditionsRaw": [
+            ">ALL"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      }
+    ],
+    "stepsInterpretation": "原稿索引。sourceOrderはファイル内の収録順。同じ所作の反復はreplyNumberRangesで整理し、各語・位置は別紙索引に保持。全stepsを順に送る指示ではなく、実送信本文と外部次候補で現在の経路・行を選ぶ。",
+    "branches": [
+      {
+        "branch": "scheduledFollowup",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            461,
+            461
+          ]
+        ],
+        "sourceRecordCount": 1
+      }
+    ],
+    "regularReplyStreamPolicy": "当日の固定返信列が無い場合も、既存の現在返信列を勝手にリセットしない。共通JSONのreplyStreamPolicyとruntimeの現在候補を使用する。",
+    "actualUserCompletion": null,
+    "detailIndex": "確認資料/原稿別_返信ワードと条件索引.txt（確認専用。最新送信本文・次候補が返信生成時の正本）"
+  },
+  "progressRules": [
+    "共通JSONのprogressionRules、5モード、commentPolicyを継承する。",
+    "現在の送信本文と次候補が同じ経路であることを外部情報で確認する。日数から次返信番号を推測しない。",
+    "質問・相談・疑念へ先に答え、fullReplyでは現在位置を保持する。",
+    "翌日や後半の未送信説明を用いて現在の反論を説得しない。"
+  ],
+  "replyRules": [
+    "送り返す言葉は該当stepの原文と実送信本文を照合する。漢字・読み・乱数を作り直さない。",
+    "wordinsert個数と必要通数を混同しない。span不足と補完可否は外部指定を使う。",
+    "自由回答は内容を読んで返し、固定語がないことを不足にしない。",
+    "所作・画像・念唱の指示を尋ねられた時だけ、既に送った範囲で補足する。代替手順や追加回数を作らない。"
+  ],
+  "allowed": [
+    "この日程のうち実際に送信済みの見立て・用語・手順への説明。",
+    "現在のユーザーが尋ねた内容への回答。前後の状態は実際の履歴で確認できる部分のみ。"
+  ],
+  "forbidden": [
+    "未送信のstepsや別分岐の内容を既に説明済みと扱うこと。",
+    "日程のgoalを超える新しい術・人物・返信語・回数・到達結果の追加。",
+    "原文に残る旧日付・曜日・季節・キャンペーンを現在の条件として断定すること。"
+  ],
+  "importantTerms": {},
+  "referenceLogs": [
+    {
+      "purpose": "送信済み範囲での語り方・説明の参考。実施済み判定や送信テンプレートとして無条件に使わない。",
+      "sourceFile": "掘り起こし/朝_オール.txt",
+      "sourceRecordId": "R0461",
+      "sourceLines": [
+        5864,
+        5896
+      ],
+      "phase": "12701yu146",
+      "replyNumber": null,
+      "comment": "<!--12701yu146/ho-->",
+      "type": "scheduledFollowup",
+      "text": "ここまでの努力を十分に生かしましょう。\nですが焦って無理をなさる必要はありません。\n通常通りあなたの生活の中で鑑定に割けるお時間がある時に進めて下さい。",
+      "textTreatment": "元本文から非連続の短い文を抜粋。表記は原文のまま。旧名・旧用語の使用許可ではない。"
+    }
+  ],
+  "additionalRules": [],
+  "timeline": [],
+  "sourceFiles": [
+    "掘り起こし/朝_オール.txt"
+  ],
+  "completionBoundary": {
+    "dailyProcedureCompletion": null,
+    "overallReadingCompletion": null,
+    "rule": "資料から会員別の当日の終了番号は確定できない。外部の現在位置と候補に従い、原稿の希望・予告を実績へ変えない。"
+  },
+  "sourceRecordCount": 1,
+  "unresolvedRecordIds": []
+}

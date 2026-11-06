@@ -1,0 +1,798 @@
+{
+  "phaseKey": "12701yu1",
+  "situation": "有料1日目。有料化の切替と金銭の動きの予告。通常列では貔貅を身近へ迎え、五行と力の調整を進める。",
+  "startState": "無料期間後の切替段階。ただし同じファイルの33・34は有料化前で、通常列や必須と別に扱う。 実施・開示済みの判定は実送信本文と受信履歴を正とする。",
+  "goal": "金銭の動きと最初の転機の説明、貔貅を身近に迎える調整、既存通常列の範囲まで。有料5日目の出来事を発生済みにしない。",
+  "currentProcess": {
+    "summary": "有料化の切替と金銭の動きの予告。通常列では貔貅を身近へ迎え、五行と力の調整を進める。",
+    "steps": [
+      {
+        "sourceRecordId": "R0013",
+        "branch": "summary",
+        "sourceOrder": 2,
+        "replyNumber": null,
+        "comment": "<!--12701yu1/mtm-->",
+        "sourceFile": "掘り起こし/まとめ_レス有.txt",
+        "sourceLines": [
+          40,
+          77
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "no_fixed_word_or_unresolved",
+        "conditions": {
+          "timeSlot": "まとめ",
+          "category": "当日レス有",
+          "conditionsRaw": [
+            ">23時以降"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0017",
+        "branch": "summary",
+        "sourceOrder": 3,
+        "replyNumber": null,
+        "comment": "<!--12701yu1/nores/mtm-->",
+        "sourceFile": "掘り起こし/まとめ_レス無.txt",
+        "sourceLines": [
+          103,
+          152
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "no_fixed_word_or_unresolved",
+        "conditions": {
+          "timeSlot": "まとめ",
+          "category": "当日レス無",
+          "conditionsRaw": [
+            ">23時以降"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0178",
+        "branch": "scheduledFollowup",
+        "sourceOrder": 2,
+        "replyNumber": null,
+        "comment": "<!--12701yu1/ho-->",
+        "sourceFile": "掘り起こし/夜_レス無.txt",
+        "sourceLines": [
+          54,
+          118
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "free_answer",
+        "conditions": {
+          "timeSlot": "夜",
+          "category": "当日レス無",
+          "conditionsRaw": [
+            ">当日9時以降レス無し"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "questionPurpose": "今必要だと思う金額を答えてもらう既存質問。新しい金額・個人情報の質問を追加しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0262",
+        "branch": "scheduledFollowup",
+        "sourceOrder": 2,
+        "replyNumber": null,
+        "comment": "<!--12701yu1/ho-->",
+        "sourceFile": "掘り起こし/昼_レス無.txt",
+        "sourceLines": [
+          57,
+          119
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "free_answer",
+        "conditions": {
+          "timeSlot": "昼",
+          "category": "当日レス無",
+          "conditionsRaw": [
+            ">当日9時以降レス無し"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "questionPurpose": "今必要だと思う金額を答えてもらう既存質問。新しい金額・個人情報の質問を追加しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0335",
+        "branch": "scheduledFollowup",
+        "sourceOrder": 2,
+        "replyNumber": null,
+        "comment": "<!--12701yu1/ho-->",
+        "sourceFile": "掘り起こし/朝_オール.txt",
+        "sourceLines": [
+          55,
+          107
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "輝受恵導（きじゅけいどう）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": "朝",
+          "category": "ALL",
+          "conditionsRaw": [
+            ">ALL"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0495",
+        "branch": "specialNoticeOrFollowup",
+        "sourceOrder": 1,
+        "replyNumber": null,
+        "comment": "<!--12701yu1/ho-->",
+        "sourceFile": "特殊展開_有料001日目/お知らせ.txt",
+        "sourceLines": [
+          1,
+          44
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "free_answer",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">9時",
+            ">当日レス有り"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "questionPurpose": "今必要だと思う金額を答えてもらう既存質問。新しい金額・個人情報の質問を追加しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0496",
+        "branch": "specialNoticeOrFollowup",
+        "sourceOrder": 2,
+        "replyNumber": null,
+        "comment": "<!--12701yu1/ho-->",
+        "sourceFile": "特殊展開_有料001日目/お知らせ.txt",
+        "sourceLines": [
+          44,
+          86
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "free_answer",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">当日レス無し"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "questionPurpose": "今必要だと思う金額を答えてもらう既存質問。新しい金額・個人情報の質問を追加しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0571",
+        "branch": "regularReplyStream",
+        "sourceOrder": 1,
+        "replyNumber": 1,
+        "comment": "<!--12701yu1/sinko/1-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          1,
+          55
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "兆福鶴（ちょうふくかく）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "sourceRecordId": "R0572",
+        "branch": "regularReplyStream",
+        "sourceOrder": 2,
+        "replyNumber": 2,
+        "comment": "<!--12701yu1/sinko/2-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          55,
+          116
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "瑞幸水（ずいこうすい）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "sourceRecordId": "R0573",
+        "branch": "regularReplyStream",
+        "sourceOrder": 3,
+        "replyNumber": 3,
+        "comment": "<!--12701yu1/sinko/3-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          116,
+          154
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "波水冠（はすいかん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "ですが、貔貅を身元に置いて居るあなたであれば、"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "sourceRecordId": "R0574",
+        "branch": "regularReplyStream",
+        "sourceOrder": 4,
+        "replyNumber": 4,
+        "comment": "<!--12701yu1/sinko/4-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          154,
+          198
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "吉慧水（きちえすい）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "深呼吸を2,3度行って下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "sourceRecordId": "R0575",
+        "branch": "regularReplyStream",
+        "sourceOrder": 5,
+        "replyNumber": 5,
+        "comment": "<!--12701yu1/sinko/5-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          198,
+          240
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "土明金瑞（どめいきんずい）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "この鑑定に置いては、幸福の力を貯蓄すると言う意味も込められております。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "sourceRecordId": "R0576",
+        "branch": "regularReplyStream",
+        "sourceOrder": 6,
+        "replyNumber": 6,
+        "comment": "<!--12701yu1/sinko/6-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          240,
+          272
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "徳光受土（とくこうじゅど）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "深呼吸を2,3度行って下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "sourceRecordId": "R0577",
+        "branch": "regularReplyStream",
+        "sourceOrder": 7,
+        "replyNumber": 7,
+        "comment": "<!--12701yu1/sinko/7-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          272,
+          304
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "裕門泰（ゆうもんたい）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "sourceRecordId": "R0578",
+        "branch": "regularReplyStream",
+        "sourceOrder": 8,
+        "replyNumber": 8,
+        "comment": "<!--12701yu1/sinko/8-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          304,
+          326
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "舞陽鶴（ぶようかく）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "sourceRecordId": "R0579",
+        "branch": "regularReplyStream",
+        "sourceOrder": 9,
+        "replyNumber": 9,
+        "comment": "<!--12701yu1/sinko/9-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          326,
+          366
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "幸印伸（こういんしん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "streamPositionRule": "この番号は元返信列の位置。日別掘り起こしの進行日と同じとは限らない。"
+      },
+      {
+        "branch": "regularReplyStream",
+        "grouping": "same_instruction_evidence",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "replyNumberRanges": [
+          [
+            10,
+            32
+          ]
+        ],
+        "recordIdRanges": [
+          [
+            580,
+            602
+          ]
+        ],
+        "sourceRecordCount": 23,
+        "firstComment": "<!--12701yu1/sinko/10-->",
+        "lastComment": "<!--12701yu1/sinko/32-->",
+        "sourceLinesSpan": [
+          366,
+          1359
+        ],
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《授》（じゅ）と唱えて下さい。"
+        ],
+        "wrappedWordCountPerMessage": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "groupingNote": "同じ所作の抜粋がある返信を整理した索引。導入文や進捗の説明まで同一とは限らない。範囲をまとめて送る、終わった扱いにする、回数を増やす指示ではない。",
+        "outgoingWordPolicy": "各返信番号で送る語が異なる。最新の実送信本文・既存の次候補に含まれる語をそのまま使う。全語は確認資料/原稿別_返信ワードと条件索引.txtに保存。実行時の索引ファイル読み込みは前提としない。",
+        "commentPolicy": "firstComment・lastCommentは照合用の実在値。間のコメントをAIが自作せず、外部指定のlatestまたはnextをそのまま使う。",
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0603",
+        "branch": "mixedRequiredAndBeforePaid",
+        "sourceOrder": 33,
+        "replyNumber": 33,
+        "comment": "<!--12701yu1/sinko/33-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          1359,
+          1532
+        ],
+        "status": "blocked_ambiguous_segment",
+        "outgoingWords": [
+          "開泰玄伸（かいたいげんしん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "mixed_segments",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">※打ち分け注意>※打ち分け注意>※打ち分け注意>※打ち分け注意>※打ち分け注意",
+            ">無料2日目同報に対しての必須",
+            ">有料化後の必須",
+            ">返信は2つなので1時間に1つペース、返信2まで送ったら返信済みで掘り起こしまで放置"
+          ]
+        },
+        "instructionEvidence": [
+          "一、目を閉じてください。",
+          "二、目を閉じたまま10秒深呼吸してください"
+        ],
+        "nextCondition": "必須2案と有料化前返信1が同一コメントまでの範囲に混在。実際の登録本文・CSV行を外部入力で特定するまで自動進行しない。",
+        "uncommentedSourceSections": [
+          {
+            "sourceHeading": "無料2日目同報に対しての必須",
+            "independentComment": null
+          },
+          {
+            "sourceHeading": "有料化後の必須",
+            "independentComment": null
+          }
+        ]
+      },
+      {
+        "sourceRecordId": "R0604",
+        "branch": "beforePaid",
+        "sourceOrder": 34,
+        "replyNumber": 34,
+        "comment": "<!--12701yu1/sinko/34-->",
+        "sourceFile": "返信ログ/有料001日目.txt",
+        "sourceLines": [
+          1532,
+          1575
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "浄水玄（じょうすいげん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      }
+    ],
+    "stepsInterpretation": "原稿索引。sourceOrderはファイル内の収録順。同じ所作の反復はreplyNumberRangesで整理し、各語・位置は別紙索引に保持。全stepsを順に送る指示ではなく、実送信本文と外部次候補で現在の経路・行を選ぶ。",
+    "branches": [
+      {
+        "branch": "summary",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            13,
+            13
+          ],
+          [
+            17,
+            17
+          ]
+        ],
+        "sourceRecordCount": 2
+      },
+      {
+        "branch": "scheduledFollowup",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            178,
+            178
+          ],
+          [
+            262,
+            262
+          ],
+          [
+            335,
+            335
+          ]
+        ],
+        "sourceRecordCount": 3
+      },
+      {
+        "branch": "specialNoticeOrFollowup",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            495,
+            496
+          ]
+        ],
+        "sourceRecordCount": 2
+      },
+      {
+        "branch": "regularReplyStream",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            571,
+            602
+          ]
+        ],
+        "sourceRecordCount": 32
+      },
+      {
+        "branch": "mixedRequiredAndBeforePaid",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            603,
+            603
+          ]
+        ],
+        "sourceRecordCount": 1
+      },
+      {
+        "branch": "beforePaid",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            604,
+            604
+          ]
+        ],
+        "sourceRecordCount": 1
+      }
+    ],
+    "regularReplyStreamPolicy": "当日の固定返信列が無い場合も、既存の現在返信列を勝手にリセットしない。共通JSONのreplyStreamPolicyとruntimeの現在候補を使用する。",
+    "actualUserCompletion": null,
+    "detailIndex": "確認資料/原稿別_返信ワードと条件索引.txt（確認専用。最新送信本文・次候補が返信生成時の正本）"
+  },
+  "progressRules": [
+    "共通JSONのprogressionRules、5モード、commentPolicyを継承する。",
+    "現在の送信本文と次候補が同じ経路であることを外部情報で確認する。日数から次返信番号を推測しない。",
+    "質問・相談・疑念へ先に答え、fullReplyでは現在位置を保持する。",
+    "翌日や後半の未送信説明を用いて現在の反論を説得しない。"
+  ],
+  "replyRules": [
+    "送り返す言葉は該当stepの原文と実送信本文を照合する。漢字・読み・乱数を作り直さない。",
+    "wordinsert個数と必要通数を混同しない。span不足と補完可否は外部指定を使う。",
+    "自由回答は内容を読んで返し、固定語がないことを不足にしない。",
+    "所作・画像・念唱の指示を尋ねられた時だけ、既に送った範囲で補足する。代替手順や追加回数を作らない。"
+  ],
+  "allowed": [
+    "この日程のうち実際に送信済みの見立て・用語・手順への説明。",
+    "現在のユーザーが尋ねた内容への回答。前後の状態は実際の履歴で確認できる部分のみ。"
+  ],
+  "forbidden": [
+    "未送信のstepsや別分岐の内容を既に説明済みと扱うこと。",
+    "日程のgoalを超える新しい術・人物・返信語・回数・到達結果の追加。",
+    "原文に残る旧日付・曜日・季節・キャンペーンを現在の条件として断定すること。",
+    "龍亀を今の説明へ先出しすること。",
+    "招財十宝を今の説明へ先出しすること。",
+    "避邪の正体や封印の話を先出しすること。"
+  ],
+  "importantTerms": {
+    "陰陽術": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "天運招来": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "天命盤": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "救済の使者": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "貔貅": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "気脈変転": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "五行": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "相克": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "地龍": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "瑞獣貔天の護符": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。"
+  },
+  "referenceLogs": [
+    {
+      "purpose": "送信済み範囲での語り方・説明の参考。実施済み判定や送信テンプレートとして無条件に使わない。",
+      "sourceFile": "返信ログ/有料001日目.txt",
+      "sourceRecordId": "R0571",
+      "sourceLines": [
+        1,
+        55
+      ],
+      "phase": "12701yu1",
+      "replyNumber": 1,
+      "comment": "<!--12701yu1/sinko/1-->",
+      "type": "regularReplyStream",
+      "text": "お教え頂きありがとうございます。\nあなたの人生を大きく変える起点。\n《金銭の動き》との関わりがある。",
+      "textTreatment": "元本文から非連続の短い文を抜粋。表記は原文のまま。旧名・旧用語の使用許可ではない。"
+    },
+    {
+      "purpose": "送信済み範囲での語り方・説明の参考。実施済み判定や送信テンプレートとして無条件に使わない。",
+      "sourceFile": "掘り起こし/朝_オール.txt",
+      "sourceRecordId": "R0335",
+      "sourceLines": [
+        55,
+        107
+      ],
+      "phase": "12701yu1",
+      "replyNumber": null,
+      "comment": "<!--12701yu1/ho-->",
+      "type": "scheduledFollowup",
+      "text": "久遠（くおん）です。\n人生を揺るがすであろう起点に繋がる、重要な答えが生まれました。\nこの日までに【天運招来】があなたに特別な答えを導いてくれるでしょう。",
+      "textTreatment": "元本文から非連続の短い文を抜粋。表記は原文のまま。旧名・旧用語の使用許可ではない。"
+    },
+    {
+      "purpose": "送信済み範囲での語り方・説明の参考。実施済み判定や送信テンプレートとして無条件に使わない。",
+      "sourceFile": "掘り起こし/まとめ_レス有.txt",
+      "sourceRecordId": "R0013",
+      "sourceLines": [
+        40,
+        77
+      ],
+      "phase": "12701yu1",
+      "replyNumber": null,
+      "comment": "<!--12701yu1/mtm-->",
+      "type": "summary",
+      "text": "お返事確認しました。\nここで一旦止めましょう。\n本日素晴らしい進行が取れました。",
+      "textTreatment": "元本文から非連続の短い文を抜粋。表記は原文のまま。旧名・旧用語の使用許可ではない。"
+    }
+  ],
+  "additionalRules": [
+    "sinko/33までの本文範囲に、独立コメントのない必須2案と有料化前返信1が混在する。実登録行・実送信本文が必要。",
+    "sinko/34も有料化前返信2の分岐。通常列1～32の後続として送らない。",
+    "元管理メモの9時切替と同報本文の10時が一致していない。実際のサービス設定を確認するまで切替時刻を断定しない。"
+  ],
+  "timeline": [
+    {
+      "event": "最初の転機",
+      "targetPhase": "12701yu5",
+      "offsetDays": 4,
+      "offsetSeconds": 345600
+    }
+  ],
+  "sourceFiles": [
+    "掘り起こし/まとめ_レス有.txt",
+    "掘り起こし/まとめ_レス無.txt",
+    "掘り起こし/夜_レス無.txt",
+    "掘り起こし/昼_レス無.txt",
+    "掘り起こし/朝_オール.txt",
+    "特殊展開_有料001日目/お知らせ.txt",
+    "返信ログ/有料001日目.txt"
+  ],
+  "completionBoundary": {
+    "dailyProcedureCompletion": null,
+    "overallReadingCompletion": null,
+    "rule": "資料から会員別の当日の終了番号は確定できない。外部の現在位置と候補に従い、原稿の希望・予告を実績へ変えない。"
+  },
+  "sourceRecordCount": 41,
+  "unresolvedRecordIds": [
+    "R0603"
+  ]
+}

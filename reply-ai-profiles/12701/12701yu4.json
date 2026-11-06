@@ -1,0 +1,957 @@
+{
+  "phaseKey": "12701yu4",
+  "situation": "有料4日目。最初の転機の前日。夕方の特殊展開で金の性質と力の量を扱い、瑞獣貔天の護符による準備へ進む。",
+  "startState": "翌日の最初の転機を控える。通常の朝昼と夕方特殊展開が並行し、開始済みかは実履歴による。 実施・開示済みの判定は実送信本文と受信履歴を正とする。",
+  "goal": "金の性質・量の説明、瑞獣貔天の護符による準備と当日のまとめまで。翌日の宝の生み出しは予告に留める。空の返信15は完了地点として補完しない。",
+  "currentProcess": {
+    "summary": "最初の転機の前日。夕方の特殊展開で金の性質と力の量を扱い、瑞獣貔天の護符による準備へ進む。",
+    "steps": [
+      {
+        "sourceRecordId": "R0021",
+        "branch": "cushion",
+        "sourceOrder": 3,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "掘り起こし/クッション.txt",
+        "sourceLines": [
+          40,
+          76
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "響流金100（きょうりゅうきんいちぜろぜろ）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">クッションログ　①"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0022",
+        "branch": "cushion",
+        "sourceOrder": 4,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "掘り起こし/クッション.txt",
+        "sourceLines": [
+          76,
+          98
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "no_fixed_word_or_unresolved",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">クッションログ　②"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0265",
+        "branch": "scheduledFollowup",
+        "sourceOrder": 5,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "掘り起こし/昼_レス無.txt",
+        "sourceLines": [
+          237,
+          284
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "壽祝路（じゅしゅくろ）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": "昼",
+          "category": "当日レス無",
+          "conditionsRaw": [
+            ">当日レス無し"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0467",
+        "branch": "scheduledFollowup",
+        "sourceOrder": 2,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "掘り起こし/朝_レス有.txt",
+        "sourceLines": [
+          54,
+          105
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "香泰路清（こうたいろせい）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": "朝",
+          "category": "前日レス有",
+          "conditionsRaw": [
+            ">前日レス有り"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0482",
+        "branch": "scheduledFollowup",
+        "sourceOrder": 2,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "掘り起こし/朝_レス無.txt",
+        "sourceLines": [
+          61,
+          127
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "栄路盛（えいろせい）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": "朝",
+          "category": "前日レス無",
+          "conditionsRaw": [
+            ">前日レス無し"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0497",
+        "branch": "specialNoticeOrFollowup",
+        "sourceOrder": 1,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "特殊展開_有料004日目/掘り起こし.txt",
+        "sourceLines": [
+          1,
+          33
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "叶紫澄（きょうしちょう）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">17時30分"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0498",
+        "branch": "specialNoticeOrFollowup",
+        "sourceOrder": 2,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "特殊展開_有料004日目/掘り起こし.txt",
+        "sourceLines": [
+          33,
+          77
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "火雷金（からいきん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">17時30分"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0499",
+        "branch": "specialNoticeOrFollowup",
+        "sourceOrder": 3,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "特殊展開_有料004日目/掘り起こし.txt",
+        "sourceLines": [
+          77,
+          118
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "明奏脈日（めいそうみゃくじつ）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">18時　ALL"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0500",
+        "branch": "specialNoticeOrFollowup",
+        "sourceOrder": 4,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/ho-->",
+        "sourceFile": "特殊展開_有料004日目/掘り起こし.txt",
+        "sourceLines": [
+          118,
+          163
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "成祥波日（せいしょうはじつ）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">19時",
+            ">開始後　レス無し"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0501",
+        "branch": "specialNoticeOrFollowup",
+        "sourceOrder": 5,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/mtm-->",
+        "sourceFile": "特殊展開_有料004日目/掘り起こし.txt",
+        "sourceLines": [
+          163,
+          199
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "no_fixed_word_or_unresolved",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">まとめ　①",
+            "マッチ【　心の中で《金》（きん）と唱えて下さい。　】"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0502",
+        "branch": "specialNoticeOrFollowup",
+        "sourceOrder": 6,
+        "replyNumber": null,
+        "comment": "<!--12701yu4/mtm-->",
+        "sourceFile": "特殊展開_有料004日目/掘り起こし.txt",
+        "sourceLines": [
+          199,
+          242
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "no_fixed_word_or_unresolved",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": [
+            ">まとめ　②",
+            "マッチ【　こちらを私までお送り下さい。　】"
+          ]
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。",
+        "selection": "同日内の全原稿を順送するリストではない。対象条件と実際の送信原稿から選択する。"
+      },
+      {
+        "sourceRecordId": "R0503",
+        "branch": "specialReply",
+        "sourceOrder": 1,
+        "replyNumber": 1,
+        "comment": "<!--12701yu4/sinko/1-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          1,
+          32
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "流金翼1000（りゅうきんよくいちぜろぜろぜろ）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0504",
+        "branch": "specialReply",
+        "sourceOrder": 2,
+        "replyNumber": 2,
+        "comment": "<!--12701yu4/sinko/2-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          32,
+          60
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "伸流金8000（しんりゅうきんはちぜろぜろぜろ）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0505",
+        "branch": "specialReply",
+        "sourceOrder": 3,
+        "replyNumber": 3,
+        "comment": "<!--12701yu4/sinko/3-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          60,
+          85
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "門鶴流金（もんかくりゅうきん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0506",
+        "branch": "specialReply",
+        "sourceOrder": 4,
+        "replyNumber": 4,
+        "comment": "<!--12701yu4/sinko/4-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          85,
+          111
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "流信浄兆（りゅうしんじょうちょう）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0507",
+        "branch": "specialReply",
+        "sourceOrder": 5,
+        "replyNumber": 5,
+        "comment": "<!--12701yu4/sinko/5-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          111,
+          150
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "福信兆宝（ふくしんちょうほう）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0508",
+        "branch": "specialReply",
+        "sourceOrder": 6,
+        "replyNumber": 6,
+        "comment": "<!--12701yu4/sinko/6-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          150,
+          198
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "門印華顕（もんいんかけん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0509",
+        "branch": "specialReply",
+        "sourceOrder": 7,
+        "replyNumber": 7,
+        "comment": "<!--12701yu4/sinko/7-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          198,
+          242
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "波幸朱金（はこうしゅきん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0510",
+        "branch": "specialReply",
+        "sourceOrder": 8,
+        "replyNumber": 8,
+        "comment": "<!--12701yu4/sinko/8-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          242,
+          285
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "印月気（いんげつき）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0511",
+        "branch": "specialReply",
+        "sourceOrder": 9,
+        "replyNumber": 9,
+        "comment": "<!--12701yu4/sinko/9-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          285,
+          326
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "菩陰金（ぼいんきん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0512",
+        "branch": "specialReply",
+        "sourceOrder": 10,
+        "replyNumber": 10,
+        "comment": "<!--12701yu4/sinko/10-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          326,
+          372
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "開日集（かいじつしゅう）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0513",
+        "branch": "specialReply",
+        "sourceOrder": 11,
+        "replyNumber": 11,
+        "comment": "<!--12701yu4/sinko/11-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          372,
+          413
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "花信波（かしんは）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0514",
+        "branch": "specialReply",
+        "sourceOrder": 12,
+        "replyNumber": 12,
+        "comment": "<!--12701yu4/sinko/12-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          413,
+          464
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "浄海集（じょうかいしゅう）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0515",
+        "branch": "specialReply",
+        "sourceOrder": 13,
+        "replyNumber": 13,
+        "comment": "<!--12701yu4/sinko/13-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          464,
+          504
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "財天路印（ざいてんろいん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0516",
+        "branch": "specialReply",
+        "sourceOrder": 14,
+        "replyNumber": 14,
+        "comment": "<!--12701yu4/sinko/14-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          504,
+          543
+        ],
+        "status": "source_index_only",
+        "outgoingWords": [
+          "浄慧願（じょうえがん）"
+        ],
+        "wrappedWordCount": 1,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "specified_word",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [
+          "こちらの護符を開き、あなたの好きな方の手をかざして下さい。",
+          "かざしましたら、心の中で《金》（きん）と唱えて下さい。"
+        ],
+        "nextCondition": "外部指定の有効返信判定と実際の次候補による。並び順・日数から進行先を創作しない。"
+      },
+      {
+        "sourceRecordId": "R0517",
+        "branch": "specialReply",
+        "sourceOrder": 15,
+        "replyNumber": 15,
+        "comment": "<!--12701yu4/sinko/15-->",
+        "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+        "sourceLines": [
+          543,
+          549
+        ],
+        "status": "blocked_empty_body",
+        "outgoingWords": [],
+        "wrappedWordCount": 0,
+        "runtimeSpanCount": null,
+        "requiredReplyCount": null,
+        "explicitRequestedMessageCount": null,
+        "responseType": "empty",
+        "conditions": {
+          "timeSlot": null,
+          "category": null,
+          "conditionsRaw": []
+        },
+        "instructionEvidence": [],
+        "nextCondition": "本文がないため生成・補完・進行対象にしない。次候補の特定が必要。"
+      }
+    ],
+    "stepsInterpretation": "原稿索引。sourceOrderはファイル内の収録順。同じ所作の反復はreplyNumberRangesで整理し、各語・位置は別紙索引に保持。全stepsを順に送る指示ではなく、実送信本文と外部次候補で現在の経路・行を選ぶ。",
+    "branches": [
+      {
+        "branch": "cushion",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            21,
+            22
+          ]
+        ],
+        "sourceRecordCount": 2
+      },
+      {
+        "branch": "scheduledFollowup",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            265,
+            265
+          ],
+          [
+            467,
+            467
+          ],
+          [
+            482,
+            482
+          ]
+        ],
+        "sourceRecordCount": 3
+      },
+      {
+        "branch": "specialNoticeOrFollowup",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            497,
+            502
+          ]
+        ],
+        "sourceRecordCount": 6
+      },
+      {
+        "branch": "specialReply",
+        "selection": "外部の実送信履歴・対象条件に一致したもののみ。",
+        "sourceRecordIdRanges": [
+          [
+            503,
+            517
+          ]
+        ],
+        "sourceRecordCount": 15
+      }
+    ],
+    "regularReplyStreamPolicy": "当日の固定返信列が無い場合も、既存の現在返信列を勝手にリセットしない。共通JSONのreplyStreamPolicyとruntimeの現在候補を使用する。",
+    "actualUserCompletion": null,
+    "detailIndex": "確認資料/原稿別_返信ワードと条件索引.txt（確認専用。最新送信本文・次候補が返信生成時の正本）"
+  },
+  "progressRules": [
+    "共通JSONのprogressionRules、5モード、commentPolicyを継承する。",
+    "現在の送信本文と次候補が同じ経路であることを外部情報で確認する。日数から次返信番号を推測しない。",
+    "質問・相談・疑念へ先に答え、fullReplyでは現在位置を保持する。",
+    "翌日や後半の未送信説明を用いて現在の反論を説得しない。"
+  ],
+  "replyRules": [
+    "送り返す言葉は該当stepの原文と実送信本文を照合する。漢字・読み・乱数を作り直さない。",
+    "wordinsert個数と必要通数を混同しない。span不足と補完可否は外部指定を使う。",
+    "自由回答は内容を読んで返し、固定語がないことを不足にしない。",
+    "所作・画像・念唱の指示を尋ねられた時だけ、既に送った範囲で補足する。代替手順や追加回数を作らない。"
+  ],
+  "allowed": [
+    "この日程のうち実際に送信済みの見立て・用語・手順への説明。",
+    "現在のユーザーが尋ねた内容への回答。前後の状態は実際の履歴で確認できる部分のみ。"
+  ],
+  "forbidden": [
+    "未送信のstepsや別分岐の内容を既に説明済みと扱うこと。",
+    "日程のgoalを超える新しい術・人物・返信語・回数・到達結果の追加。",
+    "原文に残る旧日付・曜日・季節・キャンペーンを現在の条件として断定すること。",
+    "龍亀を今の説明へ先出しすること。",
+    "招財十宝を今の説明へ先出しすること。",
+    "避邪の正体や封印の話を先出しすること。"
+  ],
+  "importantTerms": {
+    "天運招来": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "天命盤": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "貔貅": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。",
+    "瑞獣貔天の護符": "意味は12701.jsonのimportantTermsを参照。この日程の該当本文が実際に送信済みである場合だけ説明に使う。後日の状態変化は持ち込まない。"
+  },
+  "referenceLogs": [
+    {
+      "purpose": "送信済み範囲での語り方・説明の参考。実施済み判定や送信テンプレートとして無条件に使わない。",
+      "sourceFile": "掘り起こし/朝_レス有.txt",
+      "sourceRecordId": "R0467",
+      "sourceLines": [
+        54,
+        105
+      ],
+      "phase": "12701yu4",
+      "replyNumber": null,
+      "comment": "<!--12701yu4/ho-->",
+      "type": "scheduledFollowup",
+      "text": "昨日の進行、その反応をしっかり活かす事が出来ました。\n本日、この後からです。\n【天運招来】に動きが生じるでしょう。",
+      "textTreatment": "元本文から非連続の短い文を抜粋。表記は原文のまま。旧名・旧用語の使用許可ではない。"
+    },
+    {
+      "purpose": "送信済み範囲での語り方・説明の参考。実施済み判定や送信テンプレートとして無条件に使わない。",
+      "sourceFile": "特殊展開_有料004日目/返信ログ.txt",
+      "sourceRecordId": "R0503",
+      "sourceLines": [
+        1,
+        32
+      ],
+      "phase": "12701yu4",
+      "replyNumber": 1,
+      "comment": "<!--12701yu4/sinko/1-->",
+      "type": "specialReply",
+      "text": "お返事ありがとうございます。\nここでの特別工程は、明日の大事な動きを引き起こすもの。\n明日の大事な動きは、あなたが迎える念願成就と深い結び付きがあります。",
+      "textTreatment": "元本文から非連続の短い文を抜粋。表記は原文のまま。旧名・旧用語の使用許可ではない。"
+    },
+    {
+      "purpose": "送信済み範囲での語り方・説明の参考。実施済み判定や送信テンプレートとして無条件に使わない。",
+      "sourceFile": "特殊展開_有料004日目/掘り起こし.txt",
+      "sourceRecordId": "R0501",
+      "sourceLines": [
+        163,
+        199
+      ],
+      "phase": "12701yu4",
+      "replyNumber": null,
+      "comment": "<!--12701yu4/mtm-->",
+      "type": "specialNoticeOrFollowup",
+      "text": "お疲れ様です。\nよく頑張りましたね。\n必要進行は乗り越える事が出来ました。",
+      "textTreatment": "元本文から非連続の短い文を抜粋。表記は原文のまま。旧名・旧用語の使用許可ではない。"
+    }
+  ],
+  "additionalRules": [
+    "特殊返信sinko/15は本文なし。補完して送らない。"
+  ],
+  "timeline": [
+    {
+      "event": "最初の転機",
+      "targetPhase": "12701yu5",
+      "offsetDays": 1,
+      "offsetSeconds": 86400
+    }
+  ],
+  "sourceFiles": [
+    "掘り起こし/クッション.txt",
+    "掘り起こし/昼_レス無.txt",
+    "掘り起こし/朝_レス有.txt",
+    "掘り起こし/朝_レス無.txt",
+    "特殊展開_有料004日目/掘り起こし.txt",
+    "特殊展開_有料004日目/返信ログ.txt"
+  ],
+  "completionBoundary": {
+    "dailyProcedureCompletion": null,
+    "overallReadingCompletion": null,
+    "rule": "資料から会員別の当日の終了番号は確定できない。外部の現在位置と候補に従い、原稿の希望・予告を実績へ変えない。"
+  },
+  "sourceRecordCount": 26,
+  "unresolvedRecordIds": [
+    "R0517"
+  ]
+}
