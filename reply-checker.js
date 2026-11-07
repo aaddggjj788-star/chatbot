@@ -5599,7 +5599,43 @@ function validateStructuredEmotionChoiceOrSelfReflection(text, rule) {
   };
 }
 
+function validateStructuredDesiredFuture(text, rule) {
+  const t = normalizeStructuredText(text);
 
+  if (!t) {
+    return { status: 'needs_ai', reason: 'empty' };
+  }
+
+  // 本人が回答として述べた形の、明確な短文だけを機械確定する。
+  // 全文一致なので、引用・否定・質問返しに含まれる単語だけで通さない。
+  const answer = t
+    .replace(/^(?:私|わたし)(?:の希望は|の願いは|は)/u, '')
+    .trim();
+
+  const explicitWish = /^(?:(?:お金持ち|裕福|幸せ|幸福|健康|元気)になりたい|ある人と結ばれたい|好きな人と結ばれたい|好きな人と結婚したい|結婚したい|復縁したい|借金を返したい|借金を完済したい|借金をなくしたい|収入を増やしたい|貯金を増やしたい|仕事を安定させたい|就職したい|転職したい|安心して暮らしたい|穏やかに暮らしたい|家族と仲良く暮らしたい|お金に困らない生活をしたい|病気を治したい|病気をしたくない|今の暮らしを続けたい)(?:です|と思っています|と願っています)?[。！!\s]*$/u;
+  const shortWish = /^(?:お金|金運|健康|幸せ|幸福|恋愛|結婚|復縁|就職|転職|家族の幸せ|家族の健康|家庭円満|商売繁盛|借金返済|経済的な安定|平穏な暮らし|今のままでいい)(?:です)?[。！!\s]*$/u;
+
+  if (!explicitWish.test(answer) && !shortWish.test(answer)) {
+    // 長文・複数の希望・言い換えも不合格にはしない。
+    // 原文を切り詰めず、fallbackのvalid_answerで意味を確認する。
+    return {
+      status: 'needs_ai',
+      reason: 'desired_future_semantic_check'
+    };
+  }
+
+  // 安全な全文一致の後に限り、既存の願望validatorを再利用する。
+  const existing = validateStructuredConcreteWish(t, rule);
+  if (existing && existing.status === 'valid') {
+    return existing;
+  }
+
+  // 「幸せになりたい」や名詞のみの希望も、この質問では有効回答。
+  return {
+    status: 'valid',
+    reason: 'desired_future_explicit_answer'
+  };
+}
 
 
 // ======================================================
