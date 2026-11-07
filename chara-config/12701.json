@@ -17,6 +17,10 @@
             "do": {
                 "searchTarget": "12701mu1/sinko/1",
                 "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1800": 30,
+                "after1800": 20
             }
         },
         "mu2": {
@@ -29,6 +33,10 @@
                 "fileId": "12701mu2hissinko",
                 "searchTarget": "12701mu2/his/1",
                 "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1700": 30,
+                "after1700": 20
             }
         },
         "yu1": {
