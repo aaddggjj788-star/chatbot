@@ -39,6 +39,13 @@
                 "after1700": 20
             }
         },
+        "yu1am": {
+            "fileId": "12701yu1amsinko",
+            "ho": {
+                "searchTarget": "12701yu1am/sinko/1",
+                "useCurrentRow": true
+            }
+        },
         "yu1": {
             "fileId": "12701yu1sinko",
             "ho": {
