@@ -171,6 +171,12 @@
             "ho": {
                 "searchTarget": "12691yu46mu/sinko/1",
                 "useCurrentRow": true
+            },
+            "sinko5": {
+                "useHistorySearch": true,
+                "historyCharaId": "12691yu22",
+                "replaceHeader": "確認しました。\n\n流れに乗せることが出来ました。\n\nそれではここから、通常工程に戻します。\n\n通常工程とはいえ、法術の力が働いている状態。\n\n大きな意味を成すという事は言わずともご理解頂けると思います。\n\nではこちらから再開していきましょう。",
+                "fallbackSearch": "12691yu22/sinko/3"
             }
         },
         "yu49mu": {
