@@ -1019,7 +1019,37 @@
         "rejected": "use_existing_ai"
       }
     },
+    "12702mu2/his/1": {
+      "enabled": true,
+      "type": "given_name_stroke_count",
+      "fallbackProfile": "12702given_name_stroke_count",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
     "12702mu1/sinko/2": {
+      "enabled": true,
+      "type": "money_amount",
+      "fallbackProfile": "12702desired_amount",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12702mu2/his/2": {
       "enabled": true,
       "type": "money_amount",
       "fallbackProfile": "12702desired_amount",
