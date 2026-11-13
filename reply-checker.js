@@ -5637,6 +5637,50 @@ function validateStructuredDesiredFuture(text, rule) {
   };
 }
 
+function validateStructuredWesternBirthdate(text, rule) {
+  const t = normalizeStructuredText(text).trim();
+  if (!t) return { status: 'needs_ai', reason: 'birthdate_empty' };
+  if (/[?？]/.test(t)) return { status: 'needs_ai', reason: 'birthdate_question_or_mixed' };
+  if (/(?:明治|大正|昭和|平成|令和)\s*\d+年/.test(t))
+    return { status: 'needs_ai', reason: 'birthdate_era_not_western' };
+
+  // 原稿で求める西暦の年月日を4桁の年・月・日として受け付ける。
+  // 文中に別の年・日付がある長文はAIで判定する。
+  const s = t
+    .replace(/^[\s「『【(（]*\s*(?:私の|わたしの|僕の)?(?:生年月日は|生年月日|誕生日は|生まれた日は|西暦で|西暦)?\s*/u, '')
+    .replace(/[\s」』】)）]*?(?:です|になります)?[。!！\s]*$/u, '')
+    .trim();
+  const m = s.match(/^((?:18|19|20)\d{2})(?:年\s*(\d{1,2})月\s*(\d{1,2})日?|[\/.-]\s*(\d{1,2})[\/.-]\s*(\d{1,2}))$/u);
+  if (!m) return { status: 'needs_ai', reason: 'western_birthdate_not_complete' };
+  const year = Number(m[1]);
+  const month = Number(m[2] || m[4]);
+  const day = Number(m[3] || m[5]);
+  if (month < 1 || month > 12 || day < 1)
+    return { status: 'needs_ai', reason: 'birthdate_month_or_day_out_of_range' };
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (day > days[month-1])
+    return { status: 'needs_ai', reason: 'birthdate_invalid_calendar_day' };
+  return { status: 'valid', reason: 'western_birthdate_ymd_complete' };
+}
+
+function validateStructuredGivenNameStrokeCount(text, rule) {
+  const t = normalizeStructuredText(text).trim();
+  if (!t) return { status: 'needs_ai', reason: 'given_name_strokes_empty' };
+  if (/[?？]/.test(t)) return { status: 'needs_ai', reason: 'given_name_strokes_question_or_mixed' };
+  if (/(?:苗字|名字|姓|姓名|総画数|合計画数)/u.test(t))
+    return { status: 'needs_ai', reason: 'given_name_strokes_possible_surname_mix' };
+  const s = t
+    .replace(/^(?:私の|わたしの|僕の)?(?:下の名前(?:の画数)?|名前(?:の画数)?|画数)(?:は|が|を)?\s*/u, '')
+    .replace(/(?:です|だと思います|になります)?[。!！\s]*$/u, '')
+    .trim();
+  const m = s.match(/^([1-9]\d{0,2})\s*画?(?:\s*[,，、]\s*(?:または|もしくは|あるいは)\s*([1-9]\d{0,2})\s*画?|\s*(?:または|もしくは|あるいは)\s*([1-9]\d{0,2})\s*画?)?$/u);
+  if (!m) return { status: 'needs_ai', reason: 'given_name_strokes_unclear_or_missing' };
+  const nums = [m[1],m[2],m[3]].filter(Boolean).map(Number);
+  if (nums.some(n => n > 200))
+    return { status: 'needs_ai', reason: 'given_name_strokes_out_of_range' };
+  return { status: 'valid', reason: nums.length === 2 ? 'given_name_two_stroke_candidates' : 'given_name_stroke_count_found' };
+}
 
 // ======================================================
 // type → validator
@@ -5692,7 +5736,13 @@ const STRUCTURED_VALIDATORS = {
     validateStructuredKanjiPairWithGold,
     
   emotion_choice_or_self_reflection:
-    validateStructuredEmotionChoiceOrSelfReflection
+    validateStructuredEmotionChoiceOrSelfReflection,
+
+  western_birthdate:
+    validateStructuredWesternBirthdate,
+
+  given_name_stroke_count:
+    validateStructuredGivenNameStrokeCount
 };
 
 

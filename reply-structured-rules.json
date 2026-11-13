@@ -7,47 +7,195 @@
     "requireExactCommentMatch": true
   },
   "fallbackProfiles": {
-      "12701desired_future": {
-    "enabled": true,
-    "maxAutoUse": 1,
-    "categories": {
-      "valid_answer": {
-        "description": "対象質問は「あなたが迎えたい未来をお伝えください」。本人が望む未来、叶えたいこと、改善したいこと、避けたい状態、維持したい暮らしのいずれかを、回答として実際に提示していれば成立する。「ひとことで」「簡潔に」は合否条件ではなく、文字数・文の数・希望の数・具体性に制限を設けない。長文、詳しい事情説明、複数の希望、箇条書き、誤字、口語でも希望が読み取れれば成立する。「お金持ちになりたい」「健康になりたい」「ある人と結ばれたい」「幸せになりたい」「今のままでいい」「金運」「健康」「復縁」「家族の幸せ」「病気をしたくない」も有効。複数の希望を挙げて一つに選べない場合も、希望は回答済みとして扱う。「できたら」「無理かもしれませんが」等を伴っても希望が示されていれば成立する。質問後の複数メッセージを確認し、どれかに希望が明確にあれば、他に挨拶・補足・不安・記入方法の質問があるだけで不成立にしない。希望が回答済みなら、下記の未回答用カテゴリより本カテゴリを優先する。ただし、例文の引用や他人の発言の紹介だけ、願望の全面否定だけ、現在の事情の報告だけから、本人の希望を推測して作ってはいけない。「借金がある」だけで「借金を返したい」と補わない。「『健康になりたい』とはどういう意味ですか」だけを本人の希望とみなさない。",
-        "action": "continue_without_ai"
+    "12702western_birthdate": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "本人の生年月日を4桁の西暦年・月・日まで明示している。例：1980年5月3日、1980/5/3、西暦2001年12月20日。年齢や和暦のみ、年月のみ、存在しない日付、他人の生年月日は不可。入力形式が異なっても西暦の年月日が確定すれば成立。本人の回答と確認できる場合だけ。",
+          "action": "continue_without_ai"
+        },
+        "era_conversion_question": {
+          "description": "昭和・平成・令和など和暦で答えてよいか、西暦への直し方を質問し、まだ西暦の年月日を示していない。",
+          "template": "ご連絡確認しました。\n\n今回必要なのは、西暦での生年月日です。昭和・平成・令和などの年号ではなく、年を4桁の数字にしてお教え下さい。\n\n例えば「1980年5月3日」という形式です。ご自身の生年月日を西暦の年月日でお送り下さいね。",
+          "commentPolicy": "same"
+        },
+        "year_missing": {
+          "description": "月日だけ、年齢だけ、あるいは年号の末尾2桁だけで、西暦4桁の年を確認できない。",
+          "template": "月日については確認しましたが、西暦の年がまだ特定できません。\n\n生まれた年から「1980年5月3日」のように、西暦4桁・月・日を揃えてお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "date_incomplete": {
+          "description": "西暦年だけ・年月だけなど、月または日が未提示で、生年月日が完成していない。",
+          "template": "生まれた年については確認しました。今回は西暦の年だけではなく、月日まで必要となります。\n\n「1980年5月3日」のように、生年月日を揃えてお送り下さいね。",
+          "commentPolicy": "same"
+        },
+        "uncertain_date": {
+          "description": "本人が生年月日を正確には覚えていない、年月日に自信がないなど、答える意思はあるが特定できない。",
+          "template": "生年月日について、まだ確認できない部分があるのですね。\n\nこちらで生まれた日付を推測することはできませんので、確認できた西暦の年・月・日をそのままお教え下さい。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "本人の生年月日そのものを伝えることへのプライバシー上の不安を示しており、まだ回答していない。",
+          "template": "生年月日をお伝えすることに抵抗があるというお話は理解しました。\n\n今回、四柱天命数を算出するための資料として、西暦の生年月日をお伺いしています。回答されるかはご自身でご判断下さい。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "今回の生年月日そのものを答えたくない・教えたくないと明確に拒否している。料金や鑑定継続の拒否とは区別する。",
+          "template": "生年月日の回答を控えたいというご意向は理解しました。\n\n今回の質問では、西暦の生年月日を確認してから次の鑑定内容へ進む形になっています。ご回答いただける場合は、年・月・日をお教え下さい。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "生年月日を何のために聞くのか、質問の用途・目的を尋ね、まだ回答していない。",
+          "template": "生年月日を伺っているのは、四柱天命数を算出し、鑑定上の現状を確認するためです。\n\nそのため、西暦の年・月・日をお送りいただく必要があります。ご自身の生年月日を西暦から教えて下さいね。",
+          "commentPolicy": "same"
+        },
+        "invalid_date": {
+          "description": "存在しない月日や入力間違いを疑う日付が記載されており、正しい生年月日が確認できない。",
+          "template": "ご連絡は確認しましたが、記載された生年月日の月日を確認できませんでした。\n\n西暦の年・月・日をもう一度ご確認のうえ、お送り下さいね。",
+          "commentPolicy": "same"
+        }
       },
-      "meaning_question": {
-        "description": "迎えたい未来・希望をなぜ聞くのか、何に使うのか、その質問の意味や目的を尋ねており、本人の希望はまだ一つも回答されていない。希望を既に示している場合はvalid_answer。",
-        "template": "これからの鑑定で、あなたがどのような未来を望んでいらっしゃるのかを踏まえるために伺っております。金銭面、健康、人とのご縁など、望んでいらっしゃることをご自身の言葉でお聞かせ下さい。詳しくお話しいただいても構いません。",
-        "commentPolicy": "same"
-      },
-      "answer_format_question": {
-        "description": "何を書けばよいか、一言でないといけないか、長文や複数の希望でもよいか等、答え方だけを質問しており、本人の希望はまだ一つも提示していない。具体的または大まかな希望を既に挙げている場合はvalid_answer。",
-        "template": "必ず一言にまとめる必要はございません。詳しく書いていただいても、望むことが複数あっても大丈夫です。これからどうなりたいか、ご自身の言葉でお伝え下さいね。",
-        "commentPolicy": "same"
-      },
-      "uncertain_answer": {
-        "description": "「何を望んでいるのか分からない」「まだ思い浮かばない」「決められない」など、希望の回答に迷っており、希望の内容は一つも提示していない。複数候補が既に書かれている場合、「幸せになりたい」等の大まかな希望がある場合、「今のままでいい」と現状維持を望んでいる場合はvalid_answer。",
-        "template": "はっきりとした目標まで決める必要はございません。「幸せになりたい」「穏やかに暮らしたい」といった大まかなご希望でも構いませんので、今のお気持ちに近いものをお聞かせ下さい。",
-        "commentPolicy": "same"
-      },
-      "privacy_concern": {
-        "description": "希望やその背景を伝えること自体について、個人情報・相手の名前・私生活などを知られる不安があり、希望をまだ回答していない。詳細は伏せながらでも希望を述べている場合はvalid_answer。料金や鑑定の効果への不安は本カテゴリではない。",
-        "template": "お相手の実名や、私生活の詳しい事情までお話しいただく必要はございません。「ある人と結ばれたい」のように、差し支えのない表現で望んでいらっしゃる未来をお聞かせ下さい。",
-        "commentPolicy": "same"
-      },
-      "refusal": {
-        "description": "今回の質問である「迎えたい未来・希望を伝えること」自体を、答えたくない・話したくないと明確に拒否しており、希望は一つも回答していない。詳しい事情だけは伏せたいが希望は述べている場合はvalid_answer。鑑定継続、料金、購入、有料利用など別件への拒否は本カテゴリへ入れず、希望の回答もなければother。",
-        "template": "無理にお話しになる必要はございません。詳しい事情は伏せたままで構いませんので、お伝えいただけるご希望がありましたら、その言葉をお聞かせ下さいね。",
-        "commentPolicy": "same"
-      },
-      "missing_answer": {
-        "description": "「はい」「分かりました」「お願いします」「ありがとうございます」のみなど、質問への受け答えはあるが、望む未来が一つも書かれていない。または現在・過去の自分の事情だけを説明し、どうなりたいかは述べていない。希望が一つでも含まれる場合は、長文でもvalid_answer。全く別件の質問・相談・雑談はother。",
-        "template": "ここでは、あなたがこれからどのようになりたいかをお聞きしております。お金、健康、人とのご縁など、望んでいらっしゃる未来を、ご自身の言葉でお伝え下さい。短くまとめなくても構いません。",
-        "commentPolicy": "same"
-      }
+      "noTemplateAction": "existing_false_flow"
     },
-    "noTemplateAction": "existing_false_flow"
-  },
+    "12702given_name_stroke_count": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "本人の「下の名前」の画数が数字として示されている。例：23画、23、名前は23画です。原文が許容する「23画、または24画」のような候補2つも有効。3候補以上・姓名全体の合計画数のみ・苗字の画数のみ・漢字表記だけで画数未記載は不可。",
+          "action": "continue_without_ai"
+        },
+        "surname_question": {
+          "description": "姓も含めるのか、下の名前だけなのか、どの文字を数えるのか質問している。",
+          "template": "ここでお伺いしているのは、苗字を除いた「下のお名前」の画数です。\n\n姓名を合わせた画数ではなく、お名前の部分だけを数えてお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "count_method_question": {
+          "description": "旧字体・新字体・難しい漢字など、画数の数え方を尋ねている。",
+          "template": "難しい漢字では、画数の数え方によって違いが出る場合もあるでしょう。\n\n原稿でお伝えしている通り、どうしても一つに決められない場合は「23画、または24画」のように、考えられる二つの画数を教えて下さいね。",
+          "commentPolicy": "same"
+        },
+        "uncertain_count": {
+          "description": "画数が分からない、または候補はあるが正確に判断できないと伝え、具体的な画数はまだ示していない。",
+          "template": "お名前の画数について判断が難しいのですね。\n\n今回必要なのは下のお名前の画数です。一つに確定できなければ「○画、または○画」の形でも構いませんので、確認できた数字をお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "too_many_candidates": {
+          "description": "画数が3つ以上挙げられ、どれを使うべきか判断できず質問している。",
+          "template": "画数の候補が複数あるのですね。\n\n今回の原稿でご案内しているのは、確定できない場合に二つの候補を示していただく形です。お名前の画数を確認し、候補を二つまでにしてお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "なぜ画数が必要なのか、質問の目的を聞いている。",
+          "template": "お名前の画数は、四柱推命に用いる数字として確認しています。\n\n苗字は含めず、下のお名前だけの画数をお教え下さい。判断が難しい場合は二つの候補でも構いません。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "名前や名前の画数を伝えること自体へのプライバシー上の懸念があり、画数は回答していない。",
+          "template": "ご心配の点は理解しました。今回はお名前の文字そのものではなく、下のお名前の画数をお伺いしています。\n\n回答する場合は、数字だけでも構いませんので画数をお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "画数を伝えること自体を拒否しており、質問への回答がない。別件の拒否はother。",
+          "template": "画数の回答を控えたいというご意向は理解しました。\n\n今回の確認では下のお名前の画数が必要となります。ご回答いただける場合は、苗字を除いた名前の画数をお知らせ下さい。",
+          "commentPolicy": "same"
+        },
+        "missing_answer": {
+          "description": "漢字の氏名・下の名前だけを送った、あるいは「分かりました」だけなど画数を提示していない。",
+          "template": "お返事ありがとうございます。今回伺っているのは、名前の漢字そのものではなく「下のお名前」の画数です。\n\n数字で何画かをお教え下さいね。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12702desired_amount": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "本人が手に入れたい理想の金額を、円・万円・億円などの単位付きで示している。例：「理想額500万円」「500万円が希望です」「1億円ほど」。指定例文に完全一致する必要はない。今の収入・現在の借金残高などの現状数値だけ、数字の単位がない回答、架空の例を質問しているだけでは不可。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "希望金額を聞く目的、理想額の意味や範囲を質問し、本人の希望額はまだ示していない。",
+          "template": "今回伺っているのは、今の貴方がどのくらいの金額を必要としているかです。\n\n今後の鑑定に必要な材料として確認しますので、現実的に考えた希望額を具体的な金額でお教え下さい。",
+          "commentPolicy": "same"
+        },
+        "uncertain_amount": {
+          "description": "希望額を決められない、目安が分からないと伝えているが、希望額を具体的に答えていない。",
+          "template": "金額を決めかねているのですね。\n\nここでは、今ご自身が思いつく範囲で、どのくらいの金額が必要なのかを確認したいのです。生活の中で必要だと思う額を考え、「○万円」など単位を付けて教えて下さいね。",
+          "commentPolicy": "same"
+        },
+        "amount_unit_missing": {
+          "description": "「500」「3000くらい」など数値だけを送っているが円・万円などの単位がなく、金額を特定できない。",
+          "template": "数字は確認しましたが、そのままでは金額を特定できません。\n\n「500万円」「3000万円」のように、円・万円・億円などの単位を付けて、希望額をお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "multiple_amounts": {
+          "description": "複数の金額候補だけがあり、どの額を回答とするか質問している。明確な第一希望や必要額を表明している場合はvalid_answer。",
+          "template": "複数の金額が思い浮かんでいるのですね。\n\n今回確認したいのは、ご自身が今必要だと考えている金額です。その中から目安となる希望額を一つ選び、単位付きでお教え下さいね。",
+          "commentPolicy": "same"
+        },
+        "format_question": {
+          "description": "「理想額○円」という文字を必ず含めるべきか、書式だけを質問している。希望額が本人の回答として示されている場合はvalid_answer。",
+          "template": "「理想額○円」は記入例ですので、同じ形に揃えなくても構いません。\n\n大切なのは、希望する金額が分かることです。「500万円」のように、単位を付けてお送り下さいね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "希望金額そのものを言いたくない・回答したくないと拒否している。課金や継続の拒否とは区別する。",
+          "template": "希望額を答えたくないというご意向は理解しました。\n\n今回の質問では、鑑定を進めるための材料として希望金額を確認しています。ご回答いただける場合は、今必要だと思う額をお教え下さい。",
+          "commentPolicy": "same"
+        },
+        "missing_answer": {
+          "description": "「お金がほしい」「たくさん」「幸せになりたい」など、数値として特定できる理想金額を示していない。",
+          "template": "お金についてのご希望は確認しました。今回必要なのは、その希望を具体的な金額にした回答です。\n\n「500万円」のように、金額と単位を添えてお教え下さいね。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12701desired_future": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "対象質問は「あなたが迎えたい未来をお伝えください」。本人が望む未来、叶えたいこと、改善したいこと、避けたい状態、維持したい暮らしのいずれかを、回答として実際に提示していれば成立する。「ひとことで」「簡潔に」は合否条件ではなく、文字数・文の数・希望の数・具体性に制限を設けない。長文、詳しい事情説明、複数の希望、箇条書き、誤字、口語でも希望が読み取れれば成立する。「お金持ちになりたい」「健康になりたい」「ある人と結ばれたい」「幸せになりたい」「今のままでいい」「金運」「健康」「復縁」「家族の幸せ」「病気をしたくない」も有効。複数の希望を挙げて一つに選べない場合も、希望は回答済みとして扱う。「できたら」「無理かもしれませんが」等を伴っても希望が示されていれば成立する。質問後の複数メッセージを確認し、どれかに希望が明確にあれば、他に挨拶・補足・不安・記入方法の質問があるだけで不成立にしない。希望が回答済みなら、下記の未回答用カテゴリより本カテゴリを優先する。ただし、例文の引用や他人の発言の紹介だけ、願望の全面否定だけ、現在の事情の報告だけから、本人の希望を推測して作ってはいけない。「借金がある」だけで「借金を返したい」と補わない。「『健康になりたい』とはどういう意味ですか」だけを本人の希望とみなさない。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "迎えたい未来・希望をなぜ聞くのか、何に使うのか、その質問の意味や目的を尋ねており、本人の希望はまだ一つも回答されていない。希望を既に示している場合はvalid_answer。",
+          "template": "これからの鑑定で、あなたがどのような未来を望んでいらっしゃるのかを踏まえるために伺っております。金銭面、健康、人とのご縁など、望んでいらっしゃることをご自身の言葉でお聞かせ下さい。詳しくお話しいただいても構いません。",
+          "commentPolicy": "same"
+        },
+        "answer_format_question": {
+          "description": "何を書けばよいか、一言でないといけないか、長文や複数の希望でもよいか等、答え方だけを質問しており、本人の希望はまだ一つも提示していない。具体的または大まかな希望を既に挙げている場合はvalid_answer。",
+          "template": "必ず一言にまとめる必要はございません。詳しく書いていただいても、望むことが複数あっても大丈夫です。これからどうなりたいか、ご自身の言葉でお伝え下さいね。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "「何を望んでいるのか分からない」「まだ思い浮かばない」「決められない」など、希望の回答に迷っており、希望の内容は一つも提示していない。複数候補が既に書かれている場合、「幸せになりたい」等の大まかな希望がある場合、「今のままでいい」と現状維持を望んでいる場合はvalid_answer。",
+          "template": "はっきりとした目標まで決める必要はございません。「幸せになりたい」「穏やかに暮らしたい」といった大まかなご希望でも構いませんので、今のお気持ちに近いものをお聞かせ下さい。",
+          "commentPolicy": "same"
+        },
+        "privacy_concern": {
+          "description": "希望やその背景を伝えること自体について、個人情報・相手の名前・私生活などを知られる不安があり、希望をまだ回答していない。詳細は伏せながらでも希望を述べている場合はvalid_answer。料金や鑑定の効果への不安は本カテゴリではない。",
+          "template": "お相手の実名や、私生活の詳しい事情までお話しいただく必要はございません。「ある人と結ばれたい」のように、差し支えのない表現で望んでいらっしゃる未来をお聞かせ下さい。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "今回の質問である「迎えたい未来・希望を伝えること」自体を、答えたくない・話したくないと明確に拒否しており、希望は一つも回答していない。詳しい事情だけは伏せたいが希望は述べている場合はvalid_answer。鑑定継続、料金、購入、有料利用など別件への拒否は本カテゴリへ入れず、希望の回答もなければother。",
+          "template": "無理にお話しになる必要はございません。詳しい事情は伏せたままで構いませんので、お伝えいただけるご希望がありましたら、その言葉をお聞かせ下さいね。",
+          "commentPolicy": "same"
+        },
+        "missing_answer": {
+          "description": "「はい」「分かりました」「お願いします」「ありがとうございます」のみなど、質問への受け答えはあるが、望む未来が一つも書かれていない。または現在・過去の自分の事情だけを説明し、どうなりたいかは述べていない。希望が一つでも含まれる場合は、長文でもvalid_answer。全く別件の質問・相談・雑談はother。",
+          "template": "ここでは、あなたがこれからどのようになりたいかをお聞きしております。お金、健康、人とのご縁など、望んでいらっしゃる未来を、ご自身の言葉でお伝え下さい。短くまとめなくても構いません。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
     "12700emotion_choice_or_self_reflection": {
       "enabled": true,
       "maxAutoUse": 1,
@@ -826,21 +974,81 @@
     }
   },
   "rules": {
-      "12701mu1/sinko/3": {
-    "enabled": true,
-    "type": "desired_future",
-    "fallbackProfile": "12701desired_future",
-    "messagePolicy": {
-      "scope": "all_after_latest_kanteishi",
-      "matchMode": "any_message_valid",
-      "preserveSeparateMessages": true
+    "12702mu1/do": {
+      "enabled": true,
+      "type": "western_birthdate",
+      "fallbackProfile": "12702western_birthdate",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
     },
-    "result": {
-      "valid": "continue_without_ai",
-      "ambiguous": "use_existing_ai",
-      "rejected": "use_existing_ai"
-    }
-  },
+    "12702mu2/do": {
+      "enabled": true,
+      "type": "western_birthdate",
+      "fallbackProfile": "12702western_birthdate",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12702mu1/sinko/1": {
+      "enabled": true,
+      "type": "given_name_stroke_count",
+      "fallbackProfile": "12702given_name_stroke_count",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12702mu1/sinko/2": {
+      "enabled": true,
+      "type": "money_amount",
+      "fallbackProfile": "12702desired_amount",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12701mu1/sinko/3": {
+      "enabled": true,
+      "type": "desired_future",
+      "fallbackProfile": "12701desired_future",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
     "12700mu1/sinko/2": {
       "enabled": true,
       "type": "emotion_choice_or_self_reflection",

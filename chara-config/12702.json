@@ -1,0 +1,89 @@
+{
+    "charaId": "12702",
+    "globalStopTime": {
+        "start": "22:00",
+        "end": "09:00"
+    },
+    "spanMatchExclude": [
+        "12702mu1/sinko/3",
+        "12702mu1/sinko/5",
+        "12702mu1/sinko/6",
+        "12702mu1/sinko/7",
+        "12702mu1/sinko/10",
+        "12702mu1/sinko/11"
+    ],
+    "phases": {
+        "mu1": {
+            "fileId": "12702mu1sinko",
+            "do": {
+                "searchTarget": "12702mu1/sinko/1",
+                "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1800": 30,
+                "after1800": 20
+            }
+        },
+        "mu2": {
+            "fileId": "12702mu2sinko",
+            "ho": {
+                "searchTarget": "12702mu2/sinko/1",
+                "useCurrentRow": true
+            },
+            "do": {
+                "fileId": "12702mu2hissinko",
+                "searchTarget": "12702mu2/his/1",
+                "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1800": 35,
+                "after1800": 25
+            }
+        },
+        "mu2his": {
+            "fileId": "12702mu2hissinko"
+        },
+        "yu1": {
+            "fileId": "12702yu1sinko",
+            "ho": {
+                "searchTarget": "12702yu1/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu2": {
+            "fileId": "12702yu2sinko",
+            "ho": {
+                "searchTarget": "12702yu2/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu8": {
+            "fileId": "12702yu8sinko",
+            "ho": {
+                "searchTarget": "12702yu8/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4mu": {
+            "fileId": "12702yu4musinko",
+            "ho": {
+                "searchTarget": "12702yu4mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu7mu": {
+            "fileId": "12702yu7musinko",
+            "ho": {
+                "searchTarget": "12702yu7mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu10mu": {
+            "fileId": "12702yu10musinko",
+            "ho": {
+                "searchTarget": "12702yu10mu/sinko/1",
+                "useCurrentRow": true
+            }
+        }
+    }
+}
