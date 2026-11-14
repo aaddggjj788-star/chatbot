@@ -5674,7 +5674,7 @@ function validateStructuredGivenNameStrokeCount(text, rule) {
     .replace(/^(?:私の|わたしの|僕の)?(?:下の名前(?:の画数)?|名前(?:の画数)?|画数)(?:は|が|を)?\s*/u, '')
     .replace(/(?:です|だと思います|になります)?[。!！\s]*$/u, '')
     .trim();
-  const m = s.match(/^([1-9]\d{0,2})\s*画?(?:\s*[,，、]\s*(?:または|もしくは|あるいは)\s*([1-9]\d{0,2})\s*画?|\s*(?:または|もしくは|あるいは)\s*([1-9]\d{0,2})\s*画?)?$/u);
+  const m = s.match(/^([1-9]\d{0,2})\s*(?:画|かく)?(?:\s*[,，、]?\s*(?:または|もしくは|あるいは)\s*([1-9]\d{0,2})\s*(?:画|かく)?)?$/u);
   if (!m) return { status: 'needs_ai', reason: 'given_name_strokes_unclear_or_missing' };
   const nums = [m[1],m[2],m[3]].filter(Boolean).map(Number);
   if (nums.some(n => n > 200))
