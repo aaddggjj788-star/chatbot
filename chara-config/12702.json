@@ -44,6 +44,13 @@
         "mu2his": {
             "fileId": "12702mu2hissinko"
         },
+        "yu1am": {
+            "fileId": "12702yu1amsinko",
+            "ho": {
+                "searchTarget": "12702yu1am/sinko/1",
+                "useCurrentRow": true
+            }
+        },
         "yu1": {
             "fileId": "12702yu1sinko",
             "ho": {
