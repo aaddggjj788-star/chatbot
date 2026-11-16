@@ -9222,10 +9222,19 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
         );
       }      
 
+      // 自動返信の通知用に、判定対象と実送信本文末尾のコメントを保持する。
+      // sinko+1を推測せず、最終的に送信したtextToSendから抽出する。
+      const sentCommentMatches = [...textToSend.matchAll(/<!--\s*([^>]*?)\s*-->/g)];
+      const sentComment = sentCommentMatches.length
+        ? sentCommentMatches[sentCommentMatches.length - 1][1].trim()
+        : '';
+
       autoSendResults.push({
         userName,
         uid,
         kid,
+        sourceComment: latestComment || '',
+        sentComment,
 
         fallbackProfile:
           structuredFallbackProfileName || '',
@@ -12743,37 +12752,38 @@ async function checkReplies(options = {}) {
           ? result.sendResults
           : [];
 
-      const sendResultLines =
-        sendResults.length > 0
-          ? sendResults.map(item => {
+      // LINEの5000文字制限を超えないように、返信1件単位で切り詰める。
+      // 合計件数と省略件数は常に残す。
+      const maxResultLength = 4700;
+      const resultHeader = '【送信結果】\n\n';
+      const resultFooter = `\n\n合計：${result?.sentCount ?? 0}件`;
+      const resultBlocks = sendResults.map(item => {
+        const fallbackInfo = item.fallbackCategory
+          ? (`\n※フォールバックテンプレート使用：${item.fallbackProfile || '-'} / ${item.fallbackCategory}`)
+          : '';
+        return [
+          `・${item.uid}へ${item.kid}より送信しました`,
+          `${item.sourceComment || '（取得なし）'}に対して`,
+          `${item.sentComment || '（取得なし）'}を返信`
+        ].join('\n') + fallbackInfo;
+      });
 
-              const fallbackInfo =
-                item.fallbackCategory
-                  ? (
-                      `\n  ※フォールバックテンプレート使用：` +
-                      `${item.fallbackProfile || '-'} / ` +
-                      `${item.fallbackCategory}`
-                    )
-                  : '';
+      const shownBlocks = [];
+      let currentLength = resultHeader.length + resultFooter.length;
+      for (const block of resultBlocks) {
+        // 省略表示の余白を確保する。
+        if (currentLength + block.length + 2 + 80 > maxResultLength) break;
+        shownBlocks.push(block);
+        currentLength += block.length + 2;
+      }
+      const omittedCount = resultBlocks.length - shownBlocks.length;
+      const resultMessage =
+        resultHeader +
+        (shownBlocks.length ? shownBlocks.join('\n\n') : (resultBlocks.length ? '詳細表示なし' : '送信対象はありませんでした')) +
+        (omittedCount > 0 ? `\n\n（ほか${omittedCount}件の返信詳細は文字数上限のため省略）` : '') +
+        resultFooter;
 
-              return (
-                `・${item.uid}へ${item.kid}より送信しました` +
-                fallbackInfo
-              );
-            })
-          : [
-              '送信対象はありませんでした'
-            ];
-
-      await sendLine(
-        [
-          '【送信結果】',
-          '',
-          ...sendResultLines,
-          '',
-          `合計：${result?.sentCount ?? 0}件`
-        ].join('\n')
-      );
+      await sendLine(resultMessage);
 
       await sendLine(
         [
