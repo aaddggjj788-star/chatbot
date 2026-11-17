@@ -1,7 +1,7 @@
 {
     "charaId": "12702",
     "globalStopTime": {
-        "start": "22:00",
+        "start": "22:20",
         "end": "09:00"
     },
     "spanMatchExclude": [
@@ -65,12 +65,28 @@
                 "useCurrentRow": true
             }
         },
+        "yu5": {
+            "fileId": "12702yu5sinko",
+            "ho": {
+                "searchTarget": "12702yu5/sinko/1",
+                "useCurrentRow": true
+            }
+        },
         "yu8": {
             "fileId": "12702yu8sinko",
             "ho": {
                 "searchTarget": "12702yu8/sinko/1",
                 "useCurrentRow": true
             }
+        },
+        "yu4": {
+            "fileId": "12702yu2sinko"
+        },
+        "yu7": {
+            "fileId": "12702yu5sinko"
+        },
+        "yu10": {
+            "fileId": "12702yu8sinko"
         },
         "yu4mu": {
             "fileId": "12702yu4musinko",
@@ -91,6 +107,12 @@
             "ho": {
                 "searchTarget": "12702yu10mu/sinko/1",
                 "useCurrentRow": true
+            },
+            "sinko12": {
+                "useHistorySearch": true,
+                "historyCharaId": "12702yu8",
+                "replaceHeader": "ではこちらへ参ります。\n\n良いですよ。\n\n着実に前進し、結果に向かってます。\n\nその事実は糧とすべきものですので、しっかりとその調子でお願いしますね。",
+                "fallbackSearch": "12702yu8/sinko/2"
             }
         }
     }

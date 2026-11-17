@@ -5,7 +5,7 @@
     "end": "09:00"
   },
   "spanMatchExclude": [
-   "12541mu1/sinko/4"
+    "12541mu1/sinko/4"
   ],
   "phases": {
     "mu1": {
@@ -18,7 +18,10 @@
     "mu2": {
       "fileId": "12541mu2sinko",
       "sinko0": {
-        "specialProcess": ["saveMemo1", "saveNickname"],
+        "specialProcess": [
+          "saveMemo1",
+          "saveNickname"
+        ],
         "searchTarget": "12541mu2/sinko/1",
         "useCurrentRow": true
       },
@@ -27,6 +30,47 @@
         "useCurrentRow": true
       }
     },
+    "yu1": {
+      "fileId": "12541yu1sinko",
+      "ho": {
+        "searchTarget": "12541yu1/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu2": {
+      "fileId": "12541yu2sinko",
+      "ho": {
+        "searchTarget": "12541yu2/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu3": {
+      "fileId": "12541yu3sinko",
+      "ho": {
+        "searchTarget": "12541yu3/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu4": {
+      "fileId": "12541yu3sinko"
+    },
+    "yu5": {
+      "fileId": "12541yu5sinko",
+      "ho": {
+        "searchTarget": "12541yu5/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu7mu": {
+      "fileId": "12541yu7musinko",
+      "ho": {
+        "searchTarget": "12541yu7mu/sinko/1",
+        "useCurrentRow": true
+      }
+    },
+    "yu7": {
+      "fileId": "12541yu5sinko"
+    },
     "yu8": {
       "fileId": "12541yu8sinko",
       "ho": {
@@ -34,5 +78,5 @@
         "useCurrentRow": true
       }
     }
-  }    
+  }
 }
