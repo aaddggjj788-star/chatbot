@@ -13,7 +13,7 @@
                 "useCurrentRow": true
             },
             "do": {
-                "searchTarget": "12705mu2/his/1",
+                "searchTarget": "12705mu2/his/2",
                 "useCurrentRow": true
             },
             "minElapsedMinutes": {
@@ -87,5 +87,5 @@
         "yu12": {
             "fileId": "12705yu10sinko"
         }
-    }
-}
+     }
+  }
