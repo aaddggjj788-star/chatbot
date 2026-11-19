@@ -7,6 +7,42 @@
     "requireExactCommentMatch": true
   },
   "fallbackProfiles": {
+    "12705object_name_and_color": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "ユーザーが幸福を連想する対象の名前または種類と、その色の両方を明確に回答している。実物・想像の区別は問わない。例:『白い花』『桜でピンク色』『鍵は銀色』『金色の月』。会話が分割されていても両情報が明示されていれば認める。質問の再引用や曖昧な推測を回答に数えない。",
+          "action": "continue_without_ai"
+        },
+        "missing_color": {
+          "description": "対象の名前は明確だが色が示されていない。",
+          "template": "教えてくださってありがとうございます。そちらは何色でしょうか？ 色だけで構いませんので、お聞かせくださいね。",
+          "commentPolicy": "same"
+        },
+        "missing_object": {
+          "description": "色は明確だが何の色なのか対象が示されていない。",
+          "template": "色を教えてくださってありがとうございます。その色のものは何でしょうか？ 名前を教えてくださいね。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "対象や色を決められない、何も思いつかない、複数候補で迷っている。",
+          "template": "難しく考えなくても大丈夫ですよ。身近な花や鍵などでも、頭の中に思い浮かべたものでも構いません。ひとつ選んで、その名前と色を教えて頂けますか？",
+          "commentPolicy": "same"
+        },
+        "meaning_question": {
+          "description": "なぜ名前と色が必要なのか、何を選ぶべきかなど、質問の意味や目的を尋ねている。",
+          "template": "ご自分が幸福を連想できるものを、一つ選んで頂きたいのです。実物を用意できなくても大丈夫ですよ。思い浮かべたものの名前と色を教えてくださいね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "今回の名前や色の回答を明確に拒否している。鑑定継続や料金など、別件の拒否は含まない。",
+          "template": "無理にお答え頂く必要はありません。ただ、もし差し支えなければ、実物ではなくイメージでも構いませんので、思い浮かべたものの名前と色を教えてくださいね。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
     "12702western_birthdate": {
       "enabled": true,
       "maxAutoUse": 1,
@@ -978,6 +1014,21 @@
       "enabled": true,
       "type": "western_birthdate",
       "fallbackProfile": "12702western_birthdate",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12705mu2/sinko/2": {
+      "enabled": true,
+      "type": "object_name_and_color",
+      "fallbackProfile": "12705object_name_and_color",
       "messagePolicy": {
         "scope": "all_after_latest_kanteishi",
         "matchMode": "any_message_valid",

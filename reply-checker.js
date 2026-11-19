@@ -5682,6 +5682,69 @@ function validateStructuredGivenNameStrokeCount(text, rule) {
   return { status: 'valid', reason: nums.length === 2 ? 'given_name_two_stroke_candidates' : 'given_name_stroke_count_found' };
 }
 
+
+
+// ======================================================
+// 幸福を連想する物の名前 ＋ 色
+// 例：桜、ピンク色 / 自転車の鍵、銀色
+// ======================================================
+
+function validateStructuredObjectNameAndColor(text, rule) {
+  const t = normalizeStructuredText(text);
+
+  if (!t) {
+    return {
+      status: 'needs_ai',
+      reason: 'empty'
+    };
+  }
+
+  if (
+    /[?？]/.test(t) ||
+    /わからない|分からない|思いつかない|ありません|ないです|教えたくない|答えたくない/.test(t)
+  ) {
+    return {
+      status: 'needs_ai',
+      reason: 'uncertain_or_refusal'
+    };
+  }
+
+  // 明確な短文の物品名・色だけを機械判定する。
+  // その他はAIで意味判定する。
+
+  const object =
+    '(?:四つ葉のクローバー|クローバー|キーホルダー|自転車の鍵|家の鍵|鍵|さくら|桜|バラ|薔薇|チューリップ|ひまわり|向日葵|蓮|白蓮|花|月|星|太陽|虹|猫|犬|鳥|蝶|うさぎ|ハート|指輪|ぬいぐるみ|写真|絵|お守り|アクセサリー)';
+
+  const color =
+    '(?:ピンク|桃色|桜色|白|ホワイト|黒|ブラック|赤|レッド|青|ブルー|水色|緑|グリーン|黄|イエロー|紫|パープル|橙|オレンジ|金|ゴールド|銀|シルバー|茶|ブラウン|灰|グレー)(?:色)?';
+
+  const n = t
+    .replace(/[、，,・／/：:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const a = new RegExp(
+    `^(?:名前(?:は|:)?\\s*)?(${object})\\s*(?:で|です|の色は|色は|は|が|と|・|,)?\\s*(?:色(?:は|:)?\\s*)?(${color})(?:です|になります|だと思います)?[。！!]*$`
+  );
+
+  const b = new RegExp(
+    `^(?:色(?:は|:)?\\s*)?(${color})\\s*(?:の|で|と|・|,)?\\s*(?:名前(?:は|:)?\\s*)?(${object})(?:です)?[。！!]*$`
+  );
+
+  if (a.test(n) || b.test(n)) {
+    return {
+      status: 'valid',
+      reason: 'object_name_and_color_explicit'
+    };
+  }
+
+  return {
+    status: 'needs_ai',
+    reason: 'object_or_color_ambiguous'
+  };
+}
+
+
 // ======================================================
 // type → validator
 // ======================================================
@@ -5742,7 +5805,10 @@ const STRUCTURED_VALIDATORS = {
     validateStructuredWesternBirthdate,
 
   given_name_stroke_count:
-    validateStructuredGivenNameStrokeCount
+    validateStructuredGivenNameStrokeCount,
+
+  object_name_and_color:
+    validateStructuredObjectNameAndColor,    
 };
 
 
