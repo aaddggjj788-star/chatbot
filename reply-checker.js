@@ -6897,137 +6897,108 @@ function readFirstConsultationState() {
 
 async function saveFirstConsultation(page, kid, uid, historyUserTexts) {
   if (String(kid) !== '12646') return false;
+  uid = String(uid);
   const frame = page.frame({ name: 'ope_main' });
   if (!frame) throw new Error('ope_mainが取得できません');
 
-  // 100件履歴ページで「鑑定士送信なし」が確定した時点のユーザー本文。
-  // 履歴のDOMは新しい順なので、要約時は古い順に並べる。
+  // 履歴ページは新しい順。要約は古い順に渡す。
   const userTexts = (historyUserTexts || [])
     .map(t => cleanAiConversationText(String(t || '')))
     .filter(Boolean)
     .reverse();
   if (!userTexts.length) {
-    console.log(`[CONSULTATION] uid=${uid} 本文なし → スキップ`);
+    console.log(`[CONSULTATION] uid=${uid} ユーザー本文なし → スキップ`);
     return false;
   }
-
-
-  console.log(`[CONSULTATION-DEBUG] uid=${uid}`);
-console.log(`[CONSULTATION-DEBUG] URL=${frame.url()}`);
-
-console.log(
-  '[CONSULTATION-DEBUG] freeArea[1]件数=',
-  await frame.locator('input[name="freeArea[1]"]').count()
-);
-
-console.log(
-  '[CONSULTATION-DEBUG] freeArea一覧=',
-  await frame.locator('input[name^="freeArea"]').evaluateAll(
-    els => els.map(el => ({
-      name: el.name,
-      type: el.type,
-      value: el.value
-    }))
-  )
-);
-
-console.log(
-  '[CONSULTATION-DEBUG] 保存ボタン件数=',
-  await frame.locator('#appointment_memo').count()
-);
-
-
-console.log(
-  '[CONSULTATION-DEBUG] 個別メモ周辺HTML=',
-  await frame.locator('#appointment_memo').evaluate(
-    el => el.closest('table, form, div')?.outerHTML.slice(0, 5000)
-  )
-);
-
-console.log(
-  '[CONSULTATION-DEBUG] 入力欄一覧=',
-  await frame.locator('input[type="text"]').evaluateAll(
-    els => els.map(el => ({
-      name: el.name,
-      id: el.id,
-      value: el.value
-    }))
-  )
-);
-
-
-console.log(
-  '[CONSULTATION-DEBUG] freeArea親テーブル=',
-  await frame.locator('#appointment_memo').evaluate(
-    el => {
-      const table = el.closest('table');
-      return {
-        htmlLength: table?.outerHTML.length || 0,
-        hasFreeArea1: !!table?.querySelector(
-          'input[name="freeArea[1]"]'
-        ),
-        freeAreaNames: [...(table?.querySelectorAll(
-          'input[name^="freeArea"]'
-        ) || [])].map(input => input.name),
-        htmlTail: table?.outerHTML.slice(-5000) || ''
-      };
-    }
-  )
-);
-
-console.log(
-  '[CONSULTATION-DEBUG] freeArea文字列=',
-  await frame.evaluate(() =>
-    document.documentElement.outerHTML.includes('freeArea')
-  )
-);
-
-  const input = frame.locator('input[name="freeArea[1]"]');
-  await input.waitFor({ state: 'attached', timeout: 10000 });
-  if (await input.count() !== 1) throw new Error('freeArea[1]の入力欄が一意に見つかりません');
-  const button = frame.locator('input[name="memo_henko"]#appointment_memo');
-  await button.waitFor({ state: 'attached', timeout: 10000 });
 
   const key = `${uid}|12646`;
   const hash = crypto.createHash('sha256')
     .update(JSON.stringify(userTexts), 'utf8').digest('hex');
   const state = readFirstConsultationState();
-  const existing = (await input.inputValue()).trim();
-
-  if (state[key]?.hash === hash && existing) {
-    console.log(`[CONSULTATION] uid=${uid} 追加メッセージなし → スキップ`);
-    return false;
-  }
-  // 既存値が手入力や別機能のものなら、初回自動登録で上書きしない。
-  if (existing && !state[key]) {
-    console.log(`[CONSULTATION] uid=${uid} 既存freeArea[1]あり（自動登録履歴なし）→ 上書きしません`);
+  if (state[key]?.hash === hash) {
+    console.log(`[CONSULTATION] uid=${uid} 既に同じメッセージ群を処理済み → スキップ`);
     return false;
   }
 
-  if (DRY_RUN) {
-    console.log(`[DRY RUN] uid=${uid} 対象本文${userTexts.length}通。要約と保存は実行しません`);
-    return false;
-  }
+  // サポート画面はそのまま維持し、新しいタブで会員詳細 → ユニーク情報設定へ。
+  const detailLink = frame.locator(
+    `a[href*="mg_kyoseitaikai.php"][href*="ken_id=${uid}"]`
+  ).first();
+  await detailLink.waitFor({ state: 'attached', timeout: 10000 });
+  const detailHref = await detailLink.getAttribute('href');
+  if (!detailHref) throw new Error(`会員詳細URLがありません uid=${uid}`);
 
-  const summary = await summarizeFirstConsultation(userTexts);
-  if (!summary) throw new Error('初回相談の要約結果が空です');
+  const detailUrl = new URL(detailHref.replace(/&amp;/g, '&'), frame.url()).href;
+  const detailPage = await page.context().newPage();
+  try {
+    await detailPage.goto(detailUrl, { waitUntil: 'domcontentloaded' });
+    const uniqueLink = detailPage.locator(
+      `a[href*="mg_charaUserUniqueSetting.php"][href*="cid=12646"][href*="uid=${uid}"]`
+    ).first();
+    await uniqueLink.waitFor({ state: 'attached', timeout: 15000 });
+    const uniqueHref = await uniqueLink.getAttribute('href');
+    if (!uniqueHref) throw new Error(`ユニーク情報設定URLがありません uid=${uid}`);
 
-  if (existing !== summary) {
+    const uniqueUrl = new URL(uniqueHref.replace(/&amp;/g, '&'), detailPage.url()).href;
+    await detailPage.goto(uniqueUrl, { waitUntil: 'domcontentloaded' });
+    console.log(`[CONSULTATION] uid=${uid} ユニーク情報設定URL=${detailPage.url()}`);
+
+    const input = detailPage.locator('input[name="freeArea[1]"]');
+    await input.waitFor({ state: 'attached', timeout: 15000 });
+    if (await input.count() !== 1) throw new Error('freeArea[1]が一意に見つかりません');
+    const existing = (await input.inputValue()).trim();
+
+    // 人が入力した値を誤って上書きしない。
+    if (existing && !state[key]) {
+      console.log(`[CONSULTATION] uid=${uid} 手入力の可能性がある既存値を保護 → スキップ`);
+      return false;
+    }
+    if (DRY_RUN) {
+      console.log(`[DRY RUN] uid=${uid} メッセージ${userTexts.length}通 / 入力・保存しません`);
+      return false;
+    }
+
+    const summary = await summarizeFirstConsultation(userTexts);
+    if (!summary) throw new Error('OpenAIの相談要約が空です');
+    const maxLength = await input.evaluate(el => el.maxLength);
+    if (maxLength > -1 && summary.length > maxLength) {
+      throw new Error(`freeArea[1]の最大文字数${maxLength}を要約${summary.length}文字が超えています`);
+    }
     await input.fill(summary);
-    await button.click();
-    // 「更新」ボタン押下後の画面が変わる実装もあるため、ここでは待機を短く限定する。
-    await frame.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
+
+    // ボタンは「ユニーク情報設定」ページ上で改めて特定する。
+    // 別の更新ボタンを推測でクリックしない。
+    const updateButton = detailPage.locator('#appointment_memo');
+    if (await updateButton.count() !== 1) {
+      const buttons = await detailPage.locator('input[type="button"], input[type="submit"], button')
+        .evaluateAll(els => els.map(el => ({
+          tag: el.tagName, id: el.id, name: el.name,
+          value: el.value || '', text: (el.textContent || '').trim()
+        })));
+      throw new Error(`ユニーク情報設定の保存ボタン未特定: ${JSON.stringify(buttons)}`);
+    }
+    await updateButton.click();
+
+    // 更新後は再読込してDB保存された値を確認する。
+    await detailPage.goto(uniqueUrl, { waitUntil: 'domcontentloaded' });
+    const verifyInput = detailPage.locator('input[name="freeArea[1]"]');
+    await verifyInput.waitFor({ state: 'attached', timeout: 15000 });
+    const saved = await verifyInput.inputValue();
+    if (saved !== summary) {
+      throw new Error(`freeArea[1]保存未確認: 入力${summary.length}文字 / 再読込後${saved.length}文字`);
+    }
+
+    state[key] = { hash, count: userTexts.length, summary,
+      updatedAt: new Date().toISOString() };
+    const tmp = `${FIRST_CONSULTATION_STATE_FILE}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
+    fs.renameSync(tmp, FIRST_CONSULTATION_STATE_FILE);
+    console.log(`[CONSULTATION] uid=${uid} ${userTexts.length}通の要約をfreeArea[1]へ保存確認済み`);
+    return true;
+  } finally {
+    await detailPage.close().catch(() => {});
   }
-
-  // 保存ボタンの成功応答までは管理画面依存。最低限クリック成功後に処理済み記録を更新。
-  state[key] = { hash, count: userTexts.length, updatedAt: new Date().toISOString() };
-  const tempFile = `${FIRST_CONSULTATION_STATE_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tempFile, JSON.stringify(state, null, 2), 'utf8');
-  fs.renameSync(tempFile, FIRST_CONSULTATION_STATE_FILE);
-  console.log(`[CONSULTATION] uid=${uid} ${userTexts.length}通を要約・保存操作完了`);
-  return true;
 }
-
 
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
@@ -7423,9 +7394,13 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
           '履歴100件ページにも鑑定士メッセージなし'
       )
     ) {
-      await saveFirstConsultation(
-        page, kid, uid, analysis.firstConsultationUserTexts || []
-      );
+      try {
+        await saveFirstConsultation(
+          page, kid, uid, analysis.firstConsultationUserTexts || []
+        );
+      } catch (err) {
+        console.error(`[CONSULTATION-ERROR] uid=${uid} kid=${kid}: ${err.message}`);
+      }
     }
 
     if (!analysis.target) {
