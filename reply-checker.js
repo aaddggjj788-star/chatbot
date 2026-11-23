@@ -6936,6 +6936,32 @@ console.log(
   await frame.locator('#appointment_memo').count()
 );
 
+
+console.log(
+  '[CONSULTATION-DEBUG] 個別メモ周辺HTML=',
+  await frame.locator('#appointment_memo').evaluate(
+    el => el.closest('table, form, div')?.outerHTML.slice(0, 5000)
+  )
+);
+
+console.log(
+  '[CONSULTATION-DEBUG] 入力欄一覧=',
+  await frame.locator('input[type="text"]').evaluateAll(
+    els => els.map(el => ({
+      name: el.name,
+      id: el.id,
+      value: el.value
+    }))
+  )
+);
+
+console.log(
+  '[CONSULTATION-DEBUG] freeArea文字列=',
+  await frame.evaluate(() =>
+    document.documentElement.outerHTML.includes('freeArea')
+  )
+);
+
   const input = frame.locator('input[name="freeArea[1]"]');
   await input.waitFor({ state: 'attached', timeout: 10000 });
   if (await input.count() !== 1) throw new Error('freeArea[1]の入力欄が一意に見つかりません');
