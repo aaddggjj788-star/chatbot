@@ -6911,6 +6911,31 @@ async function saveFirstConsultation(page, kid, uid, historyUserTexts) {
     return false;
   }
 
+
+  console.log(`[CONSULTATION-DEBUG] uid=${uid}`);
+console.log(`[CONSULTATION-DEBUG] URL=${frame.url()}`);
+
+console.log(
+  '[CONSULTATION-DEBUG] freeArea[1]件数=',
+  await frame.locator('input[name="freeArea[1]"]').count()
+);
+
+console.log(
+  '[CONSULTATION-DEBUG] freeArea一覧=',
+  await frame.locator('input[name^="freeArea"]').evaluateAll(
+    els => els.map(el => ({
+      name: el.name,
+      type: el.type,
+      value: el.value
+    }))
+  )
+);
+
+console.log(
+  '[CONSULTATION-DEBUG] 保存ボタン件数=',
+  await frame.locator('#appointment_memo').count()
+);
+
   const input = frame.locator('input[name="freeArea[1]"]');
   await input.waitFor({ state: 'attached', timeout: 10000 });
   if (await input.count() !== 1) throw new Error('freeArea[1]の入力欄が一意に見つかりません');
