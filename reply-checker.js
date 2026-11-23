@@ -27,6 +27,7 @@ const { chromium } = require('playwright');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { parse: parseCSVSync } = require('csv-parse/sync');
 const { sendSlack, isSlackOnly } = require('./slack-notify');
 const { checkReplySafety } = require('./reply-safety');
@@ -6719,7 +6720,12 @@ async function analyzeMessagesFromRirekiHistory(page) {
           return {
             target: false,
             reason:
-              '履歴100件ページにも鑑定士メッセージなし'
+              '履歴100件ページにも鑑定士メッセージなし',
+            // DOMは新しい順。元の送信本文のみ保持する。
+            firstConsultationUserTexts: msgs
+              .filter(m => m.type === 'user')
+              .map(m => m.userText || '')
+              .filter(t => String(t).trim())
           };
         }
 
@@ -6829,6 +6835,128 @@ async function analyzeMessagesFromRirekiHistory(page) {
     }
   }
 }
+
+
+async function summarizeFirstConsultation(userTexts) {
+  const texts = userTexts
+    .map(text => String(text || '').trim())
+    .filter(Boolean);
+
+  if (texts.length === 0) return '';
+
+  const response = await openai.responses.create({
+    model: 'gpt-5-mini',
+    input: [
+      {
+        role: 'system',
+        content: [
+          'あなたは初回相談内容を整理する担当です。',
+          '以下の複数メッセージから、ユーザーが抱える悩みを要約してください。',
+          '',
+          '【ルール】',
+          '・すべて同一人物のメッセージとして扱う',
+          '・悩み、背景事情、希望を中心に整理する',
+          '・新しいメッセージによる訂正を優先する',
+          '・借金額、家族構成など重要な具体情報は維持する',
+          '・書かれていない事実を推測しない',
+          '・支離滅裂な文章でも意味を整理する',
+          '・意味が不明な部分は無理に解釈しない',
+          '・挨拶や重複表現は省略する',
+          '・鑑定結果や解決策は付け加えない',
+          '・第三者視点の自然な文章にする',
+          '・原則100〜250文字程度にまとめる',
+          '・要約した文章だけを出力する'
+        ].join('\n')
+      },
+      {
+        role: 'user',
+        content: texts.map((text, i) =>
+          `【メッセージ${i + 1}】\n${text}`
+        ).join('\n\n')
+      }
+    ]
+  });
+
+  return String(response.output_text || '').trim();
+}
+
+
+// 12646初回相談の更新状況を記録。メッセージが増えた場合だけ再要約する。
+const FIRST_CONSULTATION_STATE_FILE = path.join(__dirname, 'first-consultation-12646.json');
+
+function readFirstConsultationState() {
+  try {
+    if (!fs.existsSync(FIRST_CONSULTATION_STATE_FILE)) return {};
+    const data = JSON.parse(fs.readFileSync(FIRST_CONSULTATION_STATE_FILE, 'utf8'));
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  } catch (e) {
+    // ファイル破損時は、既存メモを上書きしないよう例外で止める。
+    throw new Error(`初回相談stateの読み込みに失敗: ${e.message}`);
+  }
+}
+
+async function saveFirstConsultation(page, kid, uid, historyUserTexts) {
+  if (String(kid) !== '12646') return false;
+  const frame = page.frame({ name: 'ope_main' });
+  if (!frame) throw new Error('ope_mainが取得できません');
+
+  // 100件履歴ページで「鑑定士送信なし」が確定した時点のユーザー本文。
+  // 履歴のDOMは新しい順なので、要約時は古い順に並べる。
+  const userTexts = (historyUserTexts || [])
+    .map(t => cleanAiConversationText(String(t || '')))
+    .filter(Boolean)
+    .reverse();
+  if (!userTexts.length) {
+    console.log(`[CONSULTATION] uid=${uid} 本文なし → スキップ`);
+    return false;
+  }
+
+  const input = frame.locator('input[name="freeArea[1]"]');
+  await input.waitFor({ state: 'attached', timeout: 10000 });
+  if (await input.count() !== 1) throw new Error('freeArea[1]の入力欄が一意に見つかりません');
+  const button = frame.locator('input[name="memo_henko"]#appointment_memo');
+  await button.waitFor({ state: 'attached', timeout: 10000 });
+
+  const key = `${uid}|12646`;
+  const hash = crypto.createHash('sha256')
+    .update(JSON.stringify(userTexts), 'utf8').digest('hex');
+  const state = readFirstConsultationState();
+  const existing = (await input.inputValue()).trim();
+
+  if (state[key]?.hash === hash && existing) {
+    console.log(`[CONSULTATION] uid=${uid} 追加メッセージなし → スキップ`);
+    return false;
+  }
+  // 既存値が手入力や別機能のものなら、初回自動登録で上書きしない。
+  if (existing && !state[key]) {
+    console.log(`[CONSULTATION] uid=${uid} 既存freeArea[1]あり（自動登録履歴なし）→ 上書きしません`);
+    return false;
+  }
+
+  if (DRY_RUN) {
+    console.log(`[DRY RUN] uid=${uid} 対象本文${userTexts.length}通。要約と保存は実行しません`);
+    return false;
+  }
+
+  const summary = await summarizeFirstConsultation(userTexts);
+  if (!summary) throw new Error('初回相談の要約結果が空です');
+
+  if (existing !== summary) {
+    await input.fill(summary);
+    await button.click();
+    // 「更新」ボタン押下後の画面が変わる実装もあるため、ここでは待機を短く限定する。
+    await frame.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
+  }
+
+  // 保存ボタンの成功応答までは管理画面依存。最低限クリック成功後に処理済み記録を更新。
+  state[key] = { hash, count: userTexts.length, updatedAt: new Date().toISOString() };
+  const tempFile = `${FIRST_CONSULTATION_STATE_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tempFile, JSON.stringify(state, null, 2), 'utf8');
+  fs.renameSync(tempFile, FIRST_CONSULTATION_STATE_FILE);
+  console.log(`[CONSULTATION] uid=${uid} ${userTexts.length}通を要約・保存操作完了`);
+  return true;
+}
+
 
 // ─── 返信処理メインループ ─────────────────────────────────────────
 
@@ -7214,6 +7342,20 @@ console.log(`[LIST] 実処理対象ユーザー: ${targets.length}件`);
       }
     }
 
+    // ==========================================
+    // 12646 初回相談内容の保存
+    // ==========================================
+    if (
+      String(kid) === '12646' &&
+      (
+        analysis.reason ===
+          '履歴100件ページにも鑑定士メッセージなし'
+      )
+    ) {
+      await saveFirstConsultation(
+        page, kid, uid, analysis.firstConsultationUserTexts || []
+      );
+    }
 
     if (!analysis.target) {
 
