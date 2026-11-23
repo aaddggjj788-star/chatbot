@@ -6955,6 +6955,26 @@ console.log(
   )
 );
 
+
+console.log(
+  '[CONSULTATION-DEBUG] freeArea親テーブル=',
+  await frame.locator('#appointment_memo').evaluate(
+    el => {
+      const table = el.closest('table');
+      return {
+        htmlLength: table?.outerHTML.length || 0,
+        hasFreeArea1: !!table?.querySelector(
+          'input[name="freeArea[1]"]'
+        ),
+        freeAreaNames: [...(table?.querySelectorAll(
+          'input[name^="freeArea"]'
+        ) || [])].map(input => input.name),
+        htmlTail: table?.outerHTML.slice(-5000) || ''
+      };
+    }
+  )
+);
+
 console.log(
   '[CONSULTATION-DEBUG] freeArea文字列=',
   await frame.evaluate(() =>
