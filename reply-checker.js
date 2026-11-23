@@ -6968,7 +6968,9 @@ async function saveFirstConsultation(page, kid, uid, historyUserTexts) {
 
     // ボタンは「ユニーク情報設定」ページ上で改めて特定する。
     // 別の更新ボタンを推測でクリックしない。
-    const updateButton = detailPage.locator('#appointment_memo');
+    const updateButton = detailPage.locator(
+      'input[type="submit"][name="memo_henko"]'
+    );
     if (await updateButton.count() !== 1) {
       const buttons = await detailPage.locator('input[type="button"], input[type="submit"], button')
         .evaluateAll(els => els.map(el => ({
