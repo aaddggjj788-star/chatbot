@@ -1,0 +1,81 @@
+{
+    "charaId": "12704",
+    "globalStopTime": {
+        "start": "22:30",
+        "end": "09:00"
+    },
+    "spanMatchExclude": [
+        "12704mu1/sinko/1",
+        "12704mu2/his/1",
+        "12704mu1/sinko/4"
+    ],
+    "phases": {
+        "mu1": {
+            "fileId": "12704mu1sinko",
+            "do": {
+                "searchTarget": "12704mu1/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "mu2": {
+            "fileId": "12704mu2sinko",
+            "do": {
+                "fileId": "12704mu2hissinko",
+                "searchTarget": "12704mu2/his/1",
+                "useCurrentRow": true
+            },
+            "ho": {
+                "searchTarget": "12704mu2/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "mu2his": {
+            "fileId": "12704mu2hissinko"
+        },
+        "yu1am": {
+            "fileId": "12704yu1amsinko",
+            "ho": {
+                "searchTarget": "12704yu1am/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu1": {
+            "fileId": "12704yu1sinko",
+            "ho": {
+                "searchTarget": "12704yu1/sinko/6",
+                "useCurrentRow": true
+            }
+        },
+        "yu2": {
+            "fileId": "12704yu2sinko",
+            "ho": {
+                "searchTarget": "12704yu2/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu3": {
+            "fileId": "12704yu3sinko",
+            "ho": {
+                "searchTarget": "12704yu3/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu5": {
+            "fileId": "12704yu5sinko",
+            "ho": {
+                "searchTarget": "12704yu5/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4mu": {
+            "fileId": "12704yu4musinko",
+            "ho": {
+                "searchTarget": "12704yu4mu/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4": {
+            "fileId": "12704yu3sinko"
+        }
+    }
+}

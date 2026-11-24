@@ -5746,6 +5746,61 @@ function validateStructuredObjectNameAndColor(text, rule) {
 }
 
 
+function validateStructuredConcernPresenceOrDisclosure(text, rule) {
+  const t = normalizeStructuredText(text);
+  if (!t) return { status: 'needs_ai', reason: 'empty' };
+  if (/[？?]/.test(t)) return { status: 'needs_ai', reason: 'question_or_mixed_answer' };
+  if (/(答えたくない|話したくない|教えたくない|言いたくない|分からない|わからない)/.test(t))
+    return { status: 'needs_ai', reason: 'refusal_or_uncertain' };
+  if (/^(?:悩み(?:は|が)?|困っていること(?:は|が)?)?\s*(?:あります|ある|ない|ありません|ないです|特にありません|特にない|今はありません|今はない)[。！!\s]*$/.test(t))
+    return { status: 'valid', reason: 'explicit_concern_presence_or_absence' };
+  // 「悩みがない」は明確な否定、「悩みがあります」も有効
+  if (/^(?:はい[、, ]*)?悩み(?:は|が)?\s*(?:あります|ある)[。！!\s]*$/.test(t)
+      || /^(?:いいえ[、, ]*)?悩み(?:は|が)?\s*(?:ありません|ない|ないです)[。！!\s]*$/.test(t))
+    return { status: 'valid', reason: 'explicit_concern_yes_no' };
+  const detail = validateStructuredInnerConcernDisclosure(text, rule);
+  if (detail?.status === 'valid') return detail;
+  return { status: 'needs_ai', reason: 'concern_requires_semantic_review' };
+}
+
+// 自分にとって最も必要なものを一つ挙げたかどうか
+function validateStructuredPriorityNeed(text, rule) {
+  const t = normalizeStructuredText(text);
+  if (!t) return { status: 'needs_ai', reason: 'empty' };
+  if (/[？?]/.test(t) || /(分からない|わからない|選べない|決められない|答えたくない|教えたくない)/.test(t))
+    return { status: 'needs_ai', reason: 'uncertain_question_or_refusal' };
+  // 複数の選択肢を並べただけの場合は「一つ」に確定しない
+  const choices = ['お金','愛情','健康','人との縁'];
+  const found = choices.filter(x => t.includes(x));
+  if (found.length > 1 && !/(一番|最も|特に|第一|優先)/.test(t))
+    return { status: 'needs_ai', reason: 'multiple_needs_unranked' };
+  if (/^(?:お金|愛情|健康|人との縁|仕事|安定した仕事|家族|時間|安心|自由|住まい|居場所|友人|信頼|収入|貯金|休息|平穏|人間関係|生きがい)(?:です|が欲しい|が必要|を望みます|が一番必要です)?[。！!\s]*$/.test(t))
+    return { status: 'valid', reason: 'single_priority_need_named' };
+  if (/^(?:今(?:の自分)?に(?:一番|最も)?必要なのは|今(?:一番|最も)必要なのは|私(?:が|にとって)(?:一番|最も)?(?:必要なのは|欲しいのは)|一番欲しいのは|最も必要なのは).{2,50}(?:です|だと思います|だ|。)?$/.test(t)
+      && !/(何|どれ|わからない|分からない)/.test(t))
+    return { status: 'valid', reason: 'explicit_priority_need_statement' };
+  return { status: 'needs_ai', reason: 'priority_need_requires_semantic_review' };
+}
+
+// 好きな点・嫌いな点・悩みの本質のうち一つでも答えれば成立
+function validateStructuredSelfReflectionAny(text, rule) {
+  const t = normalizeStructuredText(text);
+  if (!t) return { status: 'needs_ai', reason: 'empty' };
+  if (/[？?]/.test(t) || /(答えたくない|話したくない|教えたくない|言いたくない|分からない|わからない|分かりません|わかりません|思いつかない|思い浮かばない)/.test(t))
+    return { status: 'needs_ai', reason: 'question_refusal_or_uncertain' };
+  if (/^(?:好きなところは|好きな部分は|長所は|自分の良いところは|嫌いなところは|嫌いな部分は|短所は|直したいところは|悩みの本質は|本当の悩みは)[\s、。！!]*$/.test(t))
+    return { status: 'needs_ai', reason: 'label_without_answer' };
+  if (/(?:私|わたし|自分)(?:の|は|が)?.{0,15}(?:好きなところ|好きな部分|長所|良いところ|嫌いなところ|嫌いな部分|短所|直したいところ)(?:は|が|として)?[、:\s　]*[^。！？?]{2,}/.test(t)
+      || /(?:好きなところ|好きな部分|長所|良いところ|嫌いなところ|嫌いな部分|短所|直したいところ)(?:は|が|として)[、:\s　]*[^。！？?]{2,}/.test(t))
+    return { status: 'valid', reason: 'self_trait_disclosed' };
+  if (/(?:本当の悩み|悩みの本質|根本的な悩み|悩みの根っこ)(?:は|が|として)[、:\s　]*[^。！？?]{2,}/.test(t))
+    return { status: 'valid', reason: 'root_concern_disclosed' };
+  // 具体的な悩みの開示自体は「悩みの本質」と断定できないのでAIへ
+  return { status: 'needs_ai', reason: 'self_reflection_requires_semantic_review' };
+}
+
+
+
 // ======================================================
 // type → validator
 // ======================================================
@@ -5809,7 +5864,16 @@ const STRUCTURED_VALIDATORS = {
     validateStructuredGivenNameStrokeCount,
 
   object_name_and_color:
-    validateStructuredObjectNameAndColor,    
+    validateStructuredObjectNameAndColor,   
+    
+  concern_presence_or_disclosure:
+    validateStructuredConcernPresenceOrDisclosure,
+
+  priority_need:
+    validateStructuredPriorityNeed,
+
+  self_reflection_any:
+    validateStructuredSelfReflectionAny,
 };
 
 

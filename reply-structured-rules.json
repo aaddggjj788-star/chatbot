@@ -7,6 +7,89 @@
     "requireExactCommentMatch": true
   },
   "fallbackProfiles": {
+    "12704concern_presence": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "自分に悩みがある／ないと明言した、または自分の具体的な悩みを一つでも回答した。例にない悩みも有効。単に「はい」だけ、疑問文、拒否は除く。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "何を悩みとして答えればよいか、なぜ質問するのか尋ねる",
+          "template": "最近気になっていることや、困っていることを知りたいのよ。借金や恋愛など、例にあるものでなくても大丈夫。悩みがあるかないかだけでも教えてくださいね。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "何が悩みか整理できない、回答に迷っている",
+          "template": "今すぐ詳しく整理しなくても大丈夫ですよ。思い当たることがあれば一つ、なければ「悩みはない」と教えてくださいね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "悩みの有無や内容を答えること自体を拒否する",
+          "template": "詳しい事情を話さなくても大丈夫ですよ。悩みが「ある」か「ない」かだけでも教えてもらえますか。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12704priority_need": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "本人が今一番欲しい・必要と考えているものを一つ特定できる形で提示。お金・愛情・健康・人との縁以外の自由回答も可。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "何を答える質問なのか、例以外でもよいかを尋ねる",
+          "template": "今のあなたが一番必要だと思うものを一つ教えてほしいのよ。例にないものでも構いません。思い浮かんだものを教えてくださいね。",
+          "commentPolicy": "same"
+        },
+        "multiple_answers": {
+          "description": "複数候補を並べており、どれを一番にするか決められない／尋ねる",
+          "template": "どれも大切なことだと思いますよ。その中で、今一つだけ選ぶとしたら何が一番必要でしょうか。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "必要なものが分からず迷っている",
+          "template": "難しく考えすぎなくていいのよ。今の気持ちで、一番あったら嬉しいものを一つ教えてくださいね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "欲しい・必要なものの回答自体を拒否する",
+          "template": "細かく説明する必要はありませんよ。今一番必要だと感じるものを、ひと言だけでも教えてくださいね。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
+    "12704self_reflection_any": {
+      "enabled": true,
+      "maxAutoUse": 1,
+      "categories": {
+        "valid_answer": {
+          "description": "自分の好きな部分、嫌いな部分、悩みの本質のいずれか一つでも、自分について実際の内容を回答している。残りの項目は未回答でも成立。見出しだけ、一般論だけは不可。",
+          "action": "continue_without_ai"
+        },
+        "meaning_question": {
+          "description": "質問の意味、どれを答えればよいかを聞く",
+          "template": "あなた自身の好きなところ、嫌いなところ、そして悩みの本質について聞いているのよ。全部答えなくても構いません。話せるものを一つ教えてくださいね。",
+          "commentPolicy": "same"
+        },
+        "uncertain_answer": {
+          "description": "自分の長所短所や悩みの本質が分からないと迷っている",
+          "template": "すぐに答えを出せなくても大丈夫ですよ。三つのうち、今わかることが一つでもあれば教えてくださいね。",
+          "commentPolicy": "same"
+        },
+        "refusal": {
+          "description": "自己評価や悩みの本質を話すこと自体を拒否する",
+          "template": "無理に全部を話す必要はありませんよ。自分の好きなところ、嫌いなところ、悩みの本質のうち、話せるものだけでも教えてくださいね。",
+          "commentPolicy": "same"
+        }
+      },
+      "noTemplateAction": "existing_false_flow"
+    },
     "12705object_name_and_color": {
       "enabled": true,
       "maxAutoUse": 1,
@@ -1010,6 +1093,66 @@
     }
   },
   "rules": {
+    "12704mu1/sinko/1": {
+      "enabled": true,
+      "type": "concern_presence_or_disclosure",
+      "fallbackProfile": "12704concern_presence",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12704mu2/his/1": {
+      "enabled": true,
+      "type": "concern_presence_or_disclosure",
+      "fallbackProfile": "12704concern_presence",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12704mu1/sinko/4": {
+      "enabled": true,
+      "type": "priority_need",
+      "fallbackProfile": "12704priority_need",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
+    "12704mu2/sinko/5": {
+      "enabled": true,
+      "type": "self_reflection_any",
+      "fallbackProfile": "12704self_reflection_any",
+      "messagePolicy": {
+        "scope": "all_after_latest_kanteishi",
+        "matchMode": "any_message_valid",
+        "preserveSeparateMessages": true
+      },
+      "result": {
+        "valid": "continue_without_ai",
+        "ambiguous": "use_existing_ai",
+        "rejected": "use_existing_ai"
+      }
+    },
     "12702mu1/do": {
       "enabled": true,
       "type": "western_birthdate",
