@@ -15,18 +15,31 @@
             "do": {
                 "searchTarget": "12704mu1/sinko/1",
                 "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1800": 30,
+                "after1800": 20
             }
         },
         "mu2": {
             "fileId": "12704mu2sinko",
-            "do": {
+            "do1": {
                 "fileId": "12704mu2hissinko",
                 "searchTarget": "12704mu2/his/1",
+                "useCurrentRow": true
+            },
+            "do2": {
+                "fileId": "12704mu2sinko",
+                "searchTarget": "12704mu2/sinko/1",
                 "useCurrentRow": true
             },
             "ho": {
                 "searchTarget": "12704mu2/sinko/1",
                 "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1800": 30,
+                "after1800": 20
             }
         },
         "mu2his": {
