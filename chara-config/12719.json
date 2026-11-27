@@ -1,0 +1,62 @@
+{
+    "charaId": "12719",
+    "globalStopTime": {
+        "start": "22:40",
+        "end": "09:00"
+    },
+    "spanMatchExclude": [],
+    "phases": {
+        "mu1": {
+            "fileId": "12719mu1sinko",
+            "do": {
+                "searchTarget": "12719mu1/sinko/1",
+                "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1800": 30,
+                "after1800": 20
+            }
+        },
+        "mu2": {
+            "fileId": "12719mu2sinko",
+            "do": {
+                "searchTarget": "12719mu2/sinko/1",
+                "useCurrentRow": true
+            },
+            "ho1": {
+                "searchTarget": "12719mu2/sinko/5",
+                "useCurrentRow": true
+            },
+            "ho2": {
+                "searchTarget": "12719mu2/sinko/4",
+                "useCurrentRow": true
+            },
+            "ho3": {
+                "searchTarget": "12719mu2/sinko/3",
+                "useCurrentRow": true
+            },
+            "ho4": {
+                "searchTarget": "12719mu2/sinko/2",
+                "useCurrentRow": true
+            },
+            "minElapsedMinutes": {
+                "before1800": 30,
+                "after1800": 20
+            }
+        },
+        "yu1": {
+            "fileId": "12719yu1sinko",
+            "ho": {
+                "searchTarget": "12719yu1/sinko/1",
+                "useCurrentRow": true
+            }
+        },
+        "yu4mu": {
+            "fileId": "12719yu4musinko",
+            "ho": {
+                "searchTarget": "12719yu4mu/sinko/1",
+                "useCurrentRow": true
+            }
+        }
+    }
+}

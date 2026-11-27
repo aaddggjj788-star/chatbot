@@ -1,0 +1,10 @@
+{
+  "kid": "12706",
+  "routingPolicy": {
+    "baseProfile": "12706.json",
+    "phaseProfileRule": "照合済みの明示的な日程のみ。初期版では送信禁止。",
+    "fallback": "使用しない。未一致・有料・特殊タグは手動確認。",
+    "doNotCrossBoundary": true
+  },
+  "specialMappings": {}
+}
